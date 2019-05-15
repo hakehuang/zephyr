@@ -18,7 +18,7 @@
 #endif
 
 #ifndef DISPLAY_DRIVER
-#define DISPLAY_DRIVER		"DISPLAY"
+#define DISPLAY_DRIVER		CONFIG_DISPLAY_DRIVER
 #endif
 
 void main(void)
@@ -38,7 +38,7 @@ void main(void)
 
 	if (display_set_pixel_format(dev, PIXEL_FORMAT_MONO10) != 0) {
 		printf("Failed to set required pixel format\n");
-		return;
+//		return;
 	}
 
 	printf("initialized %s\n", DISPLAY_DRIVER);
@@ -72,6 +72,7 @@ void main(void)
 	       cfb_get_display_parameter(dev, CFB_DISPLAY_COLS));
 
 	while (1) {
+                int i = 10;
 		for (int i = 0; i < rows; i++) {
 			cfb_framebuffer_clear(dev, false);
 			if (cfb_print(dev,

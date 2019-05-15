@@ -71,7 +71,12 @@ config ETH_MCUX_0
 
 endif # NETWORKING
 
+config DISPLAY_DRIVER
+	string
+	default "ELCDIF_1"
+
 if LVGL
+
 
 config LVGL_DISPLAY_DEV_NAME
 	default "ELCDIF_1"

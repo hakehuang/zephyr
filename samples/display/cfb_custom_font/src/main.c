@@ -14,7 +14,7 @@
 #if defined(CONFIG_SSD1673)
 #define DISPLAY_DRIVER "SSD1673"
 #else
-#error Unsupported board
+#define DISPLAY_DRIVER CONFIG_DISPLAY_DRIVER
 #endif
 
 struct device *display;

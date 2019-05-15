@@ -66,6 +66,13 @@ static inline u8_t *get_glyph_ptr(const struct cfb_font *fptr, char c)
 	return NULL;
 }
 
+static inline u8_t *get_glyph_font8x8_ptr(const struct cfb_font *fptr, char c)
+{
+	/*each char has 8 bytes*/
+	return (u8_t *)fptr->data +
+	       (c - fptr->first_char) * (fptr->width * fptr->height / 8U );
+}
+
 /*
  * Draw the monochrome character in the monochrome tiled framebuffer,
  * a byte is interpreted as 8 pixels ordered vertically among each other.
@@ -103,6 +110,44 @@ static u8_t draw_char_vtmono(const struct char_framebuffer *fb,
 	return fptr->width;
 }
 
+/*
+ * Draw the RGB character in the rgb565 linear framebuffer
+ */
+static u8_t draw_char_vtrgb565(const struct char_framebuffer *fb,
+			     char c, u16_t x, u16_t y)
+{
+	const struct cfb_font *fptr = &(fb->fonts[fb->font_idx]);
+	u8_t *glyph_ptr;
+
+	if (c < fptr->first_char || c > fptr->last_char) {
+		c = ' ';
+	}
+
+	glyph_ptr = get_glyph_font8x8_ptr(fptr, c);
+	if (!glyph_ptr) {
+	    LOG_DBG("can not find the char %c", c);
+		return 0;
+	}
+
+	for (size_t g_x = 0; g_x < fptr->width; g_x++) {
+		u8_t masker = 1 << ( fptr->width - g_x - 1);
+		for (size_t g_y = 0; g_y < fptr->height; g_y++) {
+			u8_t v = 0;
+			u32_t fb_y = (y + g_y) * fb->x_res;
+
+			if (2 * (fb_y + x + g_x) >= fb->size) {
+				return 0;
+			}
+			u16_t * ppixel = (u16_t *)&fb->buf[2 * (fb_y + x + g_x)];
+			v = (glyph_ptr[g_y] & masker) == 0 ? 0: 255;
+			*ppixel =  ((v>>3)<<11) | ((v>>2)<<5) | (v>>3);
+		}
+	}
+
+	return fptr->width;
+}
+
+
 int cfb_print(struct device *dev, char *str, u16_t x, u16_t y)
 {
 	const struct char_framebuffer *fb = &char_fb;
@@ -116,16 +161,38 @@ int cfb_print(struct device *dev, char *str, u16_t x, u16_t y)
 		LOG_ERR("Wrong font size");
 		return -1;
 	}
-
-	if ((fb->screen_info & SCREEN_INFO_MONO_VTILED) && !(y % 8)) {
-		for (size_t i = 0; i < strlen(str); i++) {
-			if (x + fptr->width > fb->x_res) {
-				x = 0U;
-				y += fptr->height;
+    switch(fb->pixel_format)
+    {
+    	case PIXEL_FORMAT_MONO10:
+    	case PIXEL_FORMAT_MONO01:
+			if ((fb->screen_info & SCREEN_INFO_MONO_VTILED) && !(y % 8)) {
+				for (size_t i = 0; i < strlen(str); i++) {
+					if (x + fptr->width > fb->x_res) {
+						x = 0U;
+						y += fptr->height;
+					}
+					x += fb->kerning + draw_char_vtmono(fb, str[i], x, y);
+				}
+				return 0;
 			}
-			x += fb->kerning + draw_char_vtmono(fb, str[i], x, y);
-		}
-		return 0;
+			break;
+		case PIXEL_FORMAT_RGB_565:
+  			for (size_t i = 0; i < strlen(str); i++) {
+				if (x + fptr->width > fb->x_res) {
+					x = 0U;
+					y += fptr->height;
+				}
+				x += fb->kerning + draw_char_vtrgb565(fb, str[i], x, y);
+			}
+			return 0;
+		case PIXEL_FORMAT_RGB_888:
+		/*fix me*/
+		  break;
+		case PIXEL_FORMAT_ARGB_8888:
+		/*fix me*/  
+		  break;
+		default:
+		  break;
 	}
 
 	LOG_ERR("Unsupported framebuffer configuration");
@@ -310,9 +377,27 @@ int cfb_framebuffer_init(struct device *dev)
 	fb->fonts = __font_entry_start;
 	fb->font_idx = 0U;
 
-	fb->size = fb->x_res * fb->y_res / fb->ppt;
+    switch(fb->pixel_format)
+    {
+    	case PIXEL_FORMAT_MONO10:
+    	case PIXEL_FORMAT_MONO01:
+		  fb->size = fb->x_res * fb->y_res / fb->ppt;
+		  break;
+		case PIXEL_FORMAT_RGB_565:
+		  fb->size = fb->x_res * fb->y_res * 2;
+		  break;
+		case PIXEL_FORMAT_RGB_888:
+		  fb->size = fb->x_res * fb->y_res * 3;
+		  break;
+		case PIXEL_FORMAT_ARGB_8888:
+		  fb->size = fb->x_res * fb->y_res * 4;
+		  break;
+		default:
+		  break;
+	}
 	fb->buf = k_malloc(fb->size);
 	if (!fb->buf) {
+                LOG_DBG("malloc %d fails", fb->size);
 		return -1;
 	}
 
