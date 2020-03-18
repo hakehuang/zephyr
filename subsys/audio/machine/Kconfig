@@ -1,0 +1,19 @@
+# Audio configuration options
+
+# Copyright (c) 2020 NXP Semiconductor INC.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig AUDIO_PM
+	bool "SOC audio power manager"
+	default n
+	help
+	  This option is to enable Power Managerment of audio
+
+if AUDIO_PM
+
+config NXP_RT_AUDIO_SYS
+	bool
+	help
+	  This option is to use NXP RT audio
+
+endif # AUDIO_PM

@@ -15,3 +15,11 @@ zephyr_library_sources_ifdef(CONFIG_AUDIO_INTEL_DMIC	decimation/pdm_decim_int32_
 zephyr_library_sources_ifdef(CONFIG_AUDIO_INTEL_DMIC	decimation/pdm_decim_table.c)
 zephyr_library_sources_ifdef(CONFIG_AUDIO_MPXXDTYY	mpxxdtyy.c)
 zephyr_library_sources_ifdef(CONFIG_AUDIO_MPXXDTYY	mpxxdtyy-i2s.c)
+
+zephyr_library_sources(CONFIG_AUDIO_NXP_SAI fsl_sai.c)
+
+zephyr_library_sources_ifdef(CONFIG_AUDIO_NXP_SAI_EDMA  fsl_sai_edma.c)
+
+zephyr_library_sources_ifdef(CONFIG_AUDIO_NXP_SPDIF  fsl_spdif.c)
+
+zephyr_library_sources_ifdef(CONFIG_AUDIO_NXP_SPDIF_EDMA  fsl_spdif_edma.c)

@@ -55,4 +55,9 @@ source "drivers/audio/Kconfig.mpxxdtyy"
 
 endif # AUDIO_DMIC
 
+config AUDIO_WM8960
+	bool
+	help
+	  This option is to use the WM8960 codec
+
 endif # AUDIO

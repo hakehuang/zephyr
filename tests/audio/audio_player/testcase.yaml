@@ -1,0 +1,5 @@
+tests:
+  audio_player:
+    tags: audio
+    min_ram: 32
+#    platform_whitelist: mimxrt1060_evk

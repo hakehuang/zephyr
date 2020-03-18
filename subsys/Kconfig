@@ -42,3 +42,5 @@ source "subsys/fb/Kconfig"
 source "subsys/jwt/Kconfig"
 
 source "subsys/canbus/Kconfig"
+
+source "subsys/audio/Kconfig"
