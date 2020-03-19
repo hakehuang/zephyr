@@ -27,14 +27,5 @@ config I2S_3
 	help
 	  Enable I2S controller port 3.
 
-config I2S_4
-	bool "I2S port 4"
-	help
-	  Enable I2S controller port 4.
-
-config I2S_5
-	bool "I2S port 5"
-	help
-	  Enable I2S controller port 5.
 
 endif # I2S_IMX_RT

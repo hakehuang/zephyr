@@ -17,7 +17,10 @@
 extern "C" {
 #endif
 
-
+#include "fsl_edma.h"
+#include "fsl_dmamux.h"
+#include "fsl_sai_edma.h"
+#include "fsl_sai.h"
 
 #ifdef __cplusplus
 }

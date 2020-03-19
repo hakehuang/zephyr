@@ -21,7 +21,7 @@
 #include <soc.h>
 #include "i2s_imx_rt.h"
 
-#define LOG_DOMAIN dev_i2s_cavs
+#define LOG_DOMAIN dev_i2s_rt
 #define LOG_LEVEL CONFIG_I2S_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(LOG_DOMAIN);
