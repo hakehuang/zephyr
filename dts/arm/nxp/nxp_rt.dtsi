@@ -615,6 +615,8 @@
 		};
 		sai1: sai@40384000 {
 			compatible = "nxp,rt-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
 			reg = <0x40384000 0x4000>;
 			clocks = <&ccm IMX_CCM_SAI1_CLK 0x7C 0x000C0000>;
 			interrupts = <56 0>;
