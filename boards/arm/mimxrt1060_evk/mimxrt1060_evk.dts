@@ -142,3 +142,7 @@ arduino_serial: &uart3 {};
 &sai1 {
 	status = "okay";
 };
+
+&sai2 {
+	status = "okay";
+};
