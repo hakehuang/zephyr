@@ -5,27 +5,116 @@
 
 menuconfig I2S_IMX_RT
 	bool "NXP imx RT I2S controller driver"
-	depends on SOC_SERIES_IMX_RT
+	depends on SOC_SERIES_IMX_RT && DMA_IMX_RT
 	help
 	  Enable I2S support on the I.MX family of processors.
 	  (Tested on the imxrt10xx series)
 
 if I2S_IMX_RT
 
-config I2S_1
+config I2S_BUFFER_QUEUE_COUNT
+	int "default I2S buffer queue counts"
+	default 2
+	help
+	  default i2s buffer queue counts
+
+config I2S_0
 	bool "I2S port 1"
 	help
-	  Enable I2S controller port 1.
+	  Enable I2S controller SAI1.
 
-config I2S_2
+config I2S_0_NAME
+	string "I2S_0 device name"
+	default "I2S_0"
+	depends on I2S_0
+	help
+	  Name of the I2S device.
+
+config I2S_0_DMA_NAME
+	string "I2S_0 edma device name"
+	default "DMA_0"
+	depends on I2S_0 && DMA
+	help
+	  Name of the I2S device.
+
+config I2S_0_TX_DMA_SLOT
+	int "default I2S TX DMA SLOT"
+	default 0
+	depends on I2S_0
+	help
+	  default i2s1 dma tx slot
+
+config I2S_0_RX_DMA_SLOT
+	int "default I2S RX DMA SLOT"
+	default 1
+	depends on I2S_0
+	help
+	  default i2s1 dma rx slot
+
+config I2S_1
 	bool "I2S port 2"
 	help
-	  Enable I2S controller port 2.
+	  Enable I2S controller SAI2.
 
-config I2S_3
+config I2S_1_NAME
+	string "I2S_1 device name"
+	default "I2S_1"
+	depends on I2S_1
+	help
+	  Name of the I2S device.
+
+config I2S_1_DMA_NAME
+	string "I2S_1 edma device name"
+	default "DMA_1"
+	depends on I2S_1 && DMA
+	help
+	  Name of the I2S EDMA device.
+
+config I2S_1_TX_DMA_SLOT
+	int "default I2S TX DMA SLOT"
+	default 2
+	depends on I2S_1
+	help
+	  default i2s2 dma tx slot
+
+config I2S_1_RX_DMA_SLOT
+	int "default I2S RX DMA SLOT"
+	default 3
+	depends on I2S_1
+	help
+	  default i2s2 dma rx slot
+
+config I2S_2
 	bool "I2S port 3"
 	help
-	  Enable I2S controller port 3.
+	  Enable I2S2 controller SAI3.
 
+config I2S_2_NAME
+	string "I2S_2 device name"
+	default "I2S_2"
+	depends on I2S_2
+	help
+	  Name of the I2S device.
+
+config I2S_2_DMA_NAME
+	string "I2S_2 edma device name"
+	default "DMA_2"
+	depends on I2S_2 && DMA
+	help
+	  Name of the I2S EDMA device.
+
+config I2S_2_TX_DMA_SLOT
+	int "default I2S TX DMA SLOT"
+	default 4
+	depends on I2S_2
+	help
+	  default i2s3 dma tx slot
+
+config I2S_2_RX_DMA_SLOT
+	int "default I2S RX DMA SLOT"
+	default 5
+	depends on I2S_2
+	help
+	  default i2s2 dma rx slot
 
 endif # I2S_IMX_RT

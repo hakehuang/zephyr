@@ -592,23 +592,9 @@
 			nxp,a_on;
 			reg = <0x400E8000 0x4000>,
 			        <0x400EC000 0x4000>;
-			interrupts = <0 0>,
-						<1 0>,
-						<2 0>,
-						<3 0>,
-						<4 0>,
-						<5 0>,
-						<6 0>,
-						<7 0>,
-						<8 0>,
-						<9 0>,
-						<10 0>,
-						<11 0>,
-						<12 0>,
-						<13 0>,
-						<14 0>,
-						<15 0>,
-						<16 0>;
+			interrupts = <0 0>, <1 0>, <2 0>, <3 0>, <4 0>, <5 0>,
+						<6 0>, <7 0>, <8 0>, <9 0>, <10 0>, <11 0>,
+						<12 0>, <13 0>, <14 0>, <15 0>, <16 0>;
 			clocks = <&ccm IMX_CCM_EDMA_CLK 0x7C 0x000000C0>;
 			status = "disabled";
 			label = "EDMA0";
@@ -625,6 +611,36 @@
 			dma-names = "tx", "rx";
 			status = "disabled";
 			label = "SAI1";
+		};
+		sai2: sai@40388000 {
+			compatible = "nxp,rt-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x40388000 0x4000>;
+			clocks = <&ccm IMX_CCM_SAI2_CLK 0x7C 0x00300000
+					 &ccm  CCM_CS1CDR_PREDIV 0x28 0x000001C0
+					 &ccm  CCM_CS1CDR_PODF 0x28 0x0000003F>;
+			interrupts = <57 0>;
+			dmas = <&edma0 0 22 
+				&edma0 0 21 >;
+			dma-names = "tx", "rx";
+			status = "disabled";
+			label = "SAI2";
+		};
+		sai3: sai@4038C000 {
+			compatible = "nxp,rt-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x4038C000 0x4000>;
+			clocks = <&ccm IMX_CCM_SAI2_CLK 0x7C 0x00C00000
+					 &ccm  CCM_CS1CDR_PREDIV 0x28 0x01C00000
+					 &ccm  CCM_CS1CDR_PODF 0x28 0x003F0000>;
+			interrupts = <58 0>, <59 0>;
+			dmas = <&edma0 0 84
+				&edma0 0 83 >;
+			dma-names = "rx", "tx";
+			status = "disabled";
+			label = "SAI3";
 		};
 	};
 };
