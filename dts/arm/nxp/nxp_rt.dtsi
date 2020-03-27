@@ -647,11 +647,11 @@
 			status = "disabled";
 			label = "SAI2";
 		};
-		sai3: sai@4038C000 {
+		sai3: sai@4038c000 {
 			compatible = "nxp,rt-i2s";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x4038c000 0x4000>;
+			reg = <0x4038C000 0x4000>;
 			clocks = <&ccm IMX_CCM_SAI2_CLK 0x7C 0x00C00000
 					 &ccm  IMX_CCM_CS1CDR_PREDIV 0x28 0x01C00000
 					 &ccm  IMX_CCM_CS1CDR_PODF 0x28 0x003F0000>;
