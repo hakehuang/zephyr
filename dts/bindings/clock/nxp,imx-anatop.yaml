@@ -14,11 +14,24 @@ properties:
     label:
       required: true
 
-    "#clock-cells":
+    "#pll-cells":
+      type: int
+      required: true
       const: 4
+      description: Number of items to expect in a DMA specifier
+
+    "#clock-cells":
+      const: 3
 
 clock-cells:
   - name
   - offset
   - bits
   - value
+
+
+
+clock-cells:
+  - name
+  - offset
+  - bits

@@ -19,6 +19,9 @@ properties:
       required: true
       description: pll information
 
+    pll-cells:
+      
+
     dma-names:
       required: true
 
