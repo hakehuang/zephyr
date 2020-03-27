@@ -20,6 +20,7 @@ properties:
       description: pll information
 
     "#pll-cells":
+      type: int
       required: true
       const: 4
 
