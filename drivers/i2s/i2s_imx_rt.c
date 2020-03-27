@@ -26,88 +26,71 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(LOG_DOMAIN);
 
-#define I2S_IRQ_CONNECT(i2s_id)					\
-	IRQ_CONNECT(I2S##i2s_id##_CAVS_IRQ,			\
-			CONFIG_I2S_CAVS_IRQ_PRI,		\
-			i2s_cavs_isr,				\
-			DEVICE_GET(i2s##i2s_id##_cavs), 0)
+#define DEFAULT_I2S_DMA_BURST_SIZE kSAI_WordWidth16bits
 
-#define I2S_DEVICE_NAME(i2s_id)		i2s##i2s_id##_cavs
-#define I2S_DEVICE_DATA_NAME(i2s_id)	i2s##i2s_id##_cavs_data
-#define I2S_DEVICE_CONFIG_NAME(i2s_id)	i2s##i2s_id##_cavs_config
+#define I2S_IRQ_CONNECT(i2s_id)                                                \
+	IRQ_CONNECT(DT_INST_##i2s_id##_NXP_RT_I2S_IRQ_0,                       \
+		    DT_INST_##i2s_id##_NXP_RT_I2S_IRQ_0_PRIORITY, i2s_rt_isr,  \
+		    DEVICE_GET(i2s##i2s_id##_rt), 0)
 
-#define I2S_DEVICE_CONFIG_DEFINE(i2s_id)				\
-	static const struct i2s_cavs_config i2s##i2s_id##_cavs_config = {\
-		.regs = (struct i2s_cavs_ssp *)SSP_BASE(i2s_id),	\
-		.mn_regs = (struct i2s_cavs_mn_div *)SSP_MN_DIV_BASE(i2s_id),\
-		.irq_id = I2S##i2s_id##_CAVS_IRQ,		\
-		.irq_connect = i2s##i2s_id##_cavs_irq_connect,	\
+#define I2S_DEVICE_NAME(i2s_id) i2s##i2s_id##_rt
+#define I2S_DEVICE_DATA_NAME(i2s_id) i2s##i2s_id##_data
+#define I2S_DEVICE_CONFIG_NAME(i2s_id) i2s##i2s_id##_config
+
+#define I2S_DEVICE_CONFIG_DEFINE(i2s_id)                                        \
+	static const struct i2s_config i2s##i2s_id##_config = {                 \
+		.base = (I2S_Type *)DT_INST_##i2s_id##_NXP_RT_I2S_BASE_ADDRESS, \
+		.edma_name = CONFIG_I2S_##i2s_id##_DMA_NAME,                    \
+		.irq_id = DT_INST_##i2s_id##_NXP_RT_I2S_IRQ_0,                  \
 	}
 
-#define I2S_DMA_CHANNEL(i2s_id, dir)				\
-		CONFIG_I2S_CAVS_##i2s_id##_DMA_##dir##_CHANNEL
-
-#define I2S_DEVICE_OBJECT_DECLARE(i2s_id)			\
+#define I2S_DEVICE_OBJECT_DECLARE(i2s_id)                                      \
 	DEVICE_DECLARE(I2S_DEVICE_NAME(i2s_id))
 
-#define I2S_DEVICE_OBJECT(i2s_id)				\
-		DEVICE_GET(I2S_DEVICE_NAME(i2s_id))
+#define I2S_DEVICE_OBJECT(i2s_id) DEVICE_GET(I2S_DEVICE_NAME(i2s_id))
 
-#define I2S_DEVICE_DATA_DEFINE(i2s_id)				\
-	static struct i2s_cavs_dev_data i2s##i2s_id##_cavs_data = {\
+#define I2S_DEVICE_DATA_DEFINE(i2s_id)                                         \
+	static struct i2s_dev_data i2s##i2s_id##_data = {\
 		.tx = {						\
-			.dma_channel = I2S_DMA_CHANNEL(i2s_id, TX),	\
+			.dma_channel = DT_INST_##i2s_id##_NXP_RT_I2S_DMAS_SOURCE_0,	\
 			.dma_cfg = {				\
-				.source_burst_length = CAVS_I2S_DMA_BURST_SIZE,\
-				.dest_burst_length = CAVS_I2S_DMA_BURST_SIZE,\
+				.source_burst_length = DEFAULT_I2S_DMA_BURST_SIZE,\
+				.dest_burst_length = DEFAULT_I2S_DMA_BURST_SIZE,\
 				.dma_callback = i2s_dma_tx_callback,	\
 				.callback_arg = I2S_DEVICE_OBJECT(i2s_id),\
 				.complete_callback_en = 1,	\
 				.error_callback_en = 1,		\
 				.block_count = 1,		\
 				.head_block =			\
-				&i2s##i2s_id##_cavs_data.tx.dma_block,\
+				&i2s##i2s_id##_data.tx.dma_block,\
 				.channel_direction = MEMORY_TO_PERIPHERAL,\
-				.dma_slot = DMA_HANDSHAKE_SSP##i2s_id##_TX,\
+				.dma_slot = CONFIG_I2S_##i2s_id##_TX_DMA_SLOT,\
 			},					\
 		},						\
 		.rx = {						\
-			.dma_channel = I2S_DMA_CHANNEL(i2s_id, RX),	\
+			.dma_channel = DT_INST_##i2s_id##_NXP_RT_I2S_DMAS_SOURCE_1,	\
 			.dma_cfg = {				\
-				.source_burst_length = CAVS_I2S_DMA_BURST_SIZE,\
-				.dest_burst_length = CAVS_I2S_DMA_BURST_SIZE,\
+				.source_burst_length = DEFAULT_I2S_DMA_BURST_SIZE,\
+				.dest_burst_length = DEFAULT_I2S_DMA_BURST_SIZE,\
 				.dma_callback = i2s_dma_rx_callback,\
 				.callback_arg = I2S_DEVICE_OBJECT(i2s_id),\
 				.complete_callback_en = 1,	\
 				.error_callback_en = 1,		\
 				.block_count = 1,		\
 				.head_block =			\
-				&i2s##i2s_id##_cavs_data.rx.dma_block,\
+				&i2s##i2s_id##_rt_data.rx.dma_block,\
 				.channel_direction = PERIPHERAL_TO_MEMORY,\
-				.dma_slot = DMA_HANDSHAKE_SSP##i2s_id##_RX,\
+				.dma_slot = CONFIG_I2S_##i2s_id##_RX_DMA_SLOT,\
 				},				\
 		},						\
 	}
 
-#define I2S_DEVICE_AND_API_INIT(i2s_id)				\
-	DEVICE_AND_API_INIT(I2S_DEVICE_NAME(i2s_id),		\
-			CONFIG_I2S_CAVS_##i2s_id##_NAME,	\
-			i2s_cavs_initialize,			\
-			&I2S_DEVICE_DATA_NAME(i2s_id),		\
-			&I2S_DEVICE_CONFIG_NAME(i2s_id),	\
-			POST_KERNEL,				\
-			CONFIG_I2S_INIT_PRIORITY,		\
-			&i2s_cavs_driver_api)
-
-/* length of the buffer queue */
-#define I2S_CAVS_BUF_Q_LEN			2
-
-#define CAVS_SSP_WORD_SIZE_BITS_MIN     4
-#define CAVS_SSP_WORD_SIZE_BITS_MAX     32
-#define CAVS_SSP_WORD_PER_FRAME_MIN     1
-#define CAVS_SSP_WORD_PER_FRAME_MAX     8
-
-#define CAVS_I2S_DMA_BURST_SIZE		8
+#define I2S_DEVICE_AND_API_INIT(i2s_id)                                        \
+	DEVICE_AND_API_INIT(I2S_DEVICE_NAME(i2s_id),                           \
+			    CONFIG_I2S_##i2s_id##_NAME, i2s_rt_initialize,     \
+			    &I2S_DEVICE_DATA_NAME(i2s_id),                     \
+			    &I2S_DEVICE_CONFIG_NAME(i2s_id), POST_KERNEL,      \
+			    CONFIG_I2S_INIT_PRIORITY, &i2s_rt_driver_api)
 
 /*
  * This indicates the Tx/Rx stream. Most members of the stream are
@@ -131,23 +114,25 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 struct stream {
 	s32_t state;
 	u32_t dma_channel;
+	sai_handle_t irq_handle;
+	void (*irq_call_back)(void);
 	struct dma_config dma_cfg;
 	struct dma_block_config dma_block;
 	struct k_msgq in_queue;
-	void *in_msgs[I2S_CAVS_BUF_Q_LEN];
+	void *in_msgs[CONFIG_I2S_BUFFER_QUEUE_COUNT];
 	struct k_msgq out_queue;
-	void *out_msgs[I2S_CAVS_BUF_Q_LEN];
+	void *out_msgs[CONFIG_I2S_BUFFER_QUEUE_COUNT];
 };
 
-struct i2s_cavs_config {
-	struct i2s_cavs_ssp *regs;
-	struct i2s_cavs_mn_div *mn_regs;
+struct i2s_rt_config {
+	I2S_Type *base;
 	u32_t irq_id;
+	char *edma_name;
 	void (*irq_connect)(void);
 };
 
 /* Device run time data */
-struct i2s_cavs_dev_data {
+struct i2s_dev_data {
 	struct i2s_config cfg;
 	struct device *dev_dma;
 	struct stream tx;
@@ -155,23 +140,19 @@ struct i2s_cavs_dev_data {
 };
 
 #define DEV_NAME(dev) ((dev)->config->name)
-#define DEV_CFG(dev) \
-	((const struct i2s_cavs_config *const)(dev)->config->config_info)
-#define DEV_DATA(dev) \
-	((struct i2s_cavs_dev_data *const)(dev)->driver_data)
+#define DEV_CFG(dev)                                                           \
+	((const struct i2s_rt_config *const)(dev)->config->config_info)
+#define DEV_DATA(dev) ((struct i2s_dev_data *const)(dev)->driver_data)
+#define DEV_BASE(dev) ((I2S_Type *)DEV_CFG(dev)->base)
 
 I2S_DEVICE_OBJECT_DECLARE(1);
 I2S_DEVICE_OBJECT_DECLARE(2);
 I2S_DEVICE_OBJECT_DECLARE(3);
 
 static void i2s_dma_tx_callback(void *, u32_t, int);
-static void i2s_tx_stream_disable(struct i2s_cavs_dev_data *,
-		volatile struct i2s_cavs_ssp *const, struct device *);
-static void i2s_rx_stream_disable(struct i2s_cavs_dev_data *,
-		volatile struct i2s_cavs_ssp *const, struct device *);
 
 static inline void i2s_purge_stream_buffers(struct stream *strm,
-	struct k_mem_slab *mem_slab)
+					    struct k_mem_slab *mem_slab)
 {
 	void *buffer;
 
@@ -184,14 +165,12 @@ static inline void i2s_purge_stream_buffers(struct stream *strm,
 }
 
 /* This function is executed in the interrupt context */
-static void i2s_dma_tx_callback(void *arg, u32_t channel,
-		int status)
+static void i2s_dma_tx_callback(void *arg, u32_t channel, int status)
 {
 	struct device *dev = (struct device *)arg;
-	const struct i2s_cavs_config *const dev_cfg = DEV_CFG(dev);
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
+	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 
-	volatile struct i2s_cavs_ssp *const ssp = dev_cfg->regs;
 	struct stream *strm = &dev_data->tx;
 	void *buffer;
 	int ret;
@@ -201,20 +180,18 @@ static void i2s_dma_tx_callback(void *arg, u32_t channel,
 		/* transmission complete. free the buffer */
 		k_mem_slab_free(dev_data->cfg.mem_slab, &buffer);
 	} else {
-		LOG_ERR("no buffer in output queue for channel %u",
-				channel);
+		LOG_ERR("no buffer in output queue for channel %u", channel);
 	}
 
 	switch (strm->state) {
-
 	case I2S_STATE_RUNNING:
 		/* get the next buffer from queue */
 		ret = k_msgq_get(&strm->in_queue, &buffer, K_NO_WAIT);
 		if (ret == 0) {
 			/* reload the DMA */
 			dma_reload(dev_data->dev_dma, strm->dma_channel,
-					(u32_t)buffer, (u32_t)&ssp->ssd,
-					dev_data->cfg.block_size);
+				   (u32_t)buffer, (u32_t)&ssp->ssd,
+				   dev_data->cfg.block_size);
 			dma_start(dev_data->dev_dma, strm->dma_channel);
 			ssp->ssc1 |= SSCR1_TSRE;
 			k_msgq_put(&strm->out_queue, &buffer, K_NO_WAIT);
@@ -227,7 +204,7 @@ static void i2s_dma_tx_callback(void *arg, u32_t channel,
 			 * No bufers in input queue
 			 */
 			LOG_ERR("DMA status %08x channel %u k_msgq_get ret %d",
-					status, channel, ret);
+				status, channel, ret);
 			strm->state = I2S_STATE_STOPPING;
 			i2s_tx_stream_disable(dev_data, ssp, dev_data->dev_dma);
 		}
@@ -243,34 +220,32 @@ static void i2s_dma_tx_callback(void *arg, u32_t channel,
 static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 {
 	struct device *dev = (struct device *)arg;
-	const struct i2s_cavs_config *const dev_cfg = DEV_CFG(dev);
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
-	volatile struct i2s_cavs_ssp *const ssp = dev_cfg->regs;
+	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 	struct stream *strm = &dev_data->rx;
 	void *buffer;
 	int ret;
 
 	switch (strm->state) {
-
 	case I2S_STATE_RUNNING:
 		/* retrieve buffer from input queue */
 		ret = k_msgq_get(&strm->in_queue, &buffer, K_NO_WAIT);
 		if (ret != 0) {
 			LOG_ERR("get buffer from in_queue %p failed (%d)",
-					&strm->in_queue, ret);
+				&strm->in_queue, ret);
 		}
 		/* put buffer to output queue */
 		ret = k_msgq_put(&strm->out_queue, &buffer, K_NO_WAIT);
 		if (ret != 0) {
-			LOG_ERR("buffer %p -> out_queue %p err %d",
-					buffer, &strm->out_queue, ret);
+			LOG_ERR("buffer %p -> out_queue %p err %d", buffer,
+				&strm->out_queue, ret);
 		}
 		/* allocate new buffer for next audio frame */
 		ret = k_mem_slab_alloc(dev_data->cfg.mem_slab, &buffer,
-				K_NO_WAIT);
+				       K_NO_WAIT);
 		if (ret != 0) {
 			LOG_ERR("buffer alloc from slab %p err %d",
-					dev_data->cfg.mem_slab, ret);
+				dev_data->cfg.mem_slab, ret);
 			i2s_rx_stream_disable(dev_data, ssp, dev_data->dev_dma);
 			strm->state = I2S_STATE_READY;
 		} else {
@@ -278,15 +253,15 @@ static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 			ret = k_msgq_put(&strm->in_queue, &buffer, K_NO_WAIT);
 			if (ret != 0) {
 				LOG_ERR("buffer %p -> in_queue %p err %d",
-						buffer, &strm->in_queue, ret);
+					buffer, &strm->in_queue, ret);
 			}
 
 			SOC_DCACHE_INVALIDATE(buffer, dev_data->cfg.block_size);
 
 			/* reload the DMA */
 			dma_reload(dev_data->dev_dma, strm->dma_channel,
-					(u32_t)&ssp->ssd, (u32_t)buffer,
-					dev_data->cfg.block_size);
+				   (u32_t)&ssp->ssd, (u32_t)buffer,
+				   dev_data->cfg.block_size);
 			dma_start(dev_data->dev_dma, strm->dma_channel);
 			ssp->ssc1 |= SSCR1_RSRE;
 		}
@@ -298,13 +273,11 @@ static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 	}
 }
 
-static int i2s_cavs_configure(struct device *dev, enum i2s_dir dir,
-			      struct i2s_config *i2s_cfg)
+static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
+			    struct i2s_config *i2s_cfg)
 {
-	const struct i2s_cavs_config *const dev_cfg = DEV_CFG(dev);
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
-	volatile struct i2s_cavs_ssp *const ssp = dev_cfg->regs;
-	volatile struct i2s_cavs_mn_div *const mn_div = dev_cfg->mn_regs;
+	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 	struct dma_block_config *dma_block;
 	u8_t num_words = i2s_cfg->channels;
 	u8_t word_size_bits = i2s_cfg->word_size;
@@ -329,28 +302,27 @@ static int i2s_cavs_configure(struct device *dev, enum i2s_dir dir,
 	bool inverted_frame = false;
 
 	if ((dev_data->tx.state != I2S_STATE_NOT_READY) &&
-			(dev_data->tx.state != I2S_STATE_READY) &&
-			(dev_data->rx.state != I2S_STATE_NOT_READY) &&
-			(dev_data->rx.state != I2S_STATE_READY)) {
+	    (dev_data->tx.state != I2S_STATE_READY) &&
+	    (dev_data->rx.state != I2S_STATE_NOT_READY) &&
+	    (dev_data->rx.state != I2S_STATE_READY)) {
 		LOG_ERR("invalid state tx(%u) rx(%u)", dev_data->tx.state,
-				dev_data->rx.state);
+			dev_data->rx.state);
 		return -EINVAL;
 	}
 
 	if (i2s_cfg->frame_clk_freq == 0U) {
-		LOG_ERR("Invalid frame_clk_freq %u",
-				i2s_cfg->frame_clk_freq);
+		LOG_ERR("Invalid frame_clk_freq %u", i2s_cfg->frame_clk_freq);
 		return -EINVAL;
 	}
 
-	if (word_size_bits < CAVS_SSP_WORD_SIZE_BITS_MIN ||
-	    word_size_bits > CAVS_SSP_WORD_SIZE_BITS_MAX) {
+	if (word_size_bits < rt_SSP_WORD_SIZE_BITS_MIN ||
+	    word_size_bits > rt_SSP_WORD_SIZE_BITS_MAX) {
 		LOG_ERR("Unsupported I2S word size %u", word_size_bits);
 		return -EINVAL;
 	}
 
-	if (num_words < CAVS_SSP_WORD_PER_FRAME_MIN ||
-	    num_words > CAVS_SSP_WORD_PER_FRAME_MAX) {
+	if (num_words < rt_SSP_WORD_PER_FRAME_MIN ||
+	    num_words > rt_SSP_WORD_PER_FRAME_MAX) {
 		LOG_ERR("Unsupported words per frame number %u", num_words);
 		return -EINVAL;
 	}
@@ -373,8 +345,8 @@ static int i2s_cavs_configure(struct device *dev, enum i2s_dir dir,
 	ssc2 = 0U;
 
 	/* sscr3 dynamic settings are TFT, RFT */
-	ssc3 = SSCR3_TX(CAVS_I2S_DMA_BURST_SIZE) |
-		SSCR3_RX(CAVS_I2S_DMA_BURST_SIZE);
+	ssc3 = SSCR3_TX(rt_I2S_DMA_BURST_SIZE) |
+	       SSCR3_RX(rt_I2S_DMA_BURST_SIZE);
 
 	/* sspsp dynamic settings are SCMODE, SFRMP, DMYSTRT, SFRMWDTH */
 	sspsp = 0U;
@@ -465,7 +437,6 @@ static int i2s_cavs_configure(struct device *dev, enum i2s_dir dir,
 
 	/* format */
 	switch (i2s_cfg->format & I2S_FMT_DATA_FORMAT_MASK) {
-
 	case I2S_FMT_DATA_FORMAT_I2S:
 		ssc0 |= SSCR0_FRDC(i2s_cfg->channels);
 
@@ -531,7 +502,7 @@ static int i2s_cavs_configure(struct device *dev, enum i2s_dir dir,
 	dma_block->dest_address = (u32_t)&ssp->ssd;
 
 	ret = dma_config(dev_data->dev_dma, dev_data->tx.dma_channel,
-			&dev_data->tx.dma_cfg);
+			 &dev_data->tx.dma_cfg);
 	if (ret < 0) {
 		LOG_ERR("dma_config failed: %d", ret);
 		return ret;
@@ -543,7 +514,7 @@ static int i2s_cavs_configure(struct device *dev, enum i2s_dir dir,
 	dma_block->dest_address = (u32_t)NULL;
 
 	ret = dma_config(dev_data->dev_dma, dev_data->rx.dma_channel,
-			&dev_data->rx.dma_cfg);
+			 &dev_data->rx.dma_cfg);
 	if (ret < 0) {
 		LOG_ERR("dma_config failed: %d", ret);
 		return ret;
@@ -561,9 +532,8 @@ static int i2s_cavs_configure(struct device *dev, enum i2s_dir dir,
 	return 0;
 }
 
-static int i2s_tx_stream_start(struct i2s_cavs_dev_data *dev_data,
-			   volatile struct i2s_cavs_ssp *const ssp,
-			   struct device *dev_dma)
+static int i2s_tx_stream_start(struct i2s_dev_data *dev_data,
+			       struct device *dev_dma)
 {
 	int ret = 0;
 	void *buffer;
@@ -578,7 +548,7 @@ static int i2s_tx_stream_start(struct i2s_cavs_dev_data *dev_data,
 	}
 
 	ret = dma_reload(dev_dma, strm->dma_channel, (u32_t)buffer,
-			(u32_t)&ssp->ssd, dev_data->cfg.block_size);
+			 (u32_t)&ssp->ssd, dev_data->cfg.block_size);
 	if (ret != 0) {
 		LOG_ERR("dma_reload failed (%d)", ret);
 		return ret;
@@ -607,8 +577,8 @@ static int i2s_tx_stream_start(struct i2s_cavs_dev_data *dev_data,
 	return 0;
 }
 
-static int i2s_rx_stream_start(struct i2s_cavs_dev_data *dev_data,
-		volatile struct i2s_cavs_ssp *const ssp, struct device *dev_dma)
+static int i2s_rx_stream_start(struct i2s_dev_data *dev_data,
+			       struct device *dev_dma)
 {
 	int ret = 0;
 	void *buffer;
@@ -625,7 +595,7 @@ static int i2s_rx_stream_start(struct i2s_cavs_dev_data *dev_data,
 	SOC_DCACHE_INVALIDATE(buffer, dev_data->cfg.block_size);
 
 	ret = dma_reload(dev_dma, strm->dma_channel, (u32_t)&ssp->ssd,
-			(u32_t)buffer, dev_data->cfg.block_size);
+			 (u32_t)buffer, dev_data->cfg.block_size);
 	if (ret != 0) {
 		LOG_ERR("dma_reload failed (%d)", ret);
 		return ret;
@@ -642,7 +612,7 @@ static int i2s_rx_stream_start(struct i2s_cavs_dev_data *dev_data,
 	ret = dma_start(dev_dma, strm->dma_channel);
 	if (ret < 0) {
 		LOG_ERR("Failed to start DMA Ch%d (%d)", strm->dma_channel,
-				ret);
+			ret);
 		return ret;
 	}
 
@@ -655,60 +625,12 @@ static int i2s_rx_stream_start(struct i2s_cavs_dev_data *dev_data,
 	return 0;
 }
 
-static void i2s_tx_stream_disable(struct i2s_cavs_dev_data *dev_data,
-			      volatile struct i2s_cavs_ssp *const ssp,
-			      struct device *dev_dma)
+static int i2s_rt_trigger(struct device *dev, enum i2s_dir dir,
+			  enum i2s_trigger_cmd cmd)
 {
-	struct stream *strm = &dev_data->tx;
-	unsigned int key;
-
-	/*
-	 * Enable transmit undderrun interrupt to allow notification
-	 * upon transmit FIFO being emptied.
-	 * Defer disabling of TX to the underrun processing in ISR
-	 */
-	key = irq_lock();
-	ssp->ssc0 &= ~SSCR0_TIM;
-	irq_unlock(key);
-
-	LOG_INF("Stopping DMA channel %u for TX stream", strm->dma_channel);
-	dma_stop(dev_dma, strm->dma_channel);
-
-	/* purge buffers queued in the stream */
-	i2s_purge_stream_buffers(strm, dev_data->cfg.mem_slab);
-}
-
-static void i2s_rx_stream_disable(struct i2s_cavs_dev_data *dev_data,
-			      volatile struct i2s_cavs_ssp *const ssp,
-			      struct device *dev_dma)
-{
-	struct stream *strm = &dev_data->rx;
-	u32_t data;
-
-	/* Disable DMA service request handshake logic. Handshake is
-	 * not required now since DMA is not in operation.
-	 */
-	ssp->ssrsa &= ~SSRSA_RXEN;
-
-	LOG_INF("Stopping RX stream & DMA channel %u", strm->dma_channel);
-	dma_stop(dev_dma, strm->dma_channel);
-
-	/* Empty the FIFO */
-	while (ssp->sss & SSSR_RNE) {
-		/* read the RX FIFO */
-		data = ssp->ssd;
-	}
-
-	/* purge buffers queued in the stream */
-	i2s_purge_stream_buffers(strm, dev_data->cfg.mem_slab);
-}
-
-static int i2s_cavs_trigger(struct device *dev, enum i2s_dir dir,
-			    enum i2s_trigger_cmd cmd)
-{
-	const struct i2s_cavs_config *const dev_cfg = DEV_CFG(dev);
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
-	volatile struct i2s_cavs_ssp *const ssp = dev_cfg->regs;
+	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
+	I2S_Type *const ssp = dev_cfg->base;
 	struct stream *strm;
 	unsigned int key;
 	int ret = 0;
@@ -728,10 +650,10 @@ static int i2s_cavs_trigger(struct device *dev, enum i2s_dir dir,
 
 		if (dir == I2S_DIR_TX) {
 			ret = i2s_tx_stream_start(dev_data, ssp,
-					dev_data->dev_dma);
+						  dev_data->dev_dma);
 		} else {
 			ret = i2s_rx_stream_start(dev_data, ssp,
-					dev_data->dev_dma);
+						  dev_data->dev_dma);
 		}
 
 		if (ret < 0) {
@@ -765,9 +687,9 @@ static int i2s_cavs_trigger(struct device *dev, enum i2s_dir dir,
 	return ret;
 }
 
-static int i2s_cavs_read(struct device *dev, void **mem_block, size_t *size)
+static int i2s_rt_read(struct device *dev, void **mem_block, size_t *size)
 {
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 	struct stream *strm = &dev_data->rx;
 	void *buffer;
 	int ret = 0;
@@ -787,9 +709,9 @@ static int i2s_cavs_read(struct device *dev, void **mem_block, size_t *size)
 	return 0;
 }
 
-static int i2s_cavs_write(struct device *dev, void *mem_block, size_t size)
+static int i2s_rt_write(struct device *dev, void *mem_block, size_t size)
 {
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 	struct stream *strm = &dev_data->tx;
 	int ret;
 
@@ -811,53 +733,66 @@ static int i2s_cavs_write(struct device *dev, void *mem_block, size_t size)
 }
 
 /* clear IRQ sources atm */
-static void i2s_cavs_isr(void *arg)
+static void i2s_rt_isr(void *arg)
 {
 	struct device *dev = (struct device *)arg;
-	const struct i2s_cavs_config *const dev_cfg = DEV_CFG(dev);
-	volatile struct i2s_cavs_ssp *const ssp = dev_cfg->regs;
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
-	u32_t status;
-
-	/* clear interrupts */
-	status = ssp->sss;
-	ssp->sss = status;
-
-	if (status & SSSR_TUR) {
-		/*
-		 * transmit underrun occurred.
-		 * 1. disable transmission
-		 * 2. disable underrun interrupt
-		 */
-		ssp->sstsa &= ~SSTSA_TXEN;
-		ssp->ssc0 |= SSCR0_TIM;
-		dev_data->tx.state = I2S_STATE_READY;
+	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
+	switch (dev_cfg->irq_id) {
+#if defined(I2S0)
+	case DT_INST_0_NXP_RT_I2S_IRQ_0:
+		I2S0_DriverIRQHandler();
+		break;
+#endif
+#if defined(I2S1)
+	case DT_INST_1_NXP_RT_I2S_IRQ_0:
+		I2S1_DriverIRQHandler();
+		break;
+#endif
+#if defined(I2S2)
+	case DT_INST_2_NXP_RT_I2S_IRQ_0:
+		I2S2_DriverIRQHandler() break;
+#endif
+	default:
+		LOG_ERR("irq not support");
+		break;
 	}
 }
 
-static int i2s_cavs_initialize(struct device *dev)
+static void _callback(I2S_Type *base, sai_handle_t *handle, status_t status,
+		      void *userData)
 {
-	const struct i2s_cavs_config *const dev_cfg = DEV_CFG(dev);
-	struct i2s_cavs_dev_data *const dev_data = DEV_DATA(dev);
+	LOG_DBG("sai user call back occurred");
+}
 
-	dev_data->dev_dma = device_get_binding(CONFIG_I2S_CAVS_DMA_NAME);
+static int i2s_rt_initialize(struct device *dev)
+{
+	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
+
+	dev_data->dev_dma = device_get_binding(dev_cfg->edma_name);
 	if (!dev_data->dev_dma) {
-		LOG_ERR("%s device not found", CONFIG_I2S_CAVS_DMA_NAME);
+		LOG_ERR("%s device not found", dev_cfg->edma_name);
 		return -ENODEV;
 	}
 
 	/* Initialize the buffer queues */
 	k_msgq_init(&dev_data->tx.in_queue, (char *)dev_data->tx.in_msgs,
-			sizeof(void *), I2S_CAVS_BUF_Q_LEN);
+		    sizeof(void *), CONFIG_I2S_BUFFER_QUEUE_COUNT);
 	k_msgq_init(&dev_data->rx.in_queue, (char *)dev_data->rx.in_msgs,
-			sizeof(void *), I2S_CAVS_BUF_Q_LEN);
+		    sizeof(void *), CONFIG_I2S_BUFFER_QUEUE_COUNT);
 	k_msgq_init(&dev_data->tx.out_queue, (char *)dev_data->tx.out_msgs,
-			sizeof(void *), I2S_CAVS_BUF_Q_LEN);
+		    sizeof(void *), CONFIG_I2S_BUFFER_QUEUE_COUNT);
 	k_msgq_init(&dev_data->rx.out_queue, (char *)dev_data->rx.out_msgs,
-			sizeof(void *), I2S_CAVS_BUF_Q_LEN);
+		    sizeof(void *), CONFIG_I2S_BUFFER_QUEUE_COUNT);
 
 	/* register ISR */
 	dev_cfg->irq_connect();
+
+	
+	SAI_Init(DEV_BASE(dev));
+	/*audio does not have call back to user*/
+	SAI_TransferTxCreateHandle(DEV_BASE(dev), &dev_cfg->irq_handle,
+				   _callback, NULL);
 
 	dev_data->tx.state = I2S_STATE_NOT_READY;
 	dev_data->rx.state = I2S_STATE_NOT_READY;
@@ -867,14 +802,23 @@ static int i2s_cavs_initialize(struct device *dev)
 	return 0;
 }
 
-static const struct i2s_driver_api i2s_cavs_driver_api = {
-	.configure = i2s_cavs_configure,
-	.read = i2s_cavs_read,
-	.write = i2s_cavs_write,
-	.trigger = i2s_cavs_trigger,
+static const struct i2s_driver_api i2s_rt_driver_api = {
+	.configure = i2s_rt_configure,
+	.read = i2s_rt_read,
+	.write = i2s_rt_write,
+	.trigger = i2s_rt_trigger,
 };
 
-static void i2s1_cavs_irq_connect(void)
+static void i2s0_irq_connect(void)
+{
+	I2S_IRQ_CONNECT(0);
+}
+
+I2S_DEVICE_CONFIG_DEFINE(0);
+I2S_DEVICE_DATA_DEFINE(0);
+I2S_DEVICE_AND_API_INIT(0);
+
+static void i2s1_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(1);
 }
@@ -883,7 +827,7 @@ I2S_DEVICE_CONFIG_DEFINE(1);
 I2S_DEVICE_DATA_DEFINE(1);
 I2S_DEVICE_AND_API_INIT(1);
 
-static void i2s2_cavs_irq_connect(void)
+static void i2s2_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(2);
 }
@@ -891,12 +835,3 @@ static void i2s2_cavs_irq_connect(void)
 I2S_DEVICE_CONFIG_DEFINE(2);
 I2S_DEVICE_DATA_DEFINE(2);
 I2S_DEVICE_AND_API_INIT(2);
-
-static void i2s3_cavs_irq_connect(void)
-{
-	I2S_IRQ_CONNECT(3);
-}
-
-I2S_DEVICE_CONFIG_DEFINE(3);
-I2S_DEVICE_DATA_DEFINE(3);
-I2S_DEVICE_AND_API_INIT(3);

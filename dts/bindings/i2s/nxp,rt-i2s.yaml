@@ -14,5 +14,12 @@ properties:
     interrupts:
       required: true
 
+    pll:
+      type: phandle-array
+      required: true
+      description: pll information
+
     dma-names:
       required: true
+
+

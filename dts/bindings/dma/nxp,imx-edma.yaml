@@ -29,8 +29,8 @@ properties:
       description: If the DMA controller supports always on
 
     "#dma-cells":
-      type: int
       required: true
+      const: 2
       description: Number of items to expect in a DMAMUX specifier
 
 # Parameter syntax of NXP follows the dmamux client dts syntax

@@ -93,6 +93,14 @@ static int mcux_ccm_get_subsys_rate(struct device *dev,
 		*rate = CLOCK_GetIpgFreq();	
 		break;
 #endif
+
+#ifdef CONFIG_I2S_IMX_RT
+	case IMX_CCM_SAI1_CLK:
+	case IMX_CCM_SAI2_CLK:
+	case IMX_CCM_SAI3_CLK:
+		*rate = CLOCK_GetFreq(kCLOCK_AudioPllClk);
+		break;
+#endif
 	}
 
 	return 0;
