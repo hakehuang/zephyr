@@ -15,10 +15,10 @@ properties:
       required: true
 
     "#clock-cells":
+      const: 3
+
+    "#pll-cells":
+      type: int
+      required: true
       const: 4
 
-clock-cells:
-  - name
-  - offset
-  - bits
-  - value
