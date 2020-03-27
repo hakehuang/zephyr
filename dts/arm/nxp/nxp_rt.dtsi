@@ -140,7 +140,7 @@
 			compatible = "nxp,imx-anatop";
 			reg = <0x400d8000 0x4000>;
 			label = "CCM_ANA";
-			#clock-cells = <4>;
+			#clock-cells = <3>;
 		};
 
 		gpio1: gpio@401b8000 {
@@ -606,6 +606,7 @@
 			status = "disabled";
 			label = "EDMA0";
 		};
+
 		sai1: sai@40384000 {
 			compatible = "nxp,rt-i2s";
 			#address-cells = <1>;
