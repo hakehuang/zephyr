@@ -17,3 +17,8 @@ properties:
     "#clock-cells":
       const: 4
 
+clock-cells:
+  - name
+  - offset
+  - bits
+  - value
