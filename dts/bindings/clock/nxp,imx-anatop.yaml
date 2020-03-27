@@ -23,13 +23,11 @@ properties:
     "#clock-cells":
       const: 3
 
-clock-cells:
+pll-cells:
   - name
   - offset
   - bits
   - value
-
-
 
 clock-cells:
   - name
