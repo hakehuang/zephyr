@@ -5,7 +5,7 @@ description: NXP RT SAI-I2S controller
 
 compatible: "nxp,rt-i2s"
 
-include: [i2s-controller.yaml, dma.yaml]
+include: [i2s-controller.yaml, dma.yaml, iomux-controller.yaml]
 
 properties:
     reg:
