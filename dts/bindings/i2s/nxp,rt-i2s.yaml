@@ -17,17 +17,17 @@ properties:
     dma-names:
       required: true
 
-    mclks:
+    iomuxs:
       type: phandle-array
       required: true
 
-    "#mclk-cells":
+    "#iomux-cells":
       type: int
       const: 3
       required: true
-      description: Number of items to expect in a mclk specifier
+      description: Number of items to expect in a iomux specifier
 
-mclk-cells:
+iomux-cells:
   - offset
   - mask  
 
