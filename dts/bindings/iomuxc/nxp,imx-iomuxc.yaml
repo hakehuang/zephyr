@@ -15,9 +15,8 @@ properties:
       required: true
 
     "#iomux-cells":
-      const: 3
+      const: 2
 
 iomux-cells:
-  - pin
   - offset
   - mask
