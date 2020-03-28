@@ -1,0 +1,20 @@
+# MCUXpresso SDK pinmux
+
+# Copyright (c) 2016, Freescale Semiconductor, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig PINMUX_IMX
+	bool "i.MX.RT pinmux driver"
+	depends on SOC_SERIES_IMX_RT
+	help
+	  Enable the i.MX.RT pinmux driver.
+
+if PINMUX_IMX
+
+config PINMUX_MCUX_GPR
+	bool "General Purpose Register"
+	default y
+	help
+	  Enable General Purpose Register.
+
+endif # PINMUX_MCUX

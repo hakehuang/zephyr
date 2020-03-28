@@ -61,4 +61,9 @@ config PINMUX_MCUX_PORTE_NAME
 	depends on PINMUX_MCUX_PORTE
 	default "porte"
 
+config PINMUX_MCUX_GPR
+	bool "General Purpose Register"
+	help
+	  Enable General Purpose Register.
+
 endif # PINMUX_MCUX
