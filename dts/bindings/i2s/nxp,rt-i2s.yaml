@@ -17,7 +17,7 @@ properties:
     dma-names:
       required: true
 
-    iomuxs:
+    pinmuxs:
       type: phandle-array
       required: true
       description: iomux settings

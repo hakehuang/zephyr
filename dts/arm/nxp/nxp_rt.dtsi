@@ -622,7 +622,7 @@
 				    &anatop IMX_CCM_AUDIO_POST_DIV_SEL 0x70 0x18 1
 				    &anatop IMX_CCM_ANALOG_PLL_AUDIO_NUM 0x80 0x3FFFFFFF 77
 				    &anatop IMX_CCM_ANALOG_PLL_AUDIO_DENOM 0x90 0x3FFFFFFF 100>;
-			iomuxs = <&iomuxc 0x4 0x80000>;
+			pinmuxs = <&iomuxc 0x4 0x80000>;
 			interrupts = <56 0>;
 			dmas = <&edma0 0 20 
 				&edma0 0 19 >;
@@ -644,7 +644,7 @@
 				   &anatop IMX_CCM_AUDIO_POST_DIV_SEL 0x70 0x18 1
 				   &anatop IMX_CCM_ANALOG_PLL_AUDIO_NUM 0x80 0x3FFFFFFF 77
 				   &anatop IMX_CCM_ANALOG_PLL_AUDIO_DENOM 0x90 0x3FFFFFFF 100>;
-			iomuxs = <&iomuxc 0x4 0x100000>;
+			pinmuxs = <&iomuxc 0x4 0x100000>;
 			interrupts = <57 0>;
 			dmas = <&edma0 0 22 
 				&edma0 0 21 >;
@@ -666,7 +666,7 @@
 				   &anatop IMX_CCM_AUDIO_POST_DIV_SEL 0x70 0x18 1
 				   &anatop IMX_CCM_ANALOG_PLL_AUDIO_NUM 0x80 0x3FFFFFFF 77
 				   &anatop IMX_CCM_ANALOG_PLL_AUDIO_DENOM 0x90 0x3FFFFFFF 100>;
-			iomuxs = <&iomuxc 0x4 0x200000>;
+			pinmuxs = <&iomuxc 0x4 0x200000>;
 			interrupts = <58 0>, <59 0>;
 			dmas = <&edma0 0 84
 				&edma0 0 83 >;
