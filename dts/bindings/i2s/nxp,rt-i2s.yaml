@@ -20,6 +20,7 @@ properties:
     iomuxs:
       type: phandle-array
       required: true
+      description: iomux settings
 
     "#iomux-cells":
       type: int
@@ -29,7 +30,7 @@ properties:
 
 iomux-cells:
   - offset
-  - mask  
+  - mask
 
 
 
