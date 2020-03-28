@@ -19,7 +19,7 @@ properties:
 
     mclks:
       type: phandle-array
-      retquired: true
+      required: true
 
 
 
