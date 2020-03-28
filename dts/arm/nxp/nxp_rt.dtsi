@@ -240,7 +240,7 @@
 			compatible = "nxp,imx-iomuxc.yaml"
 			reg = <0x401f8000 0x4000>;
 			label = "PINMUX_0";
-			#-cells = <4>;
+			#iomux-cells = <3>;
 		};
 
 		lcdif1: display-controller@402b8000 {
