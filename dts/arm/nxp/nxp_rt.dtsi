@@ -132,7 +132,6 @@
 			compatible = "nxp,imx-ccm";
 			reg = <0x400fc000 0x4000>;
 			label = "CCM";
-
 			#clock-cells = <3>;
 		};
 
@@ -240,7 +239,7 @@
 			compatible = "nxp,imx-iomuxc.yaml";
 			reg = <0x401f8000 0x4000>;
 			label = "PINMUX_0";
-			#iomux-cells = <3>;
+			#iomux-cells = <2>;
 		};
 
 		lcdif1: display-controller@402b8000 {
