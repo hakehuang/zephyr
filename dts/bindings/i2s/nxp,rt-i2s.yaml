@@ -22,15 +22,6 @@ properties:
       required: true
       description: iomux settings
 
-    "#iomux-cells":
-      type: int
-      const: 2
-      required: true
-      description: Number of items to expect in a iomux specifier
-
-iomux-cells:
-  - offset
-  - mask
 
 
 
