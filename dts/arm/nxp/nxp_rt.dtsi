@@ -236,10 +236,10 @@
 		};
 
 		iomuxc: iomuxc@401f8000 {
-			compatible = "nxp,imx-iomuxc.yaml";
+			compatible = "nxp,imx-pinmuxc";
 			reg = <0x401f8000 0x4000>;
 			label = "PINMUX_0";
-			#iomux-cells = <2>;
+			#pinmux-cells = <2>;
 		};
 
 		lcdif1: display-controller@402b8000 {

@@ -3,9 +3,9 @@
 
 description: i.MX IOMUXC node
 
-compatible: "nxp,imx-iomuxc"
+compatible: "nxp,imx-pinmuxc"
 
-include: [iomux-controller.yaml, base.yaml]
+include: base.yaml
 
 properties:
     reg:
@@ -14,9 +14,6 @@ properties:
     label:
       required: true
 
-    "#iomux-cells":
-      const: 2
-
-iomux-cells:
+pinmux-cells:
   - offset
   - mask
