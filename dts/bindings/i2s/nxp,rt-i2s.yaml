@@ -23,7 +23,7 @@ properties:
 
     "#iomux-cells":
       type: int
-      const: 3
+      const: 2
       required: true
       description: Number of items to expect in a iomux specifier
 
