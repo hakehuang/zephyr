@@ -3,7 +3,7 @@
 
 description: i.MX IOMUXC node
 
-compatible: "nxp,imx-pinmuxc"
+compatible: "nxp,imx-pinmux"
 
 include: base.yaml
 

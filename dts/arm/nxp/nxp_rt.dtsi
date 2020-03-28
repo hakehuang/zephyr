@@ -238,11 +238,10 @@
 		iomuxc: iomuxc@401f8000 {
 			reg = <0x401f8000 0x4000>;
 			label = "PINMUX_0";
-			#pinmux-cells = <2>;
 		};
 
 		iomuxcgpr: iomuxcgpr@400ac000 {
-			compatible = "nxp,imx-pinmuxcgpr";
+			compatible = "nxp,imx-pinmux";
 			reg = <0x400AC000 0x4000>;
 			label = "PINMUX_GPR";
 			#pinmux-cells = <2>;
