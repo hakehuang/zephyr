@@ -613,6 +613,7 @@
 			compatible = "nxp,rt-i2s";
 			#address-cells = <1>;
 			#size-cells = <0>;
+			#mclk-cells = <2>;
 			reg = <0x40384000 0x4000>;
 			clocks = <&ccm IMX_CCM_SAI1_CLK 0x7C 2 
 					&ccm  IMX_CCM_CS1CDR_PREDIV 0x28 0
@@ -634,6 +635,7 @@
 			compatible = "nxp,rt-i2s";
 			#address-cells = <1>;
 			#size-cells = <0>;
+			#mclk-cells = <2>;
 			reg = <0x40388000 0x4000>;
 			clocks = <&ccm IMX_CCM_SAI2_CLK 0x7C 2
 					 &ccm  IMX_CCM_CS2CDR_PREDIV 0x2C 0
@@ -655,6 +657,7 @@
 			compatible = "nxp,rt-i2s";
 			#address-cells = <1>;
 			#size-cells = <0>;
+			#mclk-cells = <2>;
 			reg = <0x4038C000 0x4000>;
 			clocks = <&ccm IMX_CCM_SAI2_CLK 0x7C 2
 					 &ccm  IMX_CCM_CS1CDR_PREDIV 0x28 0
