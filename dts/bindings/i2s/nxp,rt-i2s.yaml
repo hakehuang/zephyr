@@ -21,6 +21,16 @@ properties:
       type: phandle-array
       required: true
 
+    "#mclk-cells":
+      type: int
+      const: 3
+      required: true
+      description: Number of items to expect in a mclk specifier
+
+mclk-cells:
+  - offset
+  - mask  
+
 
 
 
