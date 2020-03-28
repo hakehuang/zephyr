@@ -17,4 +17,10 @@ properties:
     dma-names:
       required: true
 
+    mclks:
+      type: phandle-array
+      retquired: true
+
+
+
 
