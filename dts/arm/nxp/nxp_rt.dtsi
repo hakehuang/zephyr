@@ -246,7 +246,7 @@
 			reg = <0x400AC000 0x4000>;
 			label = "PINMUX_GPR";
 			#pinmux-cells = <2>;
-		}
+		};
 
 		lcdif1: display-controller@402b8000 {
 			compatible = "fsl,imx6sx-lcdif";
