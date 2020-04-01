@@ -161,9 +161,15 @@ struct pinmux_imx_config;
 	((const struct pinmux_imx_config *const)(dev)->config->config_info)
 #define DEV_PINMUX_BASE(dev) ((void *)DEV_CFG(dev)->base)
 
+#ifdef (I2S0)
+I2S_DEVICE_OBJECT_DECLARE(0);
+#endif
+#ifdef (I2S1)
 I2S_DEVICE_OBJECT_DECLARE(1);
+#endif
+#ifdef (I2S2)
 I2S_DEVICE_OBJECT_DECLARE(2);
-I2S_DEVICE_OBJECT_DECLARE(3);
+#endif
 
 static void i2s_dma_tx_callback(void *, u32_t, int);
 static void i2s_tx_stream_disable(struct device *);
@@ -570,7 +576,7 @@ static int i2s_tx_stream_start(struct device *dev)
 	struct stream *strm = &DEV_DATA(dev)->tx;
 	u32_t data_path = strm->start_channel;
 	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
-	struct dma_imx_rt_data * dev_data = DEV_DATA(dev);
+	struct i2s_rt_data * dev_data = DEV_DATA(dev);
 
 	/* retrieve buffer from input queue */
 	ret = k_msgq_get(&strm->in_queue, &buffer, K_NO_WAIT);
@@ -608,10 +614,9 @@ static int i2s_rx_stream_start(struct device *dev)
 {
 	int ret = 0;
 	void *buffer;
-	unsigned int key;
-	u32_t data_path = strm->start_channel;
 	struct stream *strm = &DEV_DATA(dev)->rx;
 	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
+	u32_t data_path = strm->start_channel;
 
 	/* allocate receive buffer from SLAB */
 	ret = k_mem_slab_alloc(dev_data->cfg.mem_slab, &buffer, K_NO_WAIT);
@@ -838,7 +843,7 @@ static void _audio_clock_settings(struct device *dev)
 	audioPllConfig.denominator = den;
 	audioPllConfig.src = src;
 
-	LOG_DBG("loopDivider = %d", ld);
+	LOG_DBG("loopDivider = %d", lp);
 	LOG_DBG("postDivider = %d", pd);
 	LOG_DBG("numerator = %d", num);
 	LOG_DBG("denominator = %d", den);
