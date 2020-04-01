@@ -42,9 +42,9 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 #define I2S_DEVICE_CONFIG_NAME(i2s_id) i2s##i2s_id##_config
 
 #define I2S_DEVICE_CONFIG_DEFINE(i2s_id)                                        \
-	static const struct i2s_config i2s##i2s_id##_config = {                 \
+	static const struct i2s_rt_config i2s##i2s_id##_config = {              \
 		.base = (I2S_Type *)DT_INST_##i2s_id##_NXP_RT_I2S_BASE_ADDRESS, \
-		.edma_name = CONFIG_I2S_##i2s_id##_DMA_NAME,                    \
+		.edma_name = DT_INST_##i2s_id##_NXP_RT_I2S_DMAS_CONTROLLER_0,   \
 		.pinmux_name =                                                  \
 			DT_INST_##i2s_id##_NXP_RT_I2S_PINMUXS_CONTROLLER,       \
 		.i2s_id = i2s_id,                                               \
@@ -162,12 +162,15 @@ struct pinmux_imx_config;
 #define DEV_PINMUX_BASE(dev) ((void *)DEV_CFG(dev)->base)
 
 #if CONFIG_I2S_0
+void SAI1_DriverIRQHandler(void);
 I2S_DEVICE_OBJECT_DECLARE(0);
 #endif
 #if CONFIG_I2S_1
+void SAI2_DriverIRQHandler(void);
 I2S_DEVICE_OBJECT_DECLARE(1);
 #endif
 #if CONFIG_I2S_2
+void SAI3_DriverIRQHandler(void);
 I2S_DEVICE_OBJECT_DECLARE(2);
 #endif
 
@@ -416,7 +419,6 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 	/*num_words is frame size*/
 	u8_t num_words = i2s_cfg->channels;
 	u8_t word_size_bits = i2s_cfg->word_size;
-	
 
 	if ((dev_data->tx.state != I2S_STATE_NOT_READY) &&
 	    (dev_data->tx.state != I2S_STATE_READY) &&
@@ -576,7 +578,7 @@ static int i2s_tx_stream_start(struct device *dev)
 	struct stream *strm = &DEV_DATA(dev)->tx;
 	u32_t data_path = strm->start_channel;
 	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
-	struct i2s_dev_data * dev_data = DEV_DATA(dev);
+	struct i2s_dev_data *dev_data = DEV_DATA(dev);
 
 	/* retrieve buffer from input queue */
 	ret = k_msgq_get(&strm->in_queue, &buffer, K_NO_WAIT);
