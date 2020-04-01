@@ -561,7 +561,7 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 		SAI_TxSetBitClockRate(DEV_BASE(dev), mclk,
 				      i2s_cfg->frame_clk_freq, word_size_bits,
 				      i2s_cfg->channels);
-		SAI_TxEnableInterrupts(dev_BASE(dev), kSAI_FIFOErrorInterruptEnable);
+		SAI_TxEnableInterrupts(DEV_BASE(dev), kSAI_FIFOErrorInterruptEnable);
 	} else {
 		SAI_TransferRxSetConfig(DEV_BASE(dev),
 					&(DEV_DATA(dev)->rx.handle), &config);
@@ -569,7 +569,7 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 		SAI_RxSetBitClockRate(DEV_BASE(dev), mclk,
 				      i2s_cfg->frame_clk_freq, word_size_bits,
 				      i2s_cfg->channels);
-		SAI_RxEnableInterrupts(dev_BASE(dev), kSAI_FIFOErrorInterruptEnable);
+		SAI_RxEnableInterrupts(DEV_BASE(dev), kSAI_FIFOErrorInterruptEnable);
 	}
 
 	/* enable interrupt */
