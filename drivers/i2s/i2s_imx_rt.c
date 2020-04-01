@@ -20,7 +20,9 @@
 #include <drivers/i2s.h>
 #include <drivers/pinmux.h>
 #include <drivers/clock_control.h>
+#include <dt-bindings/clock/imx_ccm.h>
 #include <soc.h>
+
 #include "i2s_imx_rt.h"
 
 #define LOG_DOMAIN dev_i2s_rt
@@ -183,6 +185,8 @@ static inline void i2s_purge_stream_buffers(struct stream *strm,
 static void i2s_tx_stream_disable(struct device *dev)
 {
 	struct stream *strm = &DEV_DATA(dev)->tx;
+	struct device * dev_dma = DEV_DATA(dev)->dev_dma;
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 
 	LOG_INF("Stopping DMA channel %u for TX stream", strm->dma_channel);
 	dma_stop(dev_dma, strm->dma_channel);
@@ -194,6 +198,8 @@ static void i2s_tx_stream_disable(struct device *dev)
 static void i2s_rx_stream_disable(struct device *dev)
 {
 	struct stream *strm = &DEV_DATA(dev)->rx;
+	struct device * dev_dma = DEV_DATA(dev)->dev_dma;
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 
 	LOG_INF("Stopping RX stream & DMA channel %u", strm->dma_channel);
 	dma_stop(dev_dma, strm->dma_channel);
@@ -251,7 +257,7 @@ static void i2s_dma_tx_callback(void *arg, u32_t channel, int status)
 		break;
 
 	case I2S_STATE_STOPPING:
-		i2s_tx_stream_disable(dev_data);
+		i2s_tx_stream_disable(dev);
 		break;
 	}
 }
@@ -312,7 +318,7 @@ static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 
 static void _enable_mclk_direction(struct device *dev, bool dir)
 {
-	const struct device *iomuxgpr_dev =
+	const struct device * const iomuxgpr_dev =
 		device_get_binding(DEV_CFG(dev)->pinmux_name);
 	u32_t offset = 0;
 	u32_t mask = 0;
@@ -339,12 +345,12 @@ static void _enable_mclk_direction(struct device *dev, bool dir)
 		u32_t value = 0;
 		pinmux_pin_get(iomuxgpr_dev, offset, &value);
 		value |= mask;
-		pinmux_pin_set(iomuxgpr_dev, offset, &value);
+		pinmux_pin_set(iomuxgpr_dev, offset, value);
 	} else {
 		u32_t value = 0;
 		pinmux_pin_get(iomuxgpr_dev, offset, &value);
 		value &= ~mask;
-		pinmux_pin_set(iomuxgpr_dev, offset, &value);
+		pinmux_pin_set(iomuxgpr_dev, offset, value);
 	}
 }
 
@@ -352,7 +358,7 @@ static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 {
 	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
 	struct device *ccm_dev;
-	clock_control_subsys_t sub_sys;
+	clock_control_subsys_t clk_sub_sys;
 	u32_t rate = 0, pre_div, src_div;
 	switch (dev_cfg->i2s_id) {
 	case 0:
@@ -432,7 +438,7 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 
 	memcpy(&dev_data->cfg, i2s_cfg, sizeof(struct i2s_config));
 
-	memset(config, 0, sizeof(config));
+	memset(&config, 0, sizeof(config));
 
 	if (i2s_cfg->options & I2S_OPT_FRAME_CLK_SLAVE) {
 		if (i2s_cfg->options & I2S_OPT_BIT_CLK_SLAVE) {
@@ -772,6 +778,7 @@ static void _audio_clock_settings(struct device *dev)
 	clock_audio_pll_config_t audioPllConfig;
 
 	if (DEV_CFG(dev)->i2s_id == 0) {
+#if defined(I2S0)
 		src = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp  = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
 		pd  = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
@@ -784,7 +791,9 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetMux(kCLOCK_Sai1Mux, clK_src);
 		CLOCK_SetDiv(kCLOCK_Sai1PreDiv, pre_div);
 		CLOCK_SetDiv(kCLOCK_Sai1Div, src_div);
+#endif
 	} else if (DEV_CFG(dev)->i2s_id == 1) {
+#if defined(I2S1)
 		src = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp  = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
 		pd  = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
@@ -797,7 +806,9 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetMux(kCLOCK_Sai2Mux, clK_src);
 		CLOCK_SetDiv(kCLOCK_Sai2PreDiv, pre_div);
 		CLOCK_SetDiv(kCLOCK_Sai2Div, src_div);
+#endif
 	} else if (DEV_CFG(dev)->i2s_id == 2) {
+#if defined(I2S2)
 		src = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp  = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
 		pd  = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
@@ -810,6 +821,7 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetMux(kCLOCK_Sai3Mux, clK_src);
 		CLOCK_SetDiv(kCLOCK_Sai3PreDiv, pre_div);
 		CLOCK_SetDiv(kCLOCK_Sai3Div, src_div);
+#endif
 	} else {
 		LOF_ERR("i2s bus id does not support");
 	}
