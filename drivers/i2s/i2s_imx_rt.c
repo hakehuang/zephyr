@@ -161,13 +161,13 @@ struct pinmux_imx_config;
 	((const struct pinmux_imx_config *const)(dev)->config->config_info)
 #define DEV_PINMUX_BASE(dev) ((void *)DEV_CFG(dev)->base)
 
-#if defined(I2S0)
+#if defined(I2S_0)
 I2S_DEVICE_OBJECT_DECLARE(0);
 #endif
-#if defined(I2S1)
+#if defined(I2S_1)
 I2S_DEVICE_OBJECT_DECLARE(1);
 #endif
-#if defined(I2S2)
+#if defined(I2S_2)
 I2S_DEVICE_OBJECT_DECLARE(2);
 #endif
 
@@ -329,19 +329,19 @@ static void _enable_mclk_direction(struct device *dev, bool dir)
 	/* enable MCLK output */
 	switch (DEV_CFG(dev)->i2s_id) {
 	case 0:
-#if defined(I2S0)
+#if defined(I2S_0)
 		offset = DT_INST_0_NXP_RT_I2S_PINMUXS_PIN;
 		mask = DT_INST_0_NXP_RT_I2S_PINMUXS_FUNCTION;
 #endif
 		break;
 	case 1:
-#if defined(I2S1)
+#if defined(I2S_1)
 		offset = DT_INST_1_NXP_RT_I2S_PINMUXS_PIN;
 		mask = DT_INST_1_NXP_RT_I2S_PINMUXS_FUNCTION;
 #endif
 		break;
 	case 2:
-#if defined(I2S2)
+#if defined(I2S_2)
 		offset = DT_INST_2_NXP_RT_I2S_PINMUXS_PIN;
 		mask = DT_INST_2_NXP_RT_I2S_PINMUXS_FUNCTION;
 #endif
@@ -372,7 +372,7 @@ static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 	u32_t rate = 0, pre_div, src_div;
 	switch (dev_cfg->i2s_id) {
 	case 0:
-#if defined(I2S0)
+#if defined(I2S_0)
 		ccm_dev = device_get_binding(
 			DT_INST_0_NXP_RT_I2S_CLOCK_CONTROLLER);
 		clk_sub_sys = (clock_control_subsys_t)IMX_CCM_SAI1_CLK;
@@ -381,7 +381,7 @@ static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 #endif
 		break;
 	case 1:
-#if defined(I2S1)
+#if defined(I2S_1)
 		ccm_dev = device_get_binding(
 			DT_INST_1_NXP_RT_I2S_CLOCK_CONTROLLER);
 		clk_sub_sys = (clock_control_subsys_t)IMX_CCM_SAI2_CLK;
@@ -390,7 +390,7 @@ static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 #endif
 		break;
 	case 2:
-#if defined(I2S2)
+#if defined(I2S_2)
 		ccm_dev = device_get_binding(
 			DT_INST_2_NXP_RT_I2S_CLOCK_CONTROLLER);
 		clk_sub_sys = (clock_control_subsys_t)IMX_CCM_SAI3_CLK;
@@ -759,17 +759,17 @@ static void i2s_rt_isr(void *arg)
 	struct device *dev = (struct device *)arg;
 	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
 	switch (dev_cfg->irq_id) {
-#if defined(I2S0)
+#if defined(I2S_0)
 	case DT_INST_0_NXP_RT_I2S_IRQ_0:
 		I2S0_DriverIRQHandler();
 		break;
 #endif
-#if defined(I2S1)
+#if defined(I2S_1)
 	case DT_INST_1_NXP_RT_I2S_IRQ_0:
 		I2S1_DriverIRQHandler();
 		break;
 #endif
-#if defined(I2S2)
+#if defined(I2S_2)
 	case DT_INST_2_NXP_RT_I2S_IRQ_0:
 		I2S2_DriverIRQHandler() break;
 #endif
@@ -791,7 +791,7 @@ static void _audio_clock_settings(struct device *dev)
 	clock_audio_pll_config_t audioPllConfig;
 
 	if (DEV_CFG(dev)->i2s_id == 0) {
-#if defined(I2S0)
+#if defined(I2S_0)
 		src = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
 		pd = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
@@ -806,7 +806,7 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetDiv(kCLOCK_Sai1Div, src_div);
 #endif
 	} else if (DEV_CFG(dev)->i2s_id == 1) {
-#if defined(I2S1)
+#if defined(I2S_1)
 		src = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
 		pd = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
@@ -821,7 +821,7 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetDiv(kCLOCK_Sai2Div, src_div);
 #endif
 	} else if (DEV_CFG(dev)->i2s_id == 2) {
-#if defined(I2S2)
+#if defined(I2S_2)
 		src = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
 		pd = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
@@ -933,7 +933,7 @@ static const struct i2s_driver_api i2s_rt_driver_api = {
 	.trigger = i2s_rt_trigger,
 };
 
-#if defined(I2S0)
+#if defined(I2S_0)
 static void i2s0_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(0);
@@ -944,7 +944,7 @@ I2S_DEVICE_DATA_DEFINE(0);
 I2S_DEVICE_AND_API_INIT(0);
 #endif
 
-#if defined(I2S1)
+#if defined(I2S_1)
 static void i2s1_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(1);
@@ -955,7 +955,7 @@ I2S_DEVICE_DATA_DEFINE(1);
 I2S_DEVICE_AND_API_INIT(1);
 #endif
 
-#if defined(I2S2)
+#if defined(I2S_2)
 static void i2s2_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(2);
