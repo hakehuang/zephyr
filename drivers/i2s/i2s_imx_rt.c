@@ -212,7 +212,6 @@ static void i2s_rx_stream_disable(struct device *dev)
 static void i2s_dma_tx_callback(void *arg, u32_t channel, int status)
 {
 	struct device *dev = (struct device *)arg;
-	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
 	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 
 	struct stream *strm = &dev_data->tx;
@@ -265,7 +264,6 @@ static void i2s_dma_tx_callback(void *arg, u32_t channel, int status)
 static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 {
 	struct device *dev = (struct device *)arg;
-	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
 	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 	struct stream *strm = &dev_data->rx;
 	void *buffer;
@@ -318,7 +316,7 @@ static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 
 static void _enable_mclk_direction(struct device *dev, bool dir)
 {
-	const struct device * const iomuxgpr_dev =
+	const struct device * iomuxgpr_dev =
 		device_get_binding(DEV_CFG(dev)->pinmux_name);
 	u32_t offset = 0;
 	u32_t mask = 0;
