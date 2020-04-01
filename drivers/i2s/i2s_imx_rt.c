@@ -371,7 +371,7 @@ static void _enable_mclk_direction(struct device *dev, bool dir)
 static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 {
 	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
-	struct device *ccm_dev;
+	struct device *ccm_dev = NULL;
 	clock_control_subsys_t clk_sub_sys;
 	u32_t rate = 0, pre_div, src_div;
 	switch (dev_cfg->bus_id) {
@@ -561,6 +561,7 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 		SAI_TxSetBitClockRate(DEV_BASE(dev), mclk,
 				      i2s_cfg->frame_clk_freq, word_size_bits,
 				      i2s_cfg->channels);
+		SAI_TxEnableInterrupts(dev_BASE(dev), kSAI_FIFOErrorInterruptEnable);
 	} else {
 		SAI_TransferRxSetConfig(DEV_BASE(dev),
 					&(DEV_DATA(dev)->rx.handle), &config);
@@ -568,6 +569,7 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 		SAI_RxSetBitClockRate(DEV_BASE(dev), mclk,
 				      i2s_cfg->frame_clk_freq, word_size_bits,
 				      i2s_cfg->channels);
+		SAI_RxEnableInterrupts(dev_BASE(dev), kSAI_FIFOErrorInterruptEnable);
 	}
 
 	/* enable interrupt */
