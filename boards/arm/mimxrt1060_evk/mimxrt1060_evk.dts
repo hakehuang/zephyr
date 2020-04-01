@@ -123,7 +123,7 @@ arduino_serial: &uart3 {};
 		reg = <0x1A>;
 		label = "WM8960";
 		int-gpios = <&gpio1 24 0>;
-	}
+	};
 };
 
 &uart1 {
