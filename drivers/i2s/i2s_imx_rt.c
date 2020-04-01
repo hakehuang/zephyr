@@ -45,6 +45,7 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 	static const struct i2s_rt_config i2s##i2s_id##_config = {              \
 		.base = (I2S_Type *)DT_INST_##i2s_id##_NXP_RT_I2S_BASE_ADDRESS, \
 		.edma_name = DT_INST_##i2s_id##_NXP_RT_I2S_DMAS_CONTROLLER_0,   \
+		.bus_id = i2s_id,                                               \
 		.pinmux_name =                                                  \
 			DT_INST_##i2s_id##_NXP_RT_I2S_PINMUXS_CONTROLLER,       \
 		.irq_id = DT_INST_##i2s_id##_NXP_RT_I2S_IRQ_0,                  \
@@ -135,7 +136,7 @@ struct stream {
 struct i2s_rt_config {
 	I2S_Type *base;
 	u32_t irq_id;
-	u32_t i2s_id;
+	u32_t bus_id;
 	char *edma_name;
 	char *pinmux_name;
 	void (*irq_connect)(void);
@@ -330,7 +331,7 @@ static void _enable_mclk_direction(struct device *dev, bool dir)
 	u32_t offset = 0;
 	u32_t mask = 0;
 	/* enable MCLK output */
-	switch (DEV_CFG(dev)->i2s_id) {
+	switch (DEV_CFG(dev)->bus_id) {
 	case 0:
 #if CONFIG_I2S_0
 		offset = DT_INST_0_NXP_RT_I2S_PINMUXS_PIN;
@@ -373,7 +374,7 @@ static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 	struct device *ccm_dev;
 	clock_control_subsys_t clk_sub_sys;
 	u32_t rate = 0, pre_div, src_div;
-	switch (dev_cfg->i2s_id) {
+	switch (dev_cfg->bus_id) {
 	case 0:
 #if CONFIG_I2S_0
 		ccm_dev = device_get_binding(
@@ -792,7 +793,7 @@ static void _audio_clock_settings(struct device *dev)
 	u32_t lp, pd, num, den, src, clK_src, pre_div, src_div;
 	clock_audio_pll_config_t audioPllConfig;
 
-	if (DEV_CFG(dev)->i2s_id == 0) {
+	if (DEV_CFG(dev)->bus_id == 0) {
 #if CONFIG_I2S_0
 		src = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
@@ -807,7 +808,7 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetDiv(kCLOCK_Sai1PreDiv, pre_div);
 		CLOCK_SetDiv(kCLOCK_Sai1Div, src_div);
 #endif
-	} else if (DEV_CFG(dev)->i2s_id == 1) {
+	} else if (DEV_CFG(dev)->bus_id == 1) {
 #if CONFIG_I2S_1
 		src = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
@@ -822,7 +823,7 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetDiv(kCLOCK_Sai2PreDiv, pre_div);
 		CLOCK_SetDiv(kCLOCK_Sai2Div, src_div);
 #endif
-	} else if (DEV_CFG(dev)->i2s_id == 2) {
+	} else if (DEV_CFG(dev)->bus_id == 2) {
 #if CONFIG_I2S_2
 		src = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
 		lp = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
