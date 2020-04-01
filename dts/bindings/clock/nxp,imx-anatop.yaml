@@ -14,13 +14,13 @@ properties:
     label:
       required: true
 
-    "#pll_clock-cells":
+    "#clock-cells":
       type: int
       const: 4
       required: true
-      description: Number of items to expect in a PLL specifier
+      description: Number of items to expect in a PLL specifier    
 
-pll_clock-cells:
+clock-cells:
   - name
   - offset
   - bits
