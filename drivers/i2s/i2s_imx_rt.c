@@ -924,6 +924,7 @@ static const struct i2s_driver_api i2s_rt_driver_api = {
 	.trigger = i2s_rt_trigger,
 };
 
+#if defined(I2S0)
 static void i2s0_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(0);
@@ -932,7 +933,9 @@ static void i2s0_irq_connect(void)
 I2S_DEVICE_CONFIG_DEFINE(0);
 I2S_DEVICE_DATA_DEFINE(0);
 I2S_DEVICE_AND_API_INIT(0);
+#endif
 
+#if defined(I2S1)
 static void i2s1_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(1);
@@ -941,7 +944,9 @@ static void i2s1_irq_connect(void)
 I2S_DEVICE_CONFIG_DEFINE(1);
 I2S_DEVICE_DATA_DEFINE(1);
 I2S_DEVICE_AND_API_INIT(1);
+#endif
 
+#if defined(I2S2)
 static void i2s2_irq_connect(void)
 {
 	I2S_IRQ_CONNECT(2);
@@ -950,3 +955,4 @@ static void i2s2_irq_connect(void)
 I2S_DEVICE_CONFIG_DEFINE(2);
 I2S_DEVICE_DATA_DEFINE(2);
 I2S_DEVICE_AND_API_INIT(2);
+#endif
