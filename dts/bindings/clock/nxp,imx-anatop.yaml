@@ -18,9 +18,21 @@ properties:
       type: int
       const: 4
       required: true
-      description: Number of items to expect in a PLL specifier    
+      description: Number of items to expect in a clock specifier
+
+    "#pll_clock-cells":
+      type: int
+      const: 4
+      required: true
+      description: Number of items to expect in a PLL specifier   
 
 clock-cells:
+  - name
+  - offset
+  - bits
+  - value
+
+pll_clock-cells:
   - name
   - offset
   - bits
