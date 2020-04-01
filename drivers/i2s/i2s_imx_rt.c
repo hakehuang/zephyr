@@ -44,11 +44,12 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 #define I2S_DEVICE_CONFIG_DEFINE(i2s_id)                                        \
 	static const struct i2s_rt_config i2s##i2s_id##_config = {              \
 		.base = (I2S_Type *)DT_INST_##i2s_id##_NXP_RT_I2S_BASE_ADDRESS, \
+		.i2s_id = i2s_id,                                               \
 		.edma_name = DT_INST_##i2s_id##_NXP_RT_I2S_DMAS_CONTROLLER_0,   \
 		.pinmux_name =                                                  \
 			DT_INST_##i2s_id##_NXP_RT_I2S_PINMUXS_CONTROLLER,       \
-		.i2s_id = i2s_id,                                               \
 		.irq_id = DT_INST_##i2s_id##_NXP_RT_I2S_IRQ_0,                  \
+		.irq_connect = i2s##i2s_id##_irq_connect,                       \
 	}
 
 #define I2S_DEVICE_OBJECT_DECLARE(i2s_id)                                      \
@@ -936,7 +937,8 @@ static const struct i2s_driver_api i2s_rt_driver_api = {
 };
 
 #if CONFIG_I2S_0
-static void i2s0_irq_connect(void) {
+static void i2s0_irq_connect(void)
+{
 	I2S_IRQ_CONNECT(0);
 }
 
@@ -946,7 +948,8 @@ I2S_DEVICE_AND_API_INIT(0);
 #endif
 
 #if CONFIG_I2S_1
-static void i2s1_irq_connect(void) {
+static void i2s1_irq_connect(void)
+{
 	I2S_IRQ_CONNECT(1);
 }
 
@@ -956,7 +959,8 @@ I2S_DEVICE_AND_API_INIT(1);
 #endif
 
 #if CONFIG_I2S_2
-static void i2s2_irq_connect(void) {
+static void i2s2_irq_connect(void)
+{
 	I2S_IRQ_CONNECT(2);
 }
 
