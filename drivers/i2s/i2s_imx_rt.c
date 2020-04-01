@@ -291,7 +291,7 @@ static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 		if (ret != 0) {
 			LOG_ERR("buffer alloc from slab %p err %d",
 				dev_data->cfg.mem_slab, ret);
-			i2s_rx_stream_disable(dev_data);
+			i2s_rx_stream_disable(dev);
 			strm->state = I2S_STATE_READY;
 		} else {
 			u32_t data_path = dev_data->rx.start_channel;
@@ -310,7 +310,7 @@ static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 		}
 		break;
 	case I2S_STATE_STOPPING:
-		i2s_rx_stream_disable(dev_data);
+		i2s_rx_stream_disable(dev);
 		strm->state = I2S_STATE_READY;
 		break;
 	}
@@ -325,16 +325,22 @@ static void _enable_mclk_direction(struct device *dev, bool dir)
 	/* enable MCLK output */
 	switch (DEV_CFG(dev)->i2s_id) {
 	case 0:
+#if defined(I2S0)
 		offset = DT_INST_0_NXP_RT_I2S_PINMUXS_PIN;
 		mask = DT_INST_0_NXP_RT_I2S_PINMUXS_FUNCTION;
+#endif
 		break;
 	case 1:
+#if defined(I2S1)
 		offset = DT_INST_1_NXP_RT_I2S_PINMUXS_PIN;
 		mask = DT_INST_1_NXP_RT_I2S_PINMUXS_FUNCTION;
+#endif
 		break;
 	case 2:
+#if defined(I2S2)
 		offset = DT_INST_2_NXP_RT_I2S_PINMUXS_PIN;
 		mask = DT_INST_2_NXP_RT_I2S_PINMUXS_FUNCTION;
+#endif
 		break;
 	default:
 		LOG_ERR("i2s bus is out of scope");
@@ -362,25 +368,31 @@ static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 	u32_t rate = 0, pre_div, src_div;
 	switch (dev_cfg->i2s_id) {
 	case 0:
+#if defined(I2S0)
 		ccm_dev = device_get_binding(
 			DT_INST_0_NXP_RT_I2S_CLOCK_CONTROLLER);
 		clk_sub_sys = (clock_control_subsys_t)IMX_CCM_SAI1_CLK;
 		src_div = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_2;
 		pre_div = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_1;
+#endif
 		break;
 	case 1:
+#if defined(I2S1)
 		ccm_dev = device_get_binding(
 			DT_INST_1_NXP_RT_I2S_CLOCK_CONTROLLER);
 		clk_sub_sys = (clock_control_subsys_t)IMX_CCM_SAI2_CLK;
 		src_div = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_2;
 		pre_div = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_1;
+#endif
 		break;
 	case 2:
+#if defined(I2S2)
 		ccm_dev = device_get_binding(
 			DT_INST_2_NXP_RT_I2S_CLOCK_CONTROLLER);
 		clk_sub_sys = (clock_control_subsys_t)IMX_CCM_SAI3_CLK;
 		src_div = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_2;
 		pre_div = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_1;
+#endif
 		break;
 	default:
 		LOG_ERR("not a valide i2s instance");
@@ -524,8 +536,7 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 		break;
 	case I2S_FMT_DATA_FORMAT_PCM_LONG:
 		SAI_GetTDMConfig(&config, kSAI_FrameSyncLenPerWordWidth,
-				 kSAI_FrameSyncLenOneBitClk, word_size_bits,
-				 kSAI_Stereo, kSAI_Channel0Mask);
+				 word_size_bits, num_words, kSAI_Channel0Mask);
 		break;
 	default:
 		LOG_ERR("Unsupported I2S data format");
