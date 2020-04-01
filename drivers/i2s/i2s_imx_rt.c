@@ -85,7 +85,7 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 				.error_callback_en = 1,		\
 				.block_count = 1,		\
 				.head_block =			\
-				&i2s##i2s_id##_rt_data.rx.dma_block,\
+				&i2s##i2s_id##_data.rx.dma_block,\
 				.channel_direction = PERIPHERAL_TO_MEMORY,\
 				.dma_slot = CONFIG_I2S_##i2s_id##_RX_DMA_SLOT,\
 				},				\
@@ -135,9 +135,9 @@ struct stream {
 struct i2s_rt_config {
 	I2S_Type *base;
 	u32_t irq_id;
+	u32_t i2s_id;
 	char *edma_name;
 	char *pinmux_name;
-	u32_t i2s_id;
 	void (*irq_connect)(void);
 };
 
@@ -763,17 +763,17 @@ static void i2s_rt_isr(void *arg)
 	switch (dev_cfg->irq_id) {
 #if CONFIG_I2S_0
 	case DT_INST_0_NXP_RT_I2S_IRQ_0:
-		I2S0_DriverIRQHandler();
+		SAI1_DriverIRQHandler();
 		break;
 #endif
 #if CONFIG_I2S_1
 	case DT_INST_1_NXP_RT_I2S_IRQ_0:
-		I2S1_DriverIRQHandler();
+		SAI2_DriverIRQHandler();
 		break;
 #endif
 #if CONFIG_I2S_2
 	case DT_INST_2_NXP_RT_I2S_IRQ_0:
-		I2S2_DriverIRQHandler() break;
+		SAI2_DriverIRQHandler() break;
 #endif
 	default:
 		LOG_ERR("irq not support");
@@ -936,8 +936,7 @@ static const struct i2s_driver_api i2s_rt_driver_api = {
 };
 
 #if CONFIG_I2S_0
-static void i2s0_irq_connect(void)
-{
+static void i2s0_irq_connect(void) {
 	I2S_IRQ_CONNECT(0);
 }
 
@@ -947,8 +946,7 @@ I2S_DEVICE_AND_API_INIT(0);
 #endif
 
 #if CONFIG_I2S_1
-static void i2s1_irq_connect(void)
-{
+static void i2s1_irq_connect(void) {
 	I2S_IRQ_CONNECT(1);
 }
 
@@ -958,8 +956,7 @@ I2S_DEVICE_AND_API_INIT(1);
 #endif
 
 #if CONFIG_I2S_2
-static void i2s2_irq_connect(void)
-{
+static void i2s2_irq_connect(void) {
 	I2S_IRQ_CONNECT(2);
 }
 
