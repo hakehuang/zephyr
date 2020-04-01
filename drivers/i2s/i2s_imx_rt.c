@@ -772,11 +772,11 @@ static void _audio_clock_settings(struct device *dev)
 	clock_audio_pll_config_t audioPllConfig;
 
 	if (DEV_CFG(dev)->i2s_id == 0) {
-		lp = DT_INST_0_NXP_RT_I2S_CLOCK_VALUE_4;
-		pd = DT_INST_0_NXP_RT_I2S_CLOCK_VALUE_5;
-		num = DT_INST_0_NXP_RT_I2S_CLOCK_VALUE_6;
-		den = DT_INST_0_NXP_RT_I2S_CLOCK_VALUE_7;
-		src = DT_INST_0_NXP_RT_I2S_CLOCK_VALUE_3;
+		src = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
+		lp  = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
+		pd  = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
+		num = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_3;
+		den = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_4;
 		clK_src = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_0;
 		pre_div = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_1;
 		src_div = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_2;
@@ -785,11 +785,11 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetDiv(kCLOCK_Sai1PreDiv, pre_div);
 		CLOCK_SetDiv(kCLOCK_Sai1Div, src_div);
 	} else if (DEV_CFG(dev)->i2s_id == 1) {
-		lp = DT_INST_1_NXP_RT_I2S_CLOCK_VALUE_4;
-		pd = DT_INST_1_NXP_RT_I2S_CLOCK_VALUE_5;
-		num = DT_INST_1_NXP_RT_I2S_CLOCK_VALUE_6;
-		den = DT_INST_1_NXP_RT_I2S_CLOCK_VALUE_7;
-		src = DT_INST_1_NXP_RT_I2S_CLOCK_VALUE_3;
+		src = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
+		lp  = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
+		pd  = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
+		num = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_3;
+		den = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_4;
 		clK_src = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_0;
 		pre_div = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_1;
 		src_div = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_2;
@@ -798,11 +798,11 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetDiv(kCLOCK_Sai2PreDiv, pre_div);
 		CLOCK_SetDiv(kCLOCK_Sai2Div, src_div);
 	} else if (DEV_CFG(dev)->i2s_id == 2) {
-		lp = DT_INST_2_NXP_RT_I2S_CLOCK_VALUE_4;
-		pd = DT_INST_2_NXP_RT_I2S_CLOCK_VALUE_5;
-		num = DT_INST_2_NXP_RT_I2S_CLOCK_VALUE_6;
-		den = DT_INST_2_NXP_RT_I2S_CLOCK_VALUE_7;
-		src = DT_INST_2_NXP_RT_I2S_CLOCK_VALUE_3;
+		src = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
+		lp  = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
+		pd  = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
+		num = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_3;
+		den = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_4;
 		clK_src = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_0;
 		pre_div = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_1;
 		src_div = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_2;
