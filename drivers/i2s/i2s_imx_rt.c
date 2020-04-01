@@ -44,7 +44,6 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 #define I2S_DEVICE_CONFIG_DEFINE(i2s_id)                                        \
 	static const struct i2s_rt_config i2s##i2s_id##_config = {              \
 		.base = (I2S_Type *)DT_INST_##i2s_id##_NXP_RT_I2S_BASE_ADDRESS, \
-		.i2s_id = i2s_id,                                               \
 		.edma_name = DT_INST_##i2s_id##_NXP_RT_I2S_DMAS_CONTROLLER_0,   \
 		.pinmux_name =                                                  \
 			DT_INST_##i2s_id##_NXP_RT_I2S_PINMUXS_CONTROLLER,       \
