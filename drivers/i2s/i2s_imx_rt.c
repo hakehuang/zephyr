@@ -185,7 +185,7 @@ static inline void i2s_purge_stream_buffers(struct stream *strm,
 static void i2s_tx_stream_disable(struct device *dev)
 {
 	struct stream *strm = &DEV_DATA(dev)->tx;
-	struct device * dev_dma = DEV_DATA(dev)->dev_dma;
+	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
 	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 
 	LOG_INF("Stopping DMA channel %u for TX stream", strm->dma_channel);
@@ -198,7 +198,7 @@ static void i2s_tx_stream_disable(struct device *dev)
 static void i2s_rx_stream_disable(struct device *dev)
 {
 	struct stream *strm = &DEV_DATA(dev)->rx;
-	struct device * dev_dma = DEV_DATA(dev)->dev_dma;
+	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
 	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 
 	LOG_INF("Stopping RX stream & DMA channel %u", strm->dma_channel);
@@ -316,7 +316,7 @@ static void i2s_dma_rx_callback(void *arg, u32_t channel, int status)
 
 static void _enable_mclk_direction(struct device *dev, bool dir)
 {
-	const struct device * iomuxgpr_dev =
+	struct device *iomuxgpr_dev =
 		device_get_binding(DEV_CFG(dev)->pinmux_name);
 	u32_t offset = 0;
 	u32_t mask = 0;
@@ -405,15 +405,12 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 {
 	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
 	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
-	struct dma_block_config *dma_block;
 	sai_transceiver_t config;
+	u32_t mclk;
 	/*num_words is frame size*/
 	u8_t num_words = i2s_cfg->channels;
-	u8_t channels = i2s_cfg->channels;
 	u8_t word_size_bits = i2s_cfg->word_size;
-	u8_t word_size_bytes;
-	u32_t bit_clk_freq, mclk;
-	int ret;
+	
 
 	if ((dev_data->tx.state != I2S_STATE_NOT_READY) &&
 	    (dev_data->tx.state != I2S_STATE_READY) &&
@@ -545,14 +542,16 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 		SAI_TransferTxSetConfig(DEV_BASE(dev),
 					&(DEV_DATA(dev)->tx.handle), &config);
 		/* set bit clock divider */
-		SAI_TxSetBitClockRate(DEV_BASE(dev), mclk, frame_clk_freq,
-				      word_size, i2s_cfg->channels);
+		SAI_TxSetBitClockRate(DEV_BASE(dev), mclk,
+				      i2s_cfg->frame_clk_freq, word_size_bits,
+				      i2s_cfg->channels);
 	} else {
 		SAI_TransferRxSetConfig(DEV_BASE(dev),
 					&(DEV_DATA(dev)->rx.handle), &config);
 		/* set bit clock divider */
-		SAI_RxSetBitClockRate(DEV_BASE(dev), mclk, frame_clk_freq,
-				      word_size, i2s_cfg->channels);
+		SAI_RxSetBitClockRate(DEV_BASE(dev), mclk,
+				      i2s_cfg->frame_clk_freq, word_size_bits,
+				      i2s_cfg->channels);
 	}
 
 	/* enable interrupt */
@@ -568,10 +567,10 @@ static int i2s_tx_stream_start(struct device *dev)
 {
 	int ret = 0;
 	void *buffer;
-	unsigned int key;
 	struct stream *strm = &DEV_DATA(dev)->tx;
 	u32_t data_path = strm->start_channel;
 	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
+	struct dma_imx_rt_data * dev_data = DEV_DATA(dev);
 
 	/* retrieve buffer from input queue */
 	ret = k_msgq_get(&strm->in_queue, &buffer, K_NO_WAIT);
@@ -650,7 +649,6 @@ static int i2s_rx_stream_start(struct device *dev)
 static int i2s_rt_trigger(struct device *dev, enum i2s_dir dir,
 			  enum i2s_trigger_cmd cmd)
 {
-	const struct i2s_rt_config *const dev_cfg = DEV_CFG(dev);
 	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 	struct stream *strm;
 	unsigned int key;
@@ -789,8 +787,8 @@ static void _audio_clock_settings(struct device *dev)
 	if (DEV_CFG(dev)->i2s_id == 0) {
 #if defined(I2S0)
 		src = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
-		lp  = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
-		pd  = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
+		lp = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
+		pd = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
 		num = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_3;
 		den = DT_INST_0_NXP_RT_I2S_PLL_CLOCKS_VALUE_4;
 		clK_src = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_0;
@@ -804,8 +802,8 @@ static void _audio_clock_settings(struct device *dev)
 	} else if (DEV_CFG(dev)->i2s_id == 1) {
 #if defined(I2S1)
 		src = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
-		lp  = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
-		pd  = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
+		lp = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
+		pd = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
 		num = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_3;
 		den = DT_INST_1_NXP_RT_I2S_PLL_CLOCKS_VALUE_4;
 		clK_src = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_0;
@@ -819,8 +817,8 @@ static void _audio_clock_settings(struct device *dev)
 	} else if (DEV_CFG(dev)->i2s_id == 2) {
 #if defined(I2S2)
 		src = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_0;
-		lp  = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
-		pd  = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
+		lp = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_1;
+		pd = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_2;
 		num = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_3;
 		den = DT_INST_2_NXP_RT_I2S_PLL_CLOCKS_VALUE_4;
 		clK_src = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_0;
@@ -832,9 +830,9 @@ static void _audio_clock_settings(struct device *dev)
 		CLOCK_SetDiv(kCLOCK_Sai3Div, src_div);
 #endif
 	} else {
-		LOF_ERR("i2s bus id does not support");
+		LOG_ERR("i2s bus id does not support");
 	}
-	audioPllConfig.loopDivider = ld;
+	audioPllConfig.loopDivider = lp;
 	audioPllConfig.postDivider = pd;
 	audioPllConfig.numerator = num;
 	audioPllConfig.denominator = den;
@@ -850,7 +848,6 @@ static void _audio_clock_settings(struct device *dev)
 	LOG_DBG("src_div = %d", src_div);
 
 	CLOCK_InitAudioPll(&audioPllConfig);
-
 }
 
 static int i2s_rt_initialize(struct device *dev)
@@ -887,9 +884,6 @@ static int i2s_rt_initialize(struct device *dev)
 				   _callback, NULL);
 	SAI_TransferRxCreateHandle(DEV_BASE(dev), &dev_data->rx.handle,
 				   _callback, NULL);
-
-	/*Enable MCLK clock*/
-	BOARD_EnableSaiMclkOutput(true);
 
 	dev_data->tx.state = I2S_STATE_NOT_READY;
 	dev_data->rx.state = I2S_STATE_NOT_READY;
