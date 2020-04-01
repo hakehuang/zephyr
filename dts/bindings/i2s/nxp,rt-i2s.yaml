@@ -17,6 +17,11 @@ properties:
     dma-names:
       required: true
 
+    pll_clocks:
+      type: phandle-array
+      required: true
+      description: pll settings      
+
     pinmuxs:
       type: phandle-array
       required: true
