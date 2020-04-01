@@ -540,50 +540,6 @@ static int i2s_rt_configure(struct device *dev, enum i2s_dir dir,
 				      word_size, i2s_cfg->channels);
 	}
 
-	if (I2S_OPT_DMA_ENABLED && i2s_cfg->format) {
-		/* Set up DMA channel parameters */
-		word_size_bytes = (word_size_bits + 7) / 8U;
-
-		if (dir == I2S_DIR_TX) {
-			dev_data->tx.dma_cfg.source_data_size = word_size_bytes;
-			dev_data->tx.dma_cfg.dest_data_size = word_size_bytes;
-			dev_data->tx.start_channel =
-				config.start_channel; /*obtainer by former step*/
-
-			dma_block = dev_data->tx.dma_cfg.head_block;
-			dma_block->block_size = i2s_cfg->block_size;
-			dma_block->source_address = NULL;
-			dma_block->dest_address =
-				(u32_t)&DEV_BASE(dev)->TDR[config.startChannel];
-
-			ret = dma_config(dev_data->dev_dma,
-					 dev_data->tx.dma_channel,
-					 &dev_data->tx.dma_cfg);
-			if (ret < 0) {
-				LOG_ERR("dma_config failed: %d", ret);
-				return ret;
-			}
-		} else {
-			dev_data->rx.dma_cfg.source_data_size = word_size_bytes;
-			dev_data->rx.dma_cfg.dest_data_size = word_size_bytes;
-			dev_data->rx.start_channel =
-				config.start_channel; /*obtainer by former step*/
-			dma_block = dev_data->rx.dma_cfg.head_block;
-			dma_block->block_size = i2s_cfg->block_size;
-			dma_block->source_address =
-				(u32_t)&DEV_BASE(dev)->RDR[config.startChannel];
-			dma_block->dest_address = NULL;
-
-			ret = dma_config(dev_data->dev_dma,
-					 dev_data->rx.dma_channel,
-					 &dev_data->rx.dma_cfg);
-			if (ret < 0) {
-				LOG_ERR("dma_config failed: %d", ret);
-				return ret;
-			}
-		}
-	}
-
 	/* enable interrupt */
 	irq_enable(dev_cfg->irq_id);
 
@@ -639,8 +595,8 @@ static int i2s_rx_stream_start(struct device *dev)
 	int ret = 0;
 	void *buffer;
 	unsigned int key;
-	struct stream *strm = &DEV_DATA(dev)->rx;
 	u32_t data_path = strm->start_channel;
+	struct stream *strm = &DEV_DATA(dev)->rx;
 	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
 
 	/* allocate receive buffer from SLAB */
@@ -649,8 +605,6 @@ static int i2s_rx_stream_start(struct device *dev)
 		LOG_ERR("buffer alloc from mem_slab failed (%d)", ret);
 		return ret;
 	}
-
-	SOC_DCACHE_INVALIDATE(buffer, dev_data->cfg.block_size);
 
 	ret = dma_reload(dev_dma, strm->dma_channel,
 			 (u32_t)&DEV_BASE(dev)->RDR[data_path], (u32_t)buffer,
@@ -771,8 +725,6 @@ static int i2s_rt_write(struct device *dev, void *mem_block, size_t size)
 		return -EIO;
 	}
 
-	SOC_DCACHE_FLUSH(mem_block, size);
-
 	ret = k_msgq_put(&strm->in_queue, &mem_block, dev_data->cfg.timeout);
 	if (ret) {
 		LOG_ERR("k_msgq_put failed %d", ret);
@@ -818,6 +770,7 @@ static void _audio_clock_settings(struct device *dev)
 {
 	u32_t lp, pd, num, den, src, clK_src, pre_div, src_div;
 	clock_audio_pll_config_t audioPllConfig;
+
 	if (DEV_CFG(dev)->i2s_id == 0) {
 		lp = DT_INST_0_NXP_RT_I2S_CLOCK_VALUE_4;
 		pd = DT_INST_0_NXP_RT_I2S_CLOCK_VALUE_5;
@@ -827,6 +780,10 @@ static void _audio_clock_settings(struct device *dev)
 		clK_src = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_0;
 		pre_div = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_1;
 		src_div = DT_INST_0_NXP_RT_I2S_CLOCK_BITS_2;
+		/*Clock setting for SAI1*/
+		CLOCK_SetMux(kCLOCK_Sai1Mux, clK_src);
+		CLOCK_SetDiv(kCLOCK_Sai1PreDiv, pre_div);
+		CLOCK_SetDiv(kCLOCK_Sai1Div, src_div);
 	} else if (DEV_CFG(dev)->i2s_id == 1) {
 		lp = DT_INST_1_NXP_RT_I2S_CLOCK_VALUE_4;
 		pd = DT_INST_1_NXP_RT_I2S_CLOCK_VALUE_5;
@@ -836,6 +793,10 @@ static void _audio_clock_settings(struct device *dev)
 		clK_src = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_0;
 		pre_div = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_1;
 		src_div = DT_INST_1_NXP_RT_I2S_CLOCK_BITS_2;
+		/*Clock setting for SAI2*/
+		CLOCK_SetMux(kCLOCK_Sai2Mux, clK_src);
+		CLOCK_SetDiv(kCLOCK_Sai2PreDiv, pre_div);
+		CLOCK_SetDiv(kCLOCK_Sai2Div, src_div);
 	} else if (DEV_CFG(dev)->i2s_id == 2) {
 		lp = DT_INST_2_NXP_RT_I2S_CLOCK_VALUE_4;
 		pd = DT_INST_2_NXP_RT_I2S_CLOCK_VALUE_5;
@@ -845,6 +806,10 @@ static void _audio_clock_settings(struct device *dev)
 		clK_src = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_0;
 		pre_div = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_1;
 		src_div = DT_INST_2_NXP_RT_I2S_CLOCK_BITS_2;
+		/*Clock setting for SAI3*/
+		CLOCK_SetMux(kCLOCK_Sai3Mux, clK_src);
+		CLOCK_SetDiv(kCLOCK_Sai3PreDiv, pre_div);
+		CLOCK_SetDiv(kCLOCK_Sai3Div, src_div);
 	} else {
 		LOF_ERR("i2s bus id does not support");
 	}
@@ -864,10 +829,7 @@ static void _audio_clock_settings(struct device *dev)
 	LOG_DBG("src_div = %d", src_div);
 
 	CLOCK_InitAudioPll(&audioPllConfig);
-	/*Clock setting for SAI1*/
-	CLOCK_SetMux(kCLOCK_Sai1Mux, clK_src);
-	CLOCK_SetDiv(kCLOCK_Sai1PreDiv, pre_div);
-	CLOCK_SetDiv(kCLOCK_Sai1Div, src_div);
+
 }
 
 static int i2s_rt_initialize(struct device *dev)

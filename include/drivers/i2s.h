@@ -185,12 +185,9 @@ typedef u8_t i2s_opt_t;
 #define I2S_OPT_MASTER_CLK_IN               BIT(0 << 3)
 /** I2S driver master clock output */
 #define I2S_OPT_MASTER_CLK_OUT              BIT(3)
-/** I2S driver using DMA mode*/
-#define I2S_OPT_DMA_DISABLE                 BIT(0 << 4)
-#define I2S_OPT_DMA_ENABLED                 BIT(4)
 /** I2S driver sync mode*/
-#define I2S_OPT_ASYNC_MODE                  BIT(0 << 5)
-#define I2S_OPT_SYNC_MODE                   BIT(5)
+#define I2S_OPT_ASYNC_MODE                  BIT(0 << 4)
+#define I2S_OPT_SYNC_MODE                   BIT(4)
 
 /** @brief Loop back mode.
  *
