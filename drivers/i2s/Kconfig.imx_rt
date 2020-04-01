@@ -12,6 +12,18 @@ menuconfig I2S_IMX_RT
 
 if I2S_IMX_RT
 
+config IMX_SAI
+	bool "use SAI driver"
+	default y
+	help
+	  use SAI driver
+
+config IMX_SAI_DMA
+	bool "use SAI edma driver"
+	default y
+	help
+	  use SAI edma driver
+
 config I2S_BUFFER_QUEUE_COUNT
 	int "default I2S buffer queue counts"
 	default 2
