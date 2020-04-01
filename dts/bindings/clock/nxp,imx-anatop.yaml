@@ -14,10 +14,10 @@ properties:
     label:
       required: true
 
-    "#clock-cells":
+    "#pll_clock-cells":
       const: 4
 
-clock-cells:
+pll_clock-cells:
   - name
   - offset
   - bits

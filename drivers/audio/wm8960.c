@@ -4,8 +4,15 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include <zephyr.h>
-#include <string.h>
+#include <errno.h>
+
+#include <sys/util.h>
+
+#include <device.h>
+#include <drivers/i2c.h>
+#include <drivers/gpio.h>
+
+#include <audio/codec.h>
 
 #define LOG_LEVEL CONFIG_SOC_AUDIO_LOG_LEVEL
 #include <logging/log.h>
@@ -13,672 +20,521 @@ LOG_MODULE_REGISTER(soc_audio);
 
 #include "wm8960.h"
 
-/*******************************************************************************
- * Definitations
- ******************************************************************************/
+#define CODEC_OUTPUT_VOLUME_MAX     0
+#define CODEC_OUTPUT_VOLUME_MIN     (-78 * 2)
 
-/*******************************************************************************
- * Prototypes
- ******************************************************************************/
-
-/*******************************************************************************
- * Variables
- ******************************************************************************/
-/*
- * wm8960 register cache
- * We can't read the WM8960 register space when we are
- * using 2 wire for device control, so we cache them instead.
- */
-static const uint16_t wm8960_reg[WM8960_CACHEREGNUM] = {
-    0x0097, 0x0097, 0x0000, 0x0000, 0x0000, 0x0008, 0x0000, 0x000a, 0x01c0, 0x0000, 0x00ff, 0x00ff, 0x0000, 0x0000,
-    0x0000, 0x0000, 0x0000, 0x007b, 0x0100, 0x0032, 0x0000, 0x00c3, 0x00c3, 0x01c0, 0x0000, 0x0000, 0x0000, 0x0000,
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0100, 0x0100, 0x0050, 0x0050, 0x0050, 0x0050, 0x0000, 0x0000, 0x0000, 0x0000,
-    0x0040, 0x0000, 0x0000, 0x0050, 0x0050, 0x0000, 0x0002, 0x0037, 0x004d, 0x0080, 0x0008, 0x0031, 0x0026, 0x00e9,
+struct codec_driver_config {
+    struct device   *i2c_device;
+    const char  *i2c_dev_name;
+    u8_t        i2c_address;
+    struct device   *gpio_device;
+    const char  *gpio_dev_name;
+    u32_t       gpio_pin;
+    int     gpio_flags;
 };
 
-static uint16_t reg_cache[WM8960_CACHEREGNUM];
+struct codec_driver_data {
+    struct reg_addr reg_addr_cache;
+};
 
-/*******************************************************************************
- * Code
- ******************************************************************************/
-status_t WM8960_Init(wm8960_handle_t *handle, const wm8960_config_t *wm8960Config)
+static struct codec_driver_config codec_device_config = {
+    .i2c_device = NULL,
+    .i2c_dev_name   = DT_INST_0_TI_TLV320DAC_BUS_NAME,
+    .i2c_address    = DT_INST_0_TI_TLV320DAC_BASE_ADDRESS,
+    .gpio_device    = NULL,
+    .gpio_dev_name  = DT_INST_0_TI_TLV320DAC_RESET_GPIOS_CONTROLLER,
+    .gpio_pin   = DT_INST_0_TI_TLV320DAC_RESET_GPIOS_PIN,
+    .gpio_flags = DT_INST_0_TI_TLV320DAC_RESET_GPIOS_FLAGS,
+};
+
+static struct codec_driver_data codec_device_data;
+
+#define DEV_CFG(dev) \
+    ((struct codec_driver_config *const)(dev)->config->config_info)
+#define DEV_DATA(dev) \
+    ((struct codec_driver_data *const)(dev)->driver_data)
+
+static void codec_write_reg(struct device *dev, struct reg_addr reg, u8_t val);
+static void codec_read_reg(struct device *dev, struct reg_addr reg, u8_t *val);
+static void codec_soft_reset(struct device *dev);
+static int codec_configure_dai(struct device *dev, audio_dai_cfg_t *cfg);
+static int codec_configure_clocks(struct device *dev,
+        struct audio_codec_cfg *cfg);
+static int codec_configure_filters(struct device *dev, audio_dai_cfg_t *cfg);
+static enum osr_multiple codec_get_osr_multiple(audio_dai_cfg_t *cfg);
+static void codec_configure_output(struct device *dev);
+static int codec_set_output_volume(struct device *dev, int vol);
+
+#if (LOG_LEVEL >= LOG_LEVEL_DEBUG)
+static void codec_read_all_regs(struct device *dev);
+#define CODEC_DUMP_REGS(dev)    codec_read_all_regs((dev))
+#else
+#define CODEC_DUMP_REGS(dev)
+#endif
+
+static int codec_initialize(struct device *dev)
 {
-    const wm8960_config_t *config = wm8960Config;
-    handle->config                = config;
+    struct codec_driver_config *const dev_cfg = DEV_CFG(dev);
 
-    /* i2c bus initialization */
-    if (CODEC_I2C_Init(handle->i2cHandle, config->i2cConfig.codecI2CInstance, WM8960_I2C_BAUDRATE,
-                       config->i2cConfig.codecI2CSourceClock) != kStatus_HAL_I2cSuccess)
-    {
-        return kStatus_Fail;
-    }
-    /* load wm8960 register map */
-    memcpy(reg_cache, wm8960_reg, sizeof(wm8960_reg));
+    /* bind I2C */
+    dev_cfg->i2c_device = device_get_binding(dev_cfg->i2c_dev_name);
 
-    /* Reset the codec */
-    WM8960_WriteReg(handle, WM8960_RESET, 0x00);
-    /*
-     * VMID=50K, Enable VREF, AINL, AINR, ADCL and ADCR
-     * I2S_IN (bit 0), I2S_OUT (bit 1), DAP (bit 4), DAC (bit 5), ADC (bit 6) are powered on
-     */
-    WM8960_WriteReg(handle, WM8960_POWER1, 0xFE);
-    /*
-     * Enable DACL, DACR, LOUT1, ROUT1, PLL down
-     */
-    WM8960_WriteReg(handle, WM8960_POWER2, 0x1E0);
-    /*
-     * Enable left and right channel input PGA, left and right output mixer
-     */
-    WM8960_WriteReg(handle, WM8960_POWER3, 0x3C);
-    /* ADC and DAC uses same clock */
-    WM8960_WriteReg(handle, WM8960_IFACE2, 0x40);
-    /* set data route */
-    WM8960_SetDataRoute(handle, config->route);
-    /* set data protocol */
-    WM8960_SetProtocol(handle, config->bus);
-    /* set master or slave */
-    WM8960_SetMasterSlave(handle, config->master_slave);
-    /* select left input */
-    WM8960_SetLeftInput(handle, config->leftInputSource);
-    /* select right input */
-    WM8960_SetRightInput(handle, config->rightInputSource);
-    /* speaker power */
-    if (config->enableSpeaker)
-    {
-        WM8960_SetModule(handle, kWM8960_ModuleSpeaker, true);
+    if (dev_cfg->i2c_device == NULL) {
+        LOG_ERR("I2C device binding error");
+        return -ENXIO;
     }
 
-    WM8960_WriteReg(handle, WM8960_ADDCTL1, 0x0C0);
-    WM8960_WriteReg(handle, WM8960_ADDCTL4, 0x40);
+    /* bind GPIO */
+    dev_cfg->gpio_device = device_get_binding(dev_cfg->gpio_dev_name);
 
-    WM8960_WriteReg(handle, WM8960_BYPASS1, 0x0);
-    WM8960_WriteReg(handle, WM8960_BYPASS2, 0x0);
-    /*
-     * ADC volume, 0dB
-     */
-    WM8960_WriteReg(handle, WM8960_LADC, 0x1C3);
-    WM8960_WriteReg(handle, WM8960_RADC, 0x1C3);
+    if (dev_cfg->gpio_device == NULL) {
+        LOG_ERR("GPIO device binding error");
+        return -ENXIO;
+    }
 
-    /*
-     * Digital DAC volume, 0dB
-     */
-    WM8960_WriteReg(handle, WM8960_LDAC, 0x1E0);
-    WM8960_WriteReg(handle, WM8960_RDAC, 0x1E0);
-
-    /*
-     * Headphone volume, LOUT1 and ROUT1, 0dB
-     */
-    WM8960_WriteReg(handle, WM8960_LOUT1, 0x16F);
-    WM8960_WriteReg(handle, WM8960_ROUT1, 0x16F);
-
-    /* Unmute DAC. */
-    WM8960_WriteReg(handle, WM8960_DACCTL1, 0x0000);
-    WM8960_WriteReg(handle, WM8960_LINVOL, 0x117);
-    WM8960_WriteReg(handle, WM8960_RINVOL, 0x117);
-
-    return WM8960_ConfigDataFormat(handle, config->format.mclk_HZ, config->format.sampleRate, config->format.bitWidth);
+    return 0;
 }
 
-status_t WM8960_Deinit(wm8960_handle_t *handle)
+static int codec_configure(struct device *dev,
+        struct audio_codec_cfg *cfg)
 {
-    WM8960_SetModule(handle, kWM8960_ModuleADC, false);
-    WM8960_SetModule(handle, kWM8960_ModuleDAC, false);
-    WM8960_SetModule(handle, kWM8960_ModuleVREF, false);
-    WM8960_SetModule(handle, kWM8960_ModuleLineIn, false);
-    WM8960_SetModule(handle, kWM8960_ModuleLineOut, false);
-    WM8960_SetModule(handle, kWM8960_ModuleSpeaker, false);
+    struct codec_driver_config *const dev_cfg = DEV_CFG(dev);
+    int ret;
 
-    return CODEC_I2C_Deinit(handle->i2cHandle);
-}
-
-void WM8960_SetMasterSlave(wm8960_handle_t *handle, bool master)
-{
-    if (master == 1)
-    {
-        WM8960_ModifyReg(handle, WM8960_IFACE1, WM8960_IFACE1_MS_MASK, WM8960_IFACE1_MS(WM8960_IFACE1_MASTER));
+    if (cfg->dai_type != AUDIO_DAI_TYPE_I2S) {
+        LOG_ERR("dai_type must be AUDIO_DAI_TYPE_I2S");
+        return -EINVAL;
     }
-    else
-    {
-        WM8960_ModifyReg(handle, WM8960_IFACE1, WM8960_IFACE1_MS_MASK, WM8960_IFACE1_MS(WM8960_IFACE1_SLAVE));
+
+    /* Configure reset GPIO, and set the line to inactive, which will also
+     * de-assert the reset line and thus enable the codec.
+     */
+    gpio_pin_configure(dev_cfg->gpio_device, dev_cfg->gpio_pin,
+               dev_cfg->gpio_flags | GPIO_OUTPUT_INACTIVE);
+
+    codec_soft_reset(dev);
+
+    ret = codec_configure_clocks(dev, cfg);
+    if (ret == 0) {
+        ret = codec_configure_dai(dev, &cfg->dai_cfg);
     }
-}
-
-status_t WM8960_SetModule(wm8960_handle_t *handle, wm8960_module_t module, bool isEnabled)
-{
-    status_t ret = kStatus_Success;
-    switch (module)
-    {
-        case kWM8960_ModuleADC:
-            WM8960_ModifyReg(handle, WM8960_POWER1, WM8960_POWER1_ADCL_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER1_ADCL_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER1, WM8960_POWER1_ADCR_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER1_ADCR_SHIFT));
-            break;
-        case kWM8960_ModuleDAC:
-            WM8960_ModifyReg(handle, WM8960_POWER2, WM8960_POWER2_DACL_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER2_DACL_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER2, WM8960_POWER2_DACR_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER2_DACR_SHIFT));
-            break;
-        case kWM8960_ModuleVREF:
-            WM8960_ModifyReg(handle, WM8960_POWER1, WM8960_POWER1_VREF_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER1_VREF_SHIFT));
-            break;
-        case kWM8960_ModuleLineIn:
-            WM8960_ModifyReg(handle, WM8960_POWER1, WM8960_POWER1_AINL_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER1_AINL_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER1, WM8960_POWER1_AINR_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER1_AINR_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER3, WM8960_POWER3_LMIC_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER3_LMIC_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER3, WM8960_POWER3_RMIC_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER3_RMIC_SHIFT));
-            break;
-        case kWM8960_ModuleLineOut:
-            WM8960_ModifyReg(handle, WM8960_POWER2, WM8960_POWER2_LOUT1_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER2_LOUT1_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER2, WM8960_POWER2_ROUT1_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER2_ROUT1_SHIFT));
-            break;
-        case kWM8960_ModuleMICB:
-            WM8960_ModifyReg(handle, WM8960_POWER1, WM8960_POWER1_MICB_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER1_MICB_SHIFT));
-            break;
-        case kWM8960_ModuleSpeaker:
-            WM8960_ModifyReg(handle, WM8960_POWER2, WM8960_POWER2_SPKL_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER2_SPKL_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER2, WM8960_POWER2_SPKR_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER2_SPKR_SHIFT));
-            WM8960_WriteReg(handle, WM8960_CLASSD1, 0xF7);
-            break;
-        case kWM8960_ModuleOMIX:
-            WM8960_ModifyReg(handle, WM8960_POWER3, WM8960_POWER3_LOMIX_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER3_LOMIX_SHIFT));
-            WM8960_ModifyReg(handle, WM8960_POWER3, WM8960_POWER3_ROMIX_MASK,
-                             ((uint16_t)isEnabled << WM8960_POWER3_ROMIX_SHIFT));
-            break;
-        default:
-            ret = kStatus_InvalidArgument;
-            break;
+    if (ret == 0) {
+        ret = codec_configure_filters(dev, &cfg->dai_cfg);
     }
-    return ret;
-}
-
-status_t WM8960_SetDataRoute(wm8960_handle_t *handle, wm8960_route_t route)
-{
-    status_t ret = kStatus_Success;
-    switch (route)
-    {
-        case kWM8960_RouteBypass:
-            /* Bypass means from line-in to HP*/
-            /*
-             * Left LINPUT3 to left output mixer, LINPUT3 left output mixer volume = 0dB
-             */
-            WM8960_WriteReg(handle, WM8960_LOUTMIX, 0x80);
-
-            /*
-             * Right RINPUT3 to right output mixer, RINPUT3 right output mixer volume = 0dB
-             */
-            WM8960_WriteReg(handle, WM8960_ROUTMIX, 0x80);
-            break;
-        case kWM8960_RoutePlayback:
-            /* Data route I2S_IN-> DAC-> HP */
-            /*
-             * Left DAC to left output mixer, LINPUT3 left output mixer volume = 0dB
-             */
-            WM8960_WriteReg(handle, WM8960_LOUTMIX, 0x100);
-
-            /*
-             * Right DAC to right output mixer, RINPUT3 right output mixer volume = 0dB
-             */
-            WM8960_WriteReg(handle, WM8960_ROUTMIX, 0x100);
-            WM8960_WriteReg(handle, WM8960_POWER3, 0x0C);
-            /* Set power for DAC */
-            WM8960_SetModule(handle, kWM8960_ModuleDAC, true);
-            WM8960_SetModule(handle, kWM8960_ModuleOMIX, true);
-            WM8960_SetModule(handle, kWM8960_ModuleLineOut, true);
-            break;
-        case kWM8960_RoutePlaybackandRecord:
-            /*
-             * Left DAC to left output mixer, LINPUT3 left output mixer volume = 0dB
-             */
-            WM8960_WriteReg(handle, WM8960_LOUTMIX, 0x100);
-
-            /*
-             * Right DAC to right output mixer, RINPUT3 right output mixer volume = 0dB
-             */
-            WM8960_WriteReg(handle, WM8960_ROUTMIX, 0x100);
-            WM8960_WriteReg(handle, WM8960_POWER3, 0x3C);
-            WM8960_SetModule(handle, kWM8960_ModuleDAC, true);
-            WM8960_SetModule(handle, kWM8960_ModuleADC, true);
-            WM8960_SetModule(handle, kWM8960_ModuleLineIn, true);
-            WM8960_SetModule(handle, kWM8960_ModuleOMIX, true);
-            WM8960_SetModule(handle, kWM8960_ModuleLineOut, true);
-            break;
-        case kWM8960_RouteRecord:
-            /* LINE_IN->ADC->I2S_OUT */
-            /*
-             * Left and right input boost, LIN3BOOST and RIN3BOOST = 0dB
-             */
-            WM8960_WriteReg(handle, WM8960_POWER3, 0x30);
-            /* Power up ADC and AIN */
-            WM8960_SetModule(handle, kWM8960_ModuleLineIn, true);
-            WM8960_SetModule(handle, kWM8960_ModuleADC, true);
-            break;
-        default:
-            ret = kStatus_InvalidArgument;
-            break;
-    }
-    return ret;
-}
-
-status_t WM8960_SetLeftInput(wm8960_handle_t *handle, wm8960_input_t input)
-{
-    status_t ret = kStatus_Success;
-    uint16_t val = 0;
-
-    switch (input)
-    {
-        case kWM8960_InputSingleEndedMic:
-            /* Only LMN1 enabled, LMICBOOST to 13db, LMIC2B enabled */
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINL_MASK | WM8960_POWER1_ADCL_MASK | WM8960_POWER1_MICB_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            ret = WM8960_WriteReg(handle, WM8960_LINPATH, 0x138);
-            ret = WM8960_WriteReg(handle, WM8960_LINVOL, 0x117);
-            break;
-        case kWM8960_InputDifferentialMicInput2:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINL_MASK | WM8960_POWER1_ADCL_MASK | WM8960_POWER1_MICB_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            ret = WM8960_WriteReg(handle, WM8960_LINPATH, 0x178);
-            ret = WM8960_WriteReg(handle, WM8960_LINVOL, 0x117);
-            break;
-        case kWM8960_InputDifferentialMicInput3:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINL_MASK | WM8960_POWER1_ADCL_MASK | WM8960_POWER1_MICB_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            ret = WM8960_WriteReg(handle, WM8960_LINPATH, 0x1B8);
-            ret = WM8960_WriteReg(handle, WM8960_LINVOL, 0x117);
-            break;
-        case kWM8960_InputLineINPUT2:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINL_MASK | WM8960_POWER1_ADCL_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            WM8960_ReadReg(WM8960_INBMIX1, &val);
-            val |= 0xE;
-            ret = WM8960_WriteReg(handle, WM8960_INBMIX1, val);
-            break;
-        case kWM8960_InputLineINPUT3:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINL_MASK | WM8960_POWER1_ADCL_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            WM8960_ReadReg(WM8960_INBMIX1, &val);
-            val |= 0x70;
-            ret = WM8960_WriteReg(handle, WM8960_INBMIX1, val);
-            break;
-        default:
-            break;
-    }
+    codec_configure_output(dev);
 
     return ret;
 }
 
-status_t WM8960_SetRightInput(wm8960_handle_t *handle, wm8960_input_t input)
+static void codec_start_output(struct device *dev)
 {
-    status_t ret = kStatus_Success;
-    uint16_t val = 0;
+    /* powerup DAC channels */
+    codec_write_reg(dev, DATA_PATH_SETUP_ADDR, DAC_LR_POWERUP_DEFAULT);
 
-    switch (input)
-    {
-        case kWM8960_InputSingleEndedMic:
-            /* Only LMN1 enabled, LMICBOOST to 13db, LMIC2B enabled */
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINR_MASK | WM8960_POWER1_ADCR_MASK | WM8960_POWER1_MICB_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            ret = WM8960_WriteReg(handle, WM8960_RINPATH, 0x138);
-            ret = WM8960_WriteReg(handle, WM8960_RINVOL, 0x117);
-            break;
-        case kWM8960_InputDifferentialMicInput2:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINR_MASK | WM8960_POWER1_ADCR_MASK | WM8960_POWER1_MICB_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            ret = WM8960_WriteReg(handle, WM8960_RINPATH, 0x178);
-            ret = WM8960_WriteReg(handle, WM8960_RINVOL, 0x117);
-            break;
-        case kWM8960_InputDifferentialMicInput3:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINR_MASK | WM8960_POWER1_ADCR_MASK | WM8960_POWER1_MICB_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            ret = WM8960_WriteReg(handle, WM8960_RINPATH, 0x1B8);
-            ret = WM8960_WriteReg(handle, WM8960_RINVOL, 0x117);
-            break;
-        case kWM8960_InputLineINPUT2:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINR_MASK | WM8960_POWER1_ADCR_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            WM8960_ReadReg(WM8960_INBMIX2, &val);
-            val |= 0xE;
-            ret = WM8960_WriteReg(handle, WM8960_INBMIX2, val);
-            break;
-        case kWM8960_InputLineINPUT3:
-            WM8960_ReadReg(WM8960_POWER1, &val);
-            val |= (WM8960_POWER1_AINR_MASK | WM8960_POWER1_ADCR_MASK);
-            ret = WM8960_WriteReg(handle, WM8960_POWER1, val);
-            WM8960_ReadReg(WM8960_INBMIX2, &val);
-            val |= 0x70;
-            ret = WM8960_WriteReg(handle, WM8960_INBMIX2, val);
-            break;
-        default:
-            break;
-    }
+    /* unmute DAC channels */
+    codec_write_reg(dev, VOL_CTRL_ADDR, VOL_CTRL_UNMUTE_DEFAULT);
 
-    return ret;
+    CODEC_DUMP_REGS(dev);
 }
 
-status_t WM8960_SetProtocol(wm8960_handle_t *handle, wm8960_protocol_t protocol)
+static void codec_stop_output(struct device *dev)
 {
-    return WM8960_ModifyReg(handle, WM8960_IFACE1, WM8960_IFACE1_FORMAT_MASK | WM8960_IFACE1_LRP_MASK, protocol);
+    /* mute DAC channels */
+    codec_write_reg(dev, VOL_CTRL_ADDR, VOL_CTRL_MUTE_DEFAULT);
+
+    /* powerdown DAC channels */
+    codec_write_reg(dev, DATA_PATH_SETUP_ADDR, DAC_LR_POWERDN_DEFAULT);
 }
 
-status_t WM8960_SetVolume(wm8960_handle_t *handle, wm8960_module_t module, uint32_t volume)
+static void codec_mute_output(struct device *dev)
 {
-    uint16_t vol = 0;
-    status_t ret = kStatus_Success;
-    switch (module)
-    {
-        case kWM8960_ModuleADC:
-            vol = volume;
-            ret = WM8960_WriteReg(handle, WM8960_LADC, vol);
-            ret = WM8960_WriteReg(handle, WM8960_RADC, vol);
-            /* Update volume */
-            vol = 0x100 | volume;
-            ret = WM8960_WriteReg(handle, WM8960_LADC, vol);
-            ret = WM8960_WriteReg(handle, WM8960_RADC, vol);
-            break;
-        case kWM8960_ModuleDAC:
-            vol = volume;
-            ret = WM8960_WriteReg(handle, WM8960_LDAC, vol);
-            ret = WM8960_WriteReg(handle, WM8960_RDAC, vol);
-            vol = 0x100 | volume;
-            ret = WM8960_WriteReg(handle, WM8960_LDAC, vol);
-            ret = WM8960_WriteReg(handle, WM8960_RDAC, vol);
-            break;
-        case kWM8960_ModuleHP:
-            vol = volume;
-            ret = WM8960_WriteReg(handle, WM8960_LOUT1, vol);
-            ret = WM8960_WriteReg(handle, WM8960_ROUT1, vol);
-            vol = 0x100 | volume;
-            ret = WM8960_WriteReg(handle, WM8960_LOUT1, vol);
-            ret = WM8960_WriteReg(handle, WM8960_ROUT1, vol);
-            break;
-        case kWM8960_ModuleLineIn:
-            vol = volume;
-            ret = WM8960_WriteReg(handle, WM8960_LINVOL, vol);
-            ret = WM8960_WriteReg(handle, WM8960_RINVOL, vol);
-            vol = 0x100 | volume;
-            ret = WM8960_WriteReg(handle, WM8960_LINVOL, vol);
-            ret = WM8960_WriteReg(handle, WM8960_RINVOL, vol);
-            break;
-        case kWM8960_ModuleSpeaker:
-            vol = volume;
-            ret = WM8960_WriteReg(handle, WM8960_LOUT2, vol);
-            ret = WM8960_WriteReg(handle, WM8960_ROUT2, vol);
-            vol = 0x100 | volume;
-            ret = WM8960_WriteReg(handle, WM8960_LOUT2, vol);
-            ret = WM8960_WriteReg(handle, WM8960_ROUT2, vol);
-            break;
-        default:
-            ret = kStatus_InvalidArgument;
-            break;
-    }
-    return ret;
+    /* mute DAC channels */
+    codec_write_reg(dev, VOL_CTRL_ADDR, VOL_CTRL_MUTE_DEFAULT);
 }
 
-uint32_t WM8960_GetVolume(wm8960_handle_t *handle, wm8960_module_t module)
+static void codec_unmute_output(struct device *dev)
 {
-    uint16_t vol = 0;
-    switch (module)
-    {
-        case kWM8960_ModuleADC:
-            WM8960_ReadReg(WM8960_LADC, &vol);
-            vol &= 0xFF;
-            break;
-        case kWM8960_ModuleDAC:
-            WM8960_ReadReg(WM8960_LDAC, &vol);
-            vol &= 0xFF;
-            break;
-        case kWM8960_ModuleHP:
-            WM8960_ReadReg(WM8960_LOUT1, &vol);
-            vol &= 0x7F;
-            break;
-        case kWM8960_ModuleLineOut:
-            WM8960_ReadReg(WM8960_LINVOL, &vol);
-            vol &= 0x3F;
-            break;
-        default:
-            vol = 0;
-            break;
-    }
-    return vol;
+    /* unmute DAC channels */
+    codec_write_reg(dev, VOL_CTRL_ADDR, VOL_CTRL_UNMUTE_DEFAULT);
 }
 
-status_t WM8960_SetMute(wm8960_handle_t *handle, wm8960_module_t module, bool isEnabled)
+static int codec_set_property(struct device *dev,
+        audio_property_t property, audio_channel_t channel,
+        audio_property_value_t val)
 {
-    status_t ret = kStatus_Success;
-    switch (module)
-    {
-        case kWM8960_ModuleADC:
-            /*
-             * Digital Mute
-             */
-            if (isEnabled)
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LADC, 0x100);
-                ret = WM8960_WriteReg(handle, WM8960_RADC, 0x100);
-            }
-            else
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LADC, 0x1C3);
-                ret = WM8960_WriteReg(handle, WM8960_RADC, 0x1C3);
-            }
-            break;
-        case kWM8960_ModuleDAC:
-            /*
-             * Digital mute
-             */
-            if (isEnabled)
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LDAC, 0x100);
-                ret = WM8960_WriteReg(handle, WM8960_RDAC, 0x100);
-            }
-            else
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LDAC, 0x1FF);
-                ret = WM8960_WriteReg(handle, WM8960_RDAC, 0x1FF);
-            }
-            break;
-        case kWM8960_ModuleHP:
-            /*
-             * Analog mute
-             */
-            if (isEnabled)
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LOUT1, 0x100);
-                ret = WM8960_WriteReg(handle, WM8960_ROUT1, 0x100);
-            }
-            else
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LOUT1, 0x16F);
-                ret = WM8960_WriteReg(handle, WM8960_ROUT1, 0x16F);
-            }
-            break;
-
-        case kWM8960_ModuleSpeaker:
-            if (isEnabled)
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LOUT2, 0x100);
-                ret = WM8960_WriteReg(handle, WM8960_ROUT2, 0x100);
-            }
-            else
-            {
-                ret = WM8960_WriteReg(handle, WM8960_LOUT2, 0x16F);
-                ret = WM8960_WriteReg(handle, WM8960_ROUT2, 0x16f);
-            }
-            break;
-
-        case kWM8960_ModuleLineOut:
-            break;
-        default:
-            ret = kStatus_InvalidArgument;
-            break;
+    /* individual channel control not currently supported */
+    if (channel != AUDIO_CHANNEL_ALL) {
+        LOG_ERR("channel %u invalid. must be AUDIO_CHANNEL_ALL",
+            channel);
+        return -EINVAL;
     }
-    return ret;
+
+    switch (property) {
+    case AUDIO_PROPERTY_OUTPUT_VOLUME:
+        return codec_set_output_volume(dev, val.vol);
+
+    case AUDIO_PROPERTY_OUTPUT_MUTE:
+        if (val.mute) {
+            codec_mute_output(dev);
+        } else {
+            codec_unmute_output(dev);
+        }
+        return 0;
+
+    default:
+        break;
+    }
+
+    return -EINVAL;
 }
 
-status_t WM8960_ConfigDataFormat(wm8960_handle_t *handle, uint32_t sysclk, uint32_t sample_rate, uint32_t bits)
+static int codec_apply_properties(struct device *dev)
 {
-    status_t retval  = kStatus_Success;
-    uint32_t divider = 0;
-    uint16_t val     = 0;
+    /* nothing to do because there is nothing cached */
+    return 0;
+}
 
-    /* Compute sample rate divider, dac and adc are the same sample rate */
-    divider = sysclk / sample_rate;
-    if (divider == 256)
-    {
-        val = 0;
-    }
-    else if (divider > 256)
-    {
-        val = (((divider / 256U) << 6U) | ((divider / 256U) << 3U));
-    }
-    else
-    {
-        return kStatus_InvalidArgument;
+static void codec_write_reg(struct device *dev, struct reg_addr reg, u8_t val)
+{
+    struct codec_driver_data *const dev_data = DEV_DATA(dev);
+    struct codec_driver_config *const dev_cfg = DEV_CFG(dev);
+
+    /* set page if different */
+    if (dev_data->reg_addr_cache.page != reg.page) {
+        i2c_reg_write_byte(dev_cfg->i2c_device,
+                dev_cfg->i2c_address, 0, reg.page);
+        dev_data->reg_addr_cache.page = reg.page;
     }
 
-    retval = WM8960_WriteReg(handle, WM8960_CLOCK1, val);
+    i2c_reg_write_byte(dev_cfg->i2c_device,
+            dev_cfg->i2c_address, reg.reg_addr, val);
+    LOG_DBG("WR PG:%u REG:%02u VAL:0x%02x",
+            reg.page, reg.reg_addr, val);
+}
+
+static void codec_read_reg(struct device *dev, struct reg_addr reg, u8_t *val)
+{
+    struct codec_driver_data *const dev_data = DEV_DATA(dev);
+    struct codec_driver_config *const dev_cfg = DEV_CFG(dev);
+
+    /* set page if different */
+    if (dev_data->reg_addr_cache.page != reg.page) {
+        i2c_reg_write_byte(dev_cfg->i2c_device,
+                dev_cfg->i2c_address, 0, reg.page);
+        dev_data->reg_addr_cache.page = reg.page;
+    }
+
+    i2c_reg_read_byte(dev_cfg->i2c_device,
+            dev_cfg->i2c_address, reg.reg_addr, val);
+    LOG_DBG("RD PG:%u REG:%02u VAL:0x%02x",
+            reg.page, reg.reg_addr, *val);
+}
+
+static void codec_soft_reset(struct device *dev)
+{
+    /* soft reset the DAC */
+    codec_write_reg(dev, SOFT_RESET_ADDR, SOFT_RESET_ASSERT);
+}
+
+static int codec_configure_dai(struct device *dev, audio_dai_cfg_t *cfg)
+{
+    u8_t val;
+
+    /* configure I2S interface */
+    val = IF_CTRL_IFTYPE(IF_CTRL_IFTYPE_I2S);
+    if (cfg->i2s.options & I2S_OPT_BIT_CLK_MASTER) {
+        val |= IF_CTRL_BCLK_OUT;
+    }
+
+    if (cfg->i2s.options & I2S_OPT_FRAME_CLK_MASTER) {
+        val |= IF_CTRL_WCLK_OUT;
+    }
+
+    switch (cfg->i2s.word_size) {
+    case AUDIO_PCM_WIDTH_16_BITS:
+        val |= IF_CTRL_WLEN(IF_CTRL_WLEN_16);
+        break;
+    case AUDIO_PCM_WIDTH_20_BITS:
+        val |= IF_CTRL_WLEN(IF_CTRL_WLEN_20);
+        break;
+    case AUDIO_PCM_WIDTH_24_BITS:
+        val |= IF_CTRL_WLEN(IF_CTRL_WLEN_24);
+        break;
+    case AUDIO_PCM_WIDTH_32_BITS:
+        val |= IF_CTRL_WLEN(IF_CTRL_WLEN_32);
+        break;
+    default:
+        LOG_ERR("Unsupported PCM sample bit width %u",
+                cfg->i2s.word_size);
+        return -EINVAL;
+    }
+
+    codec_write_reg(dev, IF_CTRL1_ADDR, val);
+    return 0;
+}
+
+static int codec_configure_clocks(struct device *dev,
+        struct audio_codec_cfg *cfg)
+{
+    int dac_clk, mod_clk;
+    struct i2s_config *i2s;
+    int osr, osr_min, osr_max;
+    enum osr_multiple osr_multiple;
+    int mdac, ndac, bclk_div, mclk_div;
+
+    i2s = &cfg->dai_cfg.i2s;
+    LOG_DBG("MCLK %u Hz PCM Rate: %u Hz", cfg->mclk_freq,
+            i2s->frame_clk_freq);
+
+    if (cfg->mclk_freq <= DAC_PROC_CLK_FREQ_MAX) {
+        /* use MCLK frequecy as the DAC processing clock */
+        ndac = 1;
+    } else {
+        ndac = cfg->mclk_freq / DAC_PROC_CLK_FREQ_MAX;
+    }
+
+    dac_clk = cfg->mclk_freq / ndac;
+
+    /* determine OSR Multiple based on PCM rate */
+    osr_multiple = codec_get_osr_multiple(&cfg->dai_cfg);
 
     /*
-     * Slave mode (MS = 0), LRP = 0, 32bit WL, left justified (FORMAT[1:0]=0b01)
+     * calculate MOD clock such that it is an integer multiple of
+     * cfg->i2s.frame_clk_freq and
+     * DAC_MOD_CLK_FREQ_MIN <= MOD clock <= DAC_MOD_CLK_FREQ_MAX
      */
-    switch (bits)
-    {
-        case 16:
-            retval = WM8960_ModifyReg(handle, WM8960_IFACE1, WM8960_IFACE1_WL_MASK,
-                                      WM8960_IFACE1_WL(WM8960_IFACE1_WL_16BITS));
+    osr_min = (DAC_MOD_CLK_FREQ_MIN + i2s->frame_clk_freq - 1) /
+        i2s->frame_clk_freq;
+    osr_max = DAC_MOD_CLK_FREQ_MAX / i2s->frame_clk_freq;
+
+    /* round mix and max values to the required multiple */
+    osr_max = (osr_max / osr_multiple) * osr_multiple;
+    osr_min = (osr_min + osr_multiple - 1) / osr_multiple;
+
+    osr = osr_max;
+    while (osr >= osr_min) {
+        mod_clk = i2s->frame_clk_freq * osr;
+
+        /* calculate mdac */
+        mdac = dac_clk / mod_clk;
+
+        /* check if mdac is an integer */
+        if ((mdac * mod_clk) == dac_clk) {
+            /* found suitable dividers */
             break;
-        case 20:
-            retval = WM8960_ModifyReg(handle, WM8960_IFACE1, WM8960_IFACE1_WL_MASK,
-                                      WM8960_IFACE1_WL(WM8960_IFACE1_WL_20BITS));
-            break;
-        case 24:
-            retval = WM8960_ModifyReg(handle, WM8960_IFACE1, WM8960_IFACE1_WL_MASK,
-                                      WM8960_IFACE1_WL(WM8960_IFACE1_WL_24BITS));
-            break;
-        case 32:
-            retval = WM8960_ModifyReg(handle, WM8960_IFACE1, WM8960_IFACE1_WL_MASK,
-                                      WM8960_IFACE1_WL(WM8960_IFACE1_WL_32BITS));
-            break;
-        default:
-            return kStatus_InvalidArgument;
+        }
+        osr -= osr_multiple;
     }
 
-    return retval;
+    /* check if suitable value was found */
+    if (osr < osr_min) {
+        LOG_ERR("Unable to find suitable mdac and osr values");
+        return -EINVAL;
+    }
+
+    LOG_DBG("Processing freq: %u Hz Modulator freq: %u Hz",
+            dac_clk, mod_clk);
+    LOG_DBG("NDAC: %u MDAC: %u OSR: %u", ndac, mdac, osr);
+
+    if (i2s->options & I2S_OPT_BIT_CLK_MASTER) {
+        bclk_div = osr * mdac / (i2s->word_size * 2U); /* stereo */
+        if ((bclk_div * i2s->word_size * 2) != (osr * mdac)) {
+            LOG_ERR("Unable to generate BCLK %u from MCLK %u",
+                i2s->frame_clk_freq * i2s->word_size * 2U,
+                cfg->mclk_freq);
+            return -EINVAL;
+        }
+        LOG_DBG("I2S Master BCLKDIV: %u", bclk_div);
+        codec_write_reg(dev, BCLK_DIV_ADDR,
+                BCLK_DIV_POWER_UP | BCLK_DIV(bclk_div));
+    }
+
+    /* set NDAC, then MDAC, followed by OSR */
+    codec_write_reg(dev, NDAC_DIV_ADDR,
+            (u8_t)(NDAC_DIV(ndac) | NDAC_POWER_UP_MASK));
+    codec_write_reg(dev, MDAC_DIV_ADDR,
+            (u8_t)(MDAC_DIV(mdac) | MDAC_POWER_UP_MASK));
+    codec_write_reg(dev, OSR_MSB_ADDR, (u8_t)((osr >> 8) & OSR_MSB_MASK));
+    codec_write_reg(dev, OSR_LSB_ADDR, (u8_t)(osr & OSR_LSB_MASK));
+
+    if (i2s->options & I2S_OPT_BIT_CLK_MASTER) {
+        codec_write_reg(dev, BCLK_DIV_ADDR,
+                BCLK_DIV(bclk_div) | BCLK_DIV_POWER_UP);
+    }
+
+    /* calculate MCLK divider to get ~1MHz */
+    mclk_div = (cfg->mclk_freq + 1000000 - 1) / 1000000U;
+    /* setup timer clock to be MCLK divided */
+    codec_write_reg(dev, TIMER_MCLK_DIV_ADDR,
+            TIMER_MCLK_DIV_EN_EXT | TIMER_MCLK_DIV_VAL(mclk_div));
+    LOG_DBG("Timer MCLK Divider: %u", mclk_div);
+
+    return 0;
 }
 
-status_t WM8960_SetJackDetect(wm8960_handle_t *handle, bool isEnabled)
+static int codec_configure_filters(struct device *dev, audio_dai_cfg_t *cfg)
 {
-    uint8_t retval = 0;
-    uint16_t val   = 0;
+    enum proc_block proc_blk;
 
-    WM8960_ReadReg(WM8960_ADDCTL2, &val);
-
-    if (isEnabled)
-    {
-        val |= 0x40U;
+    /* determine decimation filter type */
+    if (cfg->i2s.frame_clk_freq >= AUDIO_PCM_RATE_192K) {
+        proc_blk = PRB_P18_DECIMATION_C;
+        LOG_INF("PCM Rate: %u Filter C PRB P18 selected",
+                cfg->i2s.frame_clk_freq);
+    } else if (cfg->i2s.frame_clk_freq >= AUDIO_PCM_RATE_96K) {
+        proc_blk = PRB_P10_DECIMATION_B;
+        LOG_INF("PCM Rate: %u Filter B PRB P10 selected",
+                cfg->i2s.frame_clk_freq);
+    } else {
+        proc_blk = PRB_P25_DECIMATION_A;
+        LOG_INF("PCM Rate: %u Filter A PRB P25 selected",
+                cfg->i2s.frame_clk_freq);
     }
-    else
-    {
-        val &= 0xCF;
-    }
 
-    retval = WM8960_WriteReg(handle, WM8960_ADDCTL2, val);
-
-    return retval;
+    codec_write_reg(dev, PROC_BLK_SEL_ADDR, PROC_BLK_SEL(proc_blk));
+    return 0;
 }
 
-status_t WM8960_WriteReg(wm8960_handle_t *handle, uint8_t reg, uint16_t val)
+static enum osr_multiple codec_get_osr_multiple(audio_dai_cfg_t *cfg)
 {
-    uint8_t cmd;
-    uint16_t buff = val;
+    enum osr_multiple osr;
 
-    /* The register address */
-    cmd = (reg << 1) | ((val >> 8U) & 0x0001U);
+    if (cfg->i2s.frame_clk_freq >= AUDIO_PCM_RATE_192K) {
+        osr = OSR_MULTIPLE_2;
+    } else if (cfg->i2s.frame_clk_freq >= AUDIO_PCM_RATE_96K) {
+        osr = OSR_MULTIPLE_4;
+    } else {
+        osr = OSR_MULTIPLE_8;
+    }
 
-    reg_cache[reg] = buff;
-
-    return CODEC_I2C_Send(handle->i2cHandle, handle->config->slaveAddress, cmd, 1U, (uint8_t *)&buff, 2U);
+    LOG_INF("PCM Rate: %u OSR Multiple: %u", cfg->i2s.frame_clk_freq,
+            osr);
+    return osr;
 }
 
-status_t WM8960_ReadReg(uint8_t reg, uint16_t *val)
+static void codec_configure_output(struct device *dev)
 {
-    if (reg >= WM8960_CACHEREGNUM)
-    {
-        return kStatus_InvalidArgument;
-    }
+    u8_t val;
 
-    *val = reg_cache[reg];
+    /*
+     * set common mode voltage to 1.65V (half of AVDD)
+     * AVDD is typically 3.3V
+     */
+    codec_read_reg(dev, HEADPHONE_DRV_ADDR, &val);
+    val &= ~HEADPHONE_DRV_CM_MASK;
+    val |= HEADPHONE_DRV_CM(CM_VOLTAGE_1P65) | HEADPHONE_DRV_RESERVED;
+    codec_write_reg(dev, HEADPHONE_DRV_ADDR, val);
 
-    return kStatus_Success;
+    /* enable pop removal on power down/up */
+    codec_read_reg(dev, HP_OUT_POP_RM_ADDR, &val);
+    codec_write_reg(dev, HP_OUT_POP_RM_ADDR, val | HP_OUT_POP_RM_ENABLE);
+
+    /* route DAC output to Headphone */
+    val = OUTPUT_ROUTING_HPL | OUTPUT_ROUTING_HPR;
+    codec_write_reg(dev, OUTPUT_ROUTING_ADDR, val);
+
+    /* enable volume control on Headphone out */
+    codec_write_reg(dev, HPL_ANA_VOL_CTRL_ADDR,
+            HPX_ANA_VOL(HPX_ANA_VOL_DEFAULT));
+    codec_write_reg(dev, HPR_ANA_VOL_CTRL_ADDR,
+            HPX_ANA_VOL(HPX_ANA_VOL_DEFAULT));
+
+    /* set headphone outputs as line-out */
+    codec_write_reg(dev, HEADPHONE_DRV_CTRL_ADDR, HEADPHONE_DRV_LINEOUT);
+
+    /* unmute headphone drivers */
+    codec_write_reg(dev, HPL_DRV_GAIN_CTRL_ADDR, HPX_DRV_UNMUTE);
+    codec_write_reg(dev, HPR_DRV_GAIN_CTRL_ADDR, HPX_DRV_UNMUTE);
+
+    /* power up headphone drivers */
+    codec_read_reg(dev, HEADPHONE_DRV_ADDR, &val);
+    val |= HEADPHONE_DRV_POWERUP | HEADPHONE_DRV_RESERVED;
+    codec_write_reg(dev, HEADPHONE_DRV_ADDR, val);
 }
 
-status_t WM8960_ModifyReg(wm8960_handle_t *handle, uint8_t reg, uint16_t mask, uint16_t val)
+static int codec_set_output_volume(struct device *dev, int vol)
 {
-    uint8_t retval   = 0;
-    uint16_t reg_val = 0;
-    retval           = WM8960_ReadReg(reg, &reg_val);
-    if (retval != kStatus_Success)
-    {
-        return kStatus_Fail;
+    u8_t vol_val;
+    int vol_index;
+    u8_t vol_array[] = {
+        107, 108, 110, 113, 116, 120, 125, 128, 132, 138, 144
+    };
+
+    if ((vol > CODEC_OUTPUT_VOLUME_MAX) ||
+            (vol < CODEC_OUTPUT_VOLUME_MIN)) {
+        LOG_ERR("Invalid volume %d.%d dB",
+                vol >> 1, ((u32_t)vol & 1) ? 5 : 0);
+        return -EINVAL;
     }
-    reg_val &= (uint16_t)~mask;
-    reg_val |= val;
-    retval = WM8960_WriteReg(handle, reg, reg_val);
-    if (retval != kStatus_Success)
-    {
-        return kStatus_Fail;
+
+    /* remove sign */
+    vol = -vol;
+
+    /* if volume is near floor, set minimum */
+    if (vol > HPX_ANA_VOL_FLOOR) {
+        vol_val = HPX_ANA_VOL_FLOOR;
+    } else if (vol > HPX_ANA_VOL_LOW_THRESH) {
+        /* lookup low volume values */
+        for (vol_index = 0; vol_index < ARRAY_SIZE(vol_array); vol_index++) {
+            if (vol_array[vol_index] >= vol) {
+                break;
+            }
+        }
+        vol_val = HPX_ANA_VOL_LOW_THRESH + vol_index + 1;
+    } else {
+        vol_val = (u8_t)vol;
     }
-    return kStatus_Success;
+
+    codec_write_reg(dev, HPL_ANA_VOL_CTRL_ADDR, HPX_ANA_VOL(vol_val));
+    codec_write_reg(dev, HPR_ANA_VOL_CTRL_ADDR, HPX_ANA_VOL(vol_val));
+    return 0;
 }
 
-status_t WM8960_SetPlay(wm8960_handle_t *handle, uint32_t playSource)
+#if (LOG_LEVEL >= LOG_LEVEL_DEBUG)
+static void codec_read_all_regs(struct device *dev)
 {
-    status_t ret = kStatus_Success;
+    u8_t val;
 
-    if (kWM8960_PlaySourcePGA & playSource)
-    {
-        ret = WM8960_ModifyReg(handle, WM8960_BYPASS1, 0x80U, 0x80U);
-        ret = WM8960_ModifyReg(handle, WM8960_BYPASS2, 0x80U, 0x80U);
-        ret = WM8960_ModifyReg(handle, WM8960_LOUTMIX, 0x180U, 0U);
-        ret = WM8960_ModifyReg(handle, WM8960_ROUTMIX, 0x180U, 0U);
-    }
+    codec_read_reg(dev, SOFT_RESET_ADDR, &val);
+    codec_read_reg(dev, NDAC_DIV_ADDR, &val);
+    codec_read_reg(dev, MDAC_DIV_ADDR, &val);
+    codec_read_reg(dev, OSR_MSB_ADDR, &val);
+    codec_read_reg(dev, OSR_LSB_ADDR, &val);
+    codec_read_reg(dev, IF_CTRL1_ADDR, &val);
+    codec_read_reg(dev, BCLK_DIV_ADDR, &val);
+    codec_read_reg(dev, OVF_FLAG_ADDR, &val);
+    codec_read_reg(dev, PROC_BLK_SEL_ADDR, &val);
+    codec_read_reg(dev, DATA_PATH_SETUP_ADDR, &val);
+    codec_read_reg(dev, VOL_CTRL_ADDR, &val);
+    codec_read_reg(dev, L_DIG_VOL_CTRL_ADDR, &val);
+    codec_read_reg(dev, DRC_CTRL1_ADDR, &val);
+    codec_read_reg(dev, L_BEEP_GEN_ADDR, &val);
+    codec_read_reg(dev, R_BEEP_GEN_ADDR, &val);
+    codec_read_reg(dev, BEEP_LEN_MSB_ADDR, &val);
+    codec_read_reg(dev, BEEP_LEN_MIB_ADDR, &val);
+    codec_read_reg(dev, BEEP_LEN_LSB_ADDR, &val);
 
-    if (playSource & kWM8960_PlaySourceDAC)
-    {
-        ret = WM8960_ModifyReg(handle, WM8960_BYPASS1, 0x80U, 0x00U);
-        ret = WM8960_ModifyReg(handle, WM8960_BYPASS2, 0x80U, 0x00U);
-        ret = WM8960_ModifyReg(handle, WM8960_LOUTMIX, 0x180U, 0x100U);
-        ret = WM8960_ModifyReg(handle, WM8960_ROUTMIX, 0x180U, 0x100U);
-    }
+    codec_read_reg(dev, HEADPHONE_DRV_ADDR, &val);
+    codec_read_reg(dev, HP_OUT_POP_RM_ADDR, &val);
+    codec_read_reg(dev, OUTPUT_ROUTING_ADDR, &val);
+    codec_read_reg(dev, HPL_ANA_VOL_CTRL_ADDR, &val);
+    codec_read_reg(dev, HPR_ANA_VOL_CTRL_ADDR, &val);
+    codec_read_reg(dev, HPL_DRV_GAIN_CTRL_ADDR, &val);
+    codec_read_reg(dev, HPR_DRV_GAIN_CTRL_ADDR, &val);
+    codec_read_reg(dev, HEADPHONE_DRV_CTRL_ADDR, &val);
 
-    if (playSource & kWM8960_PlaySourceInput)
-    {
-        ret = WM8960_ModifyReg(handle, WM8960_BYPASS1, 0x80U, 0x0U);
-        ret = WM8960_ModifyReg(handle, WM8960_BYPASS2, 0x80U, 0x0U);
-        ret = WM8960_ModifyReg(handle, WM8960_LOUTMIX, 0x180U, 0x80U);
-        ret = WM8960_ModifyReg(handle, WM8960_ROUTMIX, 0x180U, 0x80U);
-    }
-
-    return ret;
+    codec_read_reg(dev, TIMER_MCLK_DIV_ADDR, &val);
 }
+#endif
+
+static const struct audio_codec_api codec_driver_api = {
+    .configure      = codec_configure,
+    .start_output       = codec_start_output,
+    .stop_output        = codec_stop_output,
+    .set_property       = codec_set_property,
+    .apply_properties   = codec_apply_properties,
+};
+
+DEVICE_AND_API_INIT(tlv320dac310x, DT_INST_0_TI_TLV320DAC_LABEL, codec_initialize,
+        &codec_device_data, &codec_device_config, POST_KERNEL,
+        CONFIG_AUDIO_CODEC_INIT_PRIORITY, &codec_driver_api);
