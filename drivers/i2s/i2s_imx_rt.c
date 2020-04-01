@@ -161,13 +161,13 @@ struct pinmux_imx_config;
 	((const struct pinmux_imx_config *const)(dev)->config->config_info)
 #define DEV_PINMUX_BASE(dev) ((void *)DEV_CFG(dev)->base)
 
-#ifdef (I2S0)
+#if defined(I2S0)
 I2S_DEVICE_OBJECT_DECLARE(0);
 #endif
-#ifdef (I2S1)
+#if defined(I2S1)
 I2S_DEVICE_OBJECT_DECLARE(1);
 #endif
-#ifdef (I2S2)
+#if defined(I2S2)
 I2S_DEVICE_OBJECT_DECLARE(2);
 #endif
 
@@ -576,7 +576,7 @@ static int i2s_tx_stream_start(struct device *dev)
 	struct stream *strm = &DEV_DATA(dev)->tx;
 	u32_t data_path = strm->start_channel;
 	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
-	struct i2s_rt_data * dev_data = DEV_DATA(dev);
+	struct i2s_dev_data * dev_data = DEV_DATA(dev);
 
 	/* retrieve buffer from input queue */
 	ret = k_msgq_get(&strm->in_queue, &buffer, K_NO_WAIT);
@@ -616,6 +616,7 @@ static int i2s_rx_stream_start(struct device *dev)
 	void *buffer;
 	struct stream *strm = &DEV_DATA(dev)->rx;
 	struct device *dev_dma = DEV_DATA(dev)->dev_dma;
+	struct i2s_dev_data *const dev_data = DEV_DATA(dev);
 	u32_t data_path = strm->start_channel;
 
 	/* allocate receive buffer from SLAB */
