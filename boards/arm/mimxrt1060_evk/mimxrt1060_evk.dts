@@ -117,6 +117,13 @@ arduino_serial: &uart3 {};
 		label = "FT5336";
 		int-gpios = <&gpio1 11 0>;
 	};
+
+	wm8960@1a {
+		compatible = "nxp,wm8960";
+		reg = <0x1A>;
+		label = "WM8960";
+		int-gpios = <&gpio1 24 0>;
+	}
 };
 
 &uart1 {
