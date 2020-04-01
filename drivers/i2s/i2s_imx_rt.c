@@ -404,9 +404,16 @@ static void _get_mclk_rate(struct device *dev, u32_t *mclk)
 		break;
 	default:
 		LOG_ERR("not a valide i2s instance");
+		*mclk = rate;
 		return;
 	}
-	clock_control_get_rate(ccm_dev, clk_sub_sys, &rate);
+	if (ccm_dev != NULL) {
+		clock_control_get_rate(ccm_dev, clk_sub_sys, &rate);
+	} else {
+		LOG_ERR("CMM driver is not installed");
+		*mclk = rate;
+		return;
+	}
 	*mclk = rate / (src_div + 1) / (pre_div + 1);
 }
 
