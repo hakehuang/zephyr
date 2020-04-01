@@ -15,7 +15,10 @@ properties:
       required: true
 
     "#pll_clock-cells":
+      type: int
       const: 4
+      required: true
+      description: Number of items to expect in a PLL specifier
 
 pll_clock-cells:
   - name

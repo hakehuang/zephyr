@@ -139,7 +139,7 @@
 			compatible = "nxp,imx-anatop";
 			reg = <0x400d8000 0x4000>;
 			label = "CCM_ANA";
-			#clock-cells = <4>;
+			#pll_clock-cells = <4>;
 		};
 
 		gpio1: gpio@401b8000 {
