@@ -20,22 +20,9 @@ config I2S_BUFFER_QUEUE_COUNT
 
 config I2S_0
 	bool "I2S port 1"
+	default y
 	help
 	  Enable I2S controller SAI1.
-
-config I2S_0_NAME
-	string "I2S_0 device name"
-	default "I2S_0"
-	depends on I2S_0
-	help
-	  Name of the I2S device.
-
-config I2S_0_DMA_NAME
-	string "I2S_0 edma device name"
-	default "DMA_0"
-	depends on I2S_0 && DMA
-	help
-	  Name of the I2S device.
 
 config I2S_0_TX_DMA_SLOT
 	int "default I2S TX DMA SLOT"
@@ -56,19 +43,6 @@ config I2S_1
 	help
 	  Enable I2S controller SAI2.
 
-config I2S_1_NAME
-	string "I2S_1 device name"
-	default "I2S_1"
-	depends on I2S_1
-	help
-	  Name of the I2S device.
-
-config I2S_1_DMA_NAME
-	string "I2S_1 edma device name"
-	default "DMA_1"
-	depends on I2S_1 && DMA
-	help
-	  Name of the I2S EDMA device.
 
 config I2S_1_TX_DMA_SLOT
 	int "default I2S TX DMA SLOT"
@@ -89,19 +63,6 @@ config I2S_2
 	help
 	  Enable I2S2 controller SAI3.
 
-config I2S_2_NAME
-	string "I2S_2 device name"
-	default "I2S_2"
-	depends on I2S_2
-	help
-	  Name of the I2S device.
-
-config I2S_2_DMA_NAME
-	string "I2S_2 edma device name"
-	default "DMA_2"
-	depends on I2S_2 && DMA
-	help
-	  Name of the I2S EDMA device.
 
 config I2S_2_TX_DMA_SLOT
 	int "default I2S TX DMA SLOT"

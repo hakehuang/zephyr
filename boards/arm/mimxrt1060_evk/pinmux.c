@@ -10,11 +10,10 @@
 #include <soc.h>
 
 #ifdef CONFIG_ETH_MCUX_0
-static gpio_pin_config_t enet_gpio_config = {
-	.direction = kGPIO_DigitalOutput,
-	.outputLogic = 0,
-	.interruptMode = kGPIO_NoIntmode
-};
+static gpio_pin_config_t enet_gpio_config = { .direction = kGPIO_DigitalOutput,
+					      .outputLogic = 0,
+					      .interruptMode =
+						      kGPIO_NoIntmode };
 #endif
 
 static int mimxrt1060_evk_init(struct device *dev)
@@ -30,8 +29,8 @@ static int mimxrt1060_evk_init(struct device *dev)
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_09_GPIO1_IO09,
 			    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
-			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
+				    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
+				    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 
 	/* SW0 */
 	IOMUXC_SetPinMux(IOMUXC_SNVS_WAKEUP_GPIO5_IO00, 0);
@@ -44,13 +43,13 @@ static int mimxrt1060_evk_init(struct device *dev)
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_12_LPUART1_TX,
 			    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
-			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
+				    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
+				    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_13_LPUART1_RX,
 			    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
-			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
+				    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
+				    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 #endif
 
 #ifdef CONFIG_UART_MCUX_LPUART_3
@@ -60,13 +59,13 @@ static int mimxrt1060_evk_init(struct device *dev)
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_06_LPUART3_TX,
 			    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
-			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
+				    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
+				    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_07_LPUART3_RX,
 			    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
-			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
+				    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
+				    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 #endif
 
 #ifdef CONFIG_I2C_1
@@ -76,17 +75,17 @@ static int mimxrt1060_evk_init(struct device *dev)
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_00_LPI2C1_SCL,
 			    IOMUXC_SW_PAD_CTL_PAD_PUS(3) |
-			    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_ODE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
-			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
+				    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
+				    IOMUXC_SW_PAD_CTL_PAD_ODE_MASK |
+				    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
+				    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_01_LPI2C1_SDA,
 			    IOMUXC_SW_PAD_CTL_PAD_PUS(3) |
-			    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_ODE_MASK |
-			    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
-			    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
+				    IOMUXC_SW_PAD_CTL_PAD_PKE_MASK |
+				    IOMUXC_SW_PAD_CTL_PAD_ODE_MASK |
+				    IOMUXC_SW_PAD_CTL_PAD_SPEED(2) |
+				    IOMUXC_SW_PAD_CTL_PAD_DSE(6));
 #endif
 
 #ifdef CONFIG_ETH_MCUX_0
@@ -179,11 +178,39 @@ static int mimxrt1060_evk_init(struct device *dev)
 	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_15_GPIO2_IO31, 0x10B0u);
 
 	gpio_pin_config_t config = {
-		kGPIO_DigitalOutput, 0,
+		kGPIO_DigitalOutput,
+		0,
 	};
 
 	config.outputLogic = 1;
 	GPIO_PinInit(GPIO2, 31, &config);
+#endif
+
+#ifdef CONFIG_I2S_IMX_RT
+	/* GPIO_AD_B1_09 is configured as SAI1_MCLK */
+	IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B1_09_SAI1_MCLK, 1U);
+	/* GPIO_AD_B1_13 is configured as SAI1_TX_DATA00 */
+	IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B1_13_SAI1_TX_DATA00, 1U);
+	/* GPIO_AD_B1_14 is configured as SAI1_TX_BCLK */
+	IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B1_14_SAI1_TX_BCLK, 1U);
+	/* GPIO_AD_B1_15 is configured as SAI1_TX_SYNC */
+	IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B1_15_SAI1_TX_SYNC, 1U);
+	/* GPIO_AD_B0_12 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_12_LPUART1_TX, 0x10B0u);
+	/* GPIO_AD_B0_13 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B0_13_LPUART1_RX, 0x10B0u);
+	/* GPIO_AD_B1_00 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_00_LPI2C1_SCL, 0xD8B0u);
+	/* GPIO_AD_B1_01 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_01_LPI2C1_SDA, 0xD8B0u);
+	/* GPIO_AD_B1_09 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_09_SAI1_MCLK, 0x10B0u);
+	/* GPIO_AD_B1_13 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_13_SAI1_TX_DATA00, 0x10B0u);
+	/* GPIO_AD_B1_14 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_14_SAI1_TX_BCLK, 0x10B0u);
+	/* GPIO_AD_B1_15 PAD functional properties : */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_15_SAI1_TX_SYNC, 0x10B0u);
 #endif
 
 	return 0;

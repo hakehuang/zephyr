@@ -22,6 +22,13 @@ extern "C" {
 #include "fsl_sai_edma.h"
 #include "fsl_sai.h"
 
+
+#define SAI_WORD_SIZE_BITS_MIN 8
+#define SAI_WORD_SIZE_BITS_MAX 32
+
+#define SAI_WORD_PER_FRAME_MIN 0
+#define SAI_WORD_PER_FRAME_MIN 32
+
 #ifdef __cplusplus
 }
 #endif

@@ -23,3 +23,4 @@ supported:
   - netif:eth
   - usb_device
   - dma
+  - i2s
