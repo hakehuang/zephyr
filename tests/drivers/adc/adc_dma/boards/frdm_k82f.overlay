@@ -1,0 +1,11 @@
+/*
+* Copyright (c) 2020, NXP
+*
+* SPDX-License-Identifier: Apache-2.0
+*/
+&adc0 {
+    clk_source = <0>;
+    long_sample = <2>;
+    nxp,continues_convert;
+    nxp,high_speed;
+};

@@ -12,10 +12,30 @@ properties:
       required: true
 
     interrupts:
-      required: true
+      required: true 
 
     "#io-channel-cells":
       const: 1
+
+    clk_source:
+      type: int
+      required: false
+      description: use alternate clock reference source
+
+    long_sample:
+      type: int
+      required: false
+      description: enable long sample mode
+
+    nxp,continues_convert:
+      type: boolean
+      required: false
+      description: If use continues convert
+
+    nxp,high_speed:
+      type: boolean
+      required: false
+      description: If use high speed
 
 io-channel-cells:
     - input

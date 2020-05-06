@@ -7,14 +7,13 @@
 #define DT_DRV_COMPAT nxp_kinetis_adc16
 
 #include <errno.h>
+
 #include <drivers/adc.h>
-#ifdef CONFIG_ADC16_ENABLE_EDMA
 #include <drivers/dma.h>
 #include <drivers/adc_mcux_edma.h>
-#include <fsl_sim.h>
-#endif
 
 #include <fsl_adc16.h>
+#include <fsl_sim.h>
 
 #define LOG_LEVEL CONFIG_ADC_LOG_LEVEL
 #include <logging/log.h>
@@ -25,43 +24,35 @@ LOG_MODULE_REGISTER(adc_mcux_adc16);
 
 struct mcux_adc16_config {
 	ADC_Type *base;
-#ifndef CONFIG_ADC16_ENABLE_EDMA
-	void (*irq_config_func)(struct device *dev);
-#endif
 };
 
 struct mcux_adc16_data {
 	struct device *dev;
-	struct adc_context ctx;
-#ifdef CONFIG_ADC16_ENABLE_EDMA
 	struct device *dev_dma;
+	struct adc_context ctx;
 	struct adc_edma_config adc_dma_config;
-#endif
-	uint16_t *buffer;
-	uint16_t *repeat_buffer;
-	uint32_t channels;
-	uint8_t channel_id;
+	u16_t *buffer;
+	u16_t *repeat_buffer;
+	u32_t channels;
+	u8_t channel_id;
 };
 
 #define DEV_CFG(dev) ((const struct mcux_adc16_config *const)dev->config_info)
 #define DEV_DATA(dev) ((struct mcux_adc16_data *)dev->driver_data)
 #define DEV_BASE(dev) ((ADC_Type *)DEV_CFG(dev)->base)
 
-#ifdef CONFIG_ADC16_ENABLE_EDMA
-static void adc_dma_callback(struct device *dma_dev, void *callback_arg,
-			     u32_t channel, int error_code)
+static void adc_dma_callback(void *callback_arg, u32_t channel, int error_code)
 {
 	struct device *dev = (struct device *)callback_arg;
 	struct mcux_adc16_data *data = DEV_DATA(dev);
 	LOG_DBG("DMA done");
 	adc_context_on_sampling_done(&data->ctx, dev);
 }
-#endif
 
 static int mcux_adc16_channel_setup(struct device *dev,
 				    const struct adc_channel_cfg *channel_cfg)
 {
-	uint8_t channel_id = channel_cfg->channel_id;
+	u8_t channel_id = channel_cfg->channel_id;
 
 	if (channel_id > (ADC_SC1_ADCH_MASK >> ADC_SC1_ADCH_SHIFT)) {
 		LOG_ERR("Channel %d is not valid", channel_id);
@@ -107,7 +98,7 @@ static int start_read(struct device *dev, const struct adc_sequence *sequence)
 	adc16_hardware_average_mode_t mode;
 	adc16_resolution_t resolution;
 	int error;
-	uint32_t tmp32;
+	u32_t tmp32;
 	ADC_Type *base = config->base;
 
 	switch (sequence->resolution) {
@@ -160,14 +151,10 @@ static int start_read(struct device *dev, const struct adc_sequence *sequence)
 	}
 	ADC16_SetHardwareAverage(config->base, mode);
 
-	data->buffer = sequence->buffer;
-
 	adc_context_start_read(&data->ctx, sequence);
 
 	error = adc_context_wait_for_completion(&data->ctx);
-#ifdef CONFIG_ADC16_ENABLE_EDMA
 	dma_stop(data->dev_dma, data->adc_dma_config.dma_channel);
-#endif
 	return error;
 }
 
@@ -206,7 +193,7 @@ static void mcux_adc16_start_channel(struct device *dev)
 	struct mcux_adc16_data *data = DEV_DATA(dev);
 
 	adc16_channel_config_t channel_config;
-	uint32_t channel_group = 0U;
+	u32_t channel_group = 0U;
 
 	data->channel_id = find_lsb_set(data->channels) - 1;
 
@@ -217,11 +204,9 @@ static void mcux_adc16_start_channel(struct device *dev)
 #endif
 	channel_config.enableInterruptOnConversionCompleted = true;
 	channel_config.channelNumber = data->channel_id;
+
 	ADC16_SetChannelConfig(config->base, channel_group, &channel_config);
-#ifdef CONFIG_ADC16_ENABLE_EDMA
-	LOG_DBG("Starting EDMA");
 	dma_start(data->dev_dma, data->adc_dma_config.dma_channel);
-#endif
 	LOG_DBG("Starting channel done");
 }
 
@@ -233,7 +218,6 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 	data->channels = ctx->sequence.channels;
 	data->repeat_buffer = data->buffer;
 
-#ifdef CONFIG_ADC16_ENABLE_EDMA
 	LOG_DBG("config dma");
 	data->buffer = ctx->sequence.buffer;
 	data->adc_dma_config.dma_block.block_size = ctx->sequence.buffer_size;
@@ -242,7 +226,6 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 		&(data->adc_dma_config.dma_block);
 	dma_config(data->dev_dma, data->adc_dma_config.dma_channel,
 		   &data->adc_dma_config.dma_cfg);
-#endif
 
 	mcux_adc16_start_channel(data->dev);
 }
@@ -258,31 +241,6 @@ static void adc_context_update_buffer_pointer(struct adc_context *ctx,
 	}
 }
 
-#ifndef CONFIG_ADC16_ENABLE_EDMA
-static void mcux_adc16_isr(void *arg)
-{
-	struct device *dev = (struct device *)arg;
-	const struct mcux_adc16_config *config = dev->config_info;
-	struct mcux_adc16_data *data = dev->driver_data;
-	ADC_Type *base = config->base;
-	uint32_t channel_group = 0U;
-	uint16_t result;
-
-	result = ADC16_GetChannelConversionValue(base, channel_group);
-	LOG_DBG("Finished channel %d. Result is 0x%04x", data->channel_id,
-		result);
-
-	*data->buffer++ = result;
-	data->channels &= ~BIT(data->channel_id);
-
-	if (data->channels) {
-		mcux_adc16_start_channel(dev);
-	} else {
-		adc_context_on_sampling_done(&data->ctx, dev);
-	}
-}
-#endif
-
 static int mcux_adc16_init(struct device *dev)
 {
 	const struct mcux_adc16_config *config = dev->config_info;
@@ -293,30 +251,27 @@ static int mcux_adc16_init(struct device *dev)
 	LOG_DBG("init adc");
 	ADC16_GetDefaultConfig(&adc_config);
 
+#if 1
 	/*try the fast ADC convertor settings*/
 	/* use bus clock*/
-#ifdef CONFIG_ADC16_ENABLE_EDMA
 	if (DT_INST_NODE_HAS_PROP(0, clk_source)) {
-		LOG_DBG("select clock src = %d", DT_INST_PROP(0, clk_source));
 		adc_config.clockSource =
 			(adc16_clock_source_t)DT_INST_PROP(0, clk_source);
 	}
 	if (DT_INST_NODE_HAS_PROP(0, long_sample)) {
-		LOG_DBG("long sample mode = %d", DT_INST_PROP(0, long_sample));
 		adc_config.longSampleMode =
 			(adc16_long_sample_mode_t)DT_INST_PROP(0, long_sample);
 	}
 	if (DT_INST_NODE_HAS_PROP(0, nxp_high_speed)) {
-		LOG_DBG("enable high speed");
 		adc_config.enableHighSpeed = DT_INST_PROP(0, nxp_high_speed);
 		//adc_config.enableHighSpeed = true;
 	}
 	if (DT_INST_NODE_HAS_PROP(0, nxp_continues_convert)) {
-		LOG_DBG("enable continues convert");
 		adc_config.enableContinuousConversion =
 			DT_INST_PROP(0, nxp_continues_convert);
 		//adc_config.enableContinuousConversion = true;
 	}
+
 #endif
 
 #if CONFIG_ADC_MCUX_ADC16_VREF_DEFAULT
@@ -343,18 +298,15 @@ static int mcux_adc16_init(struct device *dev)
 #endif
 
 /* Enable HW trigger */
-#ifdef CONFIG_ADC_HW_TRIGGER
+#if CONFIG_ADC_HW_TRIGGER
 	ADC16_EnableHardwareTrigger(base, true);
-#else
-	ADC16_EnableHardwareTrigger(base, false);
 #endif
+	/* Enable DMA. */
+	ADC16_EnableDMA(base, true);
 
 	data->dev = dev;
 
 	/* dma related init */
-#ifdef CONFIG_ADC16_ENABLE_EDMA
-	/* Enable DMA. */
-	ADC16_EnableDMA(base, true);
 
 	data->adc_dma_config.dma_name = CONFIG_DMA_0_NAME;
 	data->adc_dma_config.dma_channel = CONFIG_ADC_EDMA_CHANNEL;
@@ -376,10 +328,6 @@ static int mcux_adc16_init(struct device *dev)
 	if (data->dev_dma == NULL) {
 		LOG_INF("dma binding fail");
 	}
-#else
-	config->irq_config_func(dev);
-#endif
-	LOG_INF("adc init done");
 
 	adc_context_unlock_unconditionally(&data->ctx);
 
@@ -394,7 +342,6 @@ static const struct adc_driver_api mcux_adc16_driver_api = {
 #endif
 };
 
-#ifdef CONFIG_ADC16_ENABLE_EDMA
 #define ACD16_MCUX_INIT(n)                                                     \
 	static const struct mcux_adc16_config mcux_adc16_config_##n = {        \
 		.base = (ADC_Type *)DT_INST_REG_ADDR(n),                       \
@@ -411,34 +358,5 @@ static const struct adc_driver_api mcux_adc16_driver_api = {
 			    &mcux_adc16_config_##n, POST_KERNEL,               \
 			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,                \
 			    &mcux_adc16_driver_api);
-#else
-#define ACD16_MCUX_INIT(n)                                                     \
-	static void mcux_adc16_config_func_##n(struct device *dev);            \
-                                                                               \
-	static const struct mcux_adc16_config mcux_adc16_config_##n = {        \
-		.base = (ADC_Type *)DT_INST_REG_ADDR(n),                       \
-		.irq_config_func = mcux_adc16_config_func_##n,                 \
-	};                                                                     \
-                                                                               \
-	static struct mcux_adc16_data mcux_adc16_data_##n = {                  \
-		ADC_CONTEXT_INIT_TIMER(mcux_adc16_data_##n, ctx),              \
-		ADC_CONTEXT_INIT_LOCK(mcux_adc16_data_##n, ctx),               \
-		ADC_CONTEXT_INIT_SYNC(mcux_adc16_data_##n, ctx),               \
-	};                                                                     \
-                                                                               \
-	DEVICE_AND_API_INIT(mcux_adc16_##n, DT_INST_LABEL(n),                  \
-			    &mcux_adc16_init, &mcux_adc16_data_##n,            \
-			    &mcux_adc16_config_##n, POST_KERNEL,               \
-			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,                \
-			    &mcux_adc16_driver_api);                           \
-                                                                               \
-	static void mcux_adc16_config_func_##n(struct device *dev)             \
-	{                                                                      \
-		IRQ_CONNECT(DT_INST_IRQN(n), DT_INST_IRQ(n, priority),         \
-			    mcux_adc16_isr, DEVICE_GET(mcux_adc16_##n), 0);    \
-                                                                               \
-		irq_enable(DT_INST_IRQN(n));                                   \
-	}
-#endif
 
 DT_INST_FOREACH_STATUS_OKAY(ACD16_MCUX_INIT)
