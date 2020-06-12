@@ -121,8 +121,8 @@ static void channel_irq(edma_handle_t *handle)
 			}
 		}
 
-		handle->header = (s8_t)new_header;
-		handle->tcdUsed -= (s8_t)tcds_done;
+		handle->header = (int8_t)new_header;
+		handle->tcdUsed -= (int8_t)tcds_done;
 		/* Invoke callback function. */
 		if (handle->callback != NULL) {
 			(handle->callback)(handle, handle->userData,
