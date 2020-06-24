@@ -66,6 +66,7 @@ typedef enum {
 typedef enum {
 	AUDIO_PROPERTY_OUTPUT_VOLUME,
 	AUDIO_PROPERTY_OUTPUT_MUTE,
+	AUDIO_PROPERTY_LOOPBACK,
 } audio_property_t;
 
 /**
@@ -84,6 +85,16 @@ typedef enum {
 	AUDIO_CHANNEL_ALL,
 } audio_channel_t;
 
+/*
+ * DAI Route types
+ */
+typedef enum {
+	AUDIO_ROUTE_BYPASS,
+	AUDIO_ROUTE_PALYBACK,
+	AUDIO_ROUTE_PACKBACK_CAPTURE,
+	AUDIO_ROUTE_CAPTURE,
+} audio_route_t;
+
 /**
  * Digital Audio Interface Configuration
  * Configuration is dependent on DAI type
@@ -93,6 +104,7 @@ typedef union {
 				/* Other DAI types go here */
 } audio_dai_cfg_t;
 
+
 /**
  * Codec configuration parameters
  */
@@ -100,6 +112,7 @@ struct audio_codec_cfg {
 	uint32_t			mclk_freq;	/* MCLK input frequency in Hz */
 	audio_dai_type_t	dai_type;	/* Digital interface type */
 	audio_dai_cfg_t		dai_cfg;	/* DAI configuration info */
+	audio_route_t 		dai_route;  /* DAI route info */
 };
 
 /**
@@ -108,6 +121,7 @@ struct audio_codec_cfg {
 typedef union {
 	int 	vol;	/* Volume level in 0.5dB resolution */
 	bool 	mute;	/* mute if true, unmute if false */
+	bool    loopback; /* loopback mode */
 } audio_property_value_t;
 
 /**

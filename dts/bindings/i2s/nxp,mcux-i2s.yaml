@@ -1,0 +1,38 @@
+# Copyright (c) 2020, NXP
+# SPDX-License-Identifier: Apache-2.0
+
+description: NXP mcux SAI-I2S controller
+
+compatible: "nxp,mcux-i2s"
+
+include: [i2s-controller.yaml]
+
+properties:
+    reg:
+      required: true
+
+    interrupts:
+      required: true
+
+    dma-names:
+      required: true
+
+    tx_sync_mode:
+      type: int
+      required: false
+      description: tx sync mode
+
+    rx_sync_mode:
+      type: int
+      required: false
+      description: rx sync mode
+
+    pll_clocks:
+      type: phandle-array
+      required: true
+      description: pll settings
+
+    pinmuxs:
+      type: phandle-array
+      required: true
+      description: iomux settings

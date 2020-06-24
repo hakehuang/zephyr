@@ -46,6 +46,9 @@ extern int16_t data_r[SAMPLE_NO];
 #else
 #define I2S_DEV_NAME_TX "I2S_0"
 #endif
+#define I2S_DEV_NAME "I2S_0"
+#define CODEC_DEV_NAME DT_LABEL(DT_INST(0, wolfson_wm8960))
+
 #define BLOCK_SIZE (2 * sizeof(data_l))
 
 int rx_block_read_slab(const struct device *dev_i2s, int att,

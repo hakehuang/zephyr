@@ -1,0 +1,9 @@
+/*
+* Copyright (c) 2020, NXP
+*
+* SPDX-License-Identifier: Apache-2.0
+*/
+&sai1 {
+    tx_sync_mode = <0>;
+    rx_sync_mode = <1>;
+};

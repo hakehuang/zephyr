@@ -93,7 +93,7 @@ static void mcux_lpi2c_master_transfer_callback(LPI2C_Type *base,
 
 	ARG_UNUSED(handle);
 	ARG_UNUSED(base);
-
+	LOG_DBG("data->callback_status = %d", status);
 	data->callback_status = status;
 	k_sem_give(&data->device_sync_sem);
 }
@@ -234,6 +234,8 @@ static int mcux_lpi2c_init(const struct device *dev)
 	}
 
 	config->irq_config_func(dev);
+
+	LOG_INF("lpi2c init done");
 
 	return 0;
 }
