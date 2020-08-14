@@ -30,7 +30,7 @@ struct mcux_pit_data {
 
 static uint32_t mcux_pit_get_top_value(struct device *dev)
 {
-	const struct mcux_pit_config *config = dev->config_info;
+	const struct mcux_pit_config *config = dev->config;
 	pit_chnl_t channel = config->pit_channel;
 
 	return config->base->CHANNEL[channel].LDVAL;
@@ -38,7 +38,7 @@ static uint32_t mcux_pit_get_top_value(struct device *dev)
 
 static int mcux_pit_start(struct device *dev)
 {
-	const struct mcux_pit_config *config = dev->config_info;
+	const struct mcux_pit_config *config = dev->config;
 
 	LOG_DBG("period is %d", mcux_pit_get_top_value(dev));
 	PIT_EnableInterrupts(config->base, config->pit_channel,
@@ -49,7 +49,7 @@ static int mcux_pit_start(struct device *dev)
 
 static int mcux_pit_stop(struct device *dev)
 {
-	const struct mcux_pit_config *config = dev->config_info;
+	const struct mcux_pit_config *config = dev->config;
 
 	PIT_DisableInterrupts(config->base, config->pit_channel,
 			      kPIT_TimerInterruptEnable);
@@ -60,7 +60,7 @@ static int mcux_pit_stop(struct device *dev)
 
 static int mcux_pit_get_value(struct device *dev, uint32_t *ticks)
 {
-	const struct mcux_pit_config *config = dev->config_info;
+	const struct mcux_pit_config *config = dev->config;
 
 	*ticks = PIT_GetCurrentTimerCount(config->base, config->pit_channel);
 
@@ -70,8 +70,8 @@ static int mcux_pit_get_value(struct device *dev, uint32_t *ticks)
 static int mcux_pit_set_top_value(struct device *dev,
 				  const struct counter_top_cfg *cfg)
 {
-	const struct mcux_pit_config *config = dev->config_info;
-	struct mcux_pit_data *data = dev->driver_data;
+	const struct mcux_pit_config *config = dev->config;
+	struct mcux_pit_data *data = dev->data;
 	pit_chnl_t channel = config->pit_channel;
 
 	if (cfg->ticks == 0) {
@@ -98,7 +98,7 @@ static int mcux_pit_set_top_value(struct device *dev,
 
 static uint32_t mcux_pit_get_pending_int(struct device *dev)
 {
-	const struct mcux_pit_config *config = dev->config_info;
+	const struct mcux_pit_config *config = dev->config;
 	uint32_t mask = PIT_TFLG_TIF_MASK;
 	uint32_t flags;
 
@@ -109,7 +109,7 @@ static uint32_t mcux_pit_get_pending_int(struct device *dev)
 
 static uint32_t mcux_pit_get_max_relative_alarm(struct device *dev)
 {
-	const struct mcux_pit_config *config = dev->config_info;
+	const struct mcux_pit_config *config = dev->config;
 
 	return config->info.max_top_value;
 }
@@ -117,8 +117,8 @@ static uint32_t mcux_pit_get_max_relative_alarm(struct device *dev)
 static void mcux_pit_isr(void *arg)
 {
 	struct device *dev = arg;
-	const struct mcux_pit_config *config = dev->config_info;
-	struct mcux_pit_data *data = dev->driver_data;
+	const struct mcux_pit_config *config = dev->config;
+	struct mcux_pit_data *data = dev->data;
 	uint32_t flags;
 	uint32_t current = 0;
 
@@ -139,8 +139,8 @@ static void mcux_pit_isr(void *arg)
 static int mcux_pit_set_alarm(struct device *dev, uint8_t chan_id,
 			      const struct counter_alarm_cfg *alarm_cfg)
 {
-	const struct mcux_pit_config *config = dev->config_info;
-	struct mcux_pit_data *data = dev->driver_data;
+	const struct mcux_pit_config *config = dev->config;
+	struct mcux_pit_data *data = dev->data;
 
 	uint32_t ticks = alarm_cfg->ticks;
 
@@ -165,8 +165,8 @@ static int mcux_pit_set_alarm(struct device *dev, uint8_t chan_id,
 
 static int mcux_pit_cancel_alarm(struct device *dev, uint8_t chan_id)
 {
-	const struct mcux_pit_config *config = dev->config_info;
-	struct mcux_pit_data *data = dev->driver_data;
+	const struct mcux_pit_config *config = dev->config;
+	struct mcux_pit_data *data = dev->data;
 
 	if (chan_id != DT_PROP(DT_DRV_INST(0), pit_channel)) {
 		LOG_ERR("Invalid channel id");
@@ -183,7 +183,7 @@ static int mcux_pit_cancel_alarm(struct device *dev, uint8_t chan_id)
 static int mcux_pit_init(struct device *dev)
 {
 	const struct mcux_pit_config *config =
-		(struct mcux_pit_config *)dev->config_info;
+		(struct mcux_pit_config *)dev->config;
 	pit_config_t pit_config;
 
 	PIT_GetDefaultConfig(&pit_config);
