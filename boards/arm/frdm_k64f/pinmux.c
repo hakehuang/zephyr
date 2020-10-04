@@ -109,6 +109,17 @@ static int frdm_k64f_pinmux_init(const struct device *dev)
 	pinmux_pin_set(portd,  3, PORT_PCR_MUX(kPORT_MuxAlt2));
 #endif
 
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(spi1), okay) && CONFIG_SPI
+	/* PORTD4 (pin 97) is configured as SPI1_PCS0 */
+	pinmux_pin_set(portd, 4, PORT_PCR_MUX(kPORT_MuxAlt7));
+	/* PORTD5 (pin 98) is configured as SPI1_SCK */
+	pinmux_pin_set(portd, 5, PORT_PCR_MUX(kPORT_MuxAlt7));
+	/* PORTD6 (pin 99) is configured as SPI1_SOUT */
+	pinmux_pin_set(portd, 6, PORT_PCR_MUX(kPORT_MuxAlt7));
+	/* PORTD7 (pin 100) is configured as SPI1_SIN */
+	pinmux_pin_set(portd, 7, PORT_PCR_MUX(kPORT_MuxAlt7));
+#endif
+
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c0), okay) && CONFIG_I2C
 	/* I2C0 SCL, SDA */
 	pinmux_pin_set(porte, 24, PORT_PCR_MUX(kPORT_MuxAlt5)
