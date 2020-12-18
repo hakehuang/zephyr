@@ -33,82 +33,6 @@ LOG_MODULE_REGISTER(LOG_DOMAIN);
 
 #define DT_DRV_COMPAT nxp_mcux_i2s
 
-#define I2S_IRQ_CONNECT(i2s_id)                                                \
-	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(i2s_id, 0, irq),                        \
-		    DT_INST_IRQ_BY_IDX(i2s_id, 0, priority), i2s_mcux_isr,     \
-		    DEVICE_GET(I2S_##i2s_id), 0)
-
-/*this name shall aligned with config*/
-#define I2S_DEVICE_NAME(i2s_id) I2S_##i2s_id
-#define I2S_DEVICE_DATA_NAME(i2s_id) i2s_##i2s_id##_data
-#define I2S_DEVICE_CONFIG_NAME(i2s_id) i2s_##i2s_id##_config
-
-#define I2S_DEVICE_CONFIG_DEFINE(i2s_id)                                       \
-	static const struct i2s_mcux_config i2s_##i2s_id##_config = {          \
-		.base = (I2S_Type *)DT_INST_REG_ADDR(i2s_id),                  \
-		.edma_name = CONFIG_DMA_0_NAME,                                \
-		.bus_id = i2s_id,                                              \
-		.pinmux_name = DT_PROP(DT_PHANDLE_BY_IDX(DT_DRV_INST(i2s_id),  \
-							 pinmuxs, 0),          \
-				       label),                                 \
-		.irq_id = DT_INST_IRQ_BY_IDX(i2s_id, 0, irq),                  \
-		.irq_connect = i2s##i2s_id##_irq_connect,                      \
-		.tx_sync_mode =                                                \
-			UTIL_AND(DT_INST_NODE_HAS_PROP(i2s_id, tx_sync_mode),  \
-				 DT_INST_PROP(i2s_id, tx_sync_mode)),          \
-		.rx_sync_mode =                                                \
-			UTIL_AND(DT_INST_NODE_HAS_PROP(i2s_id, rx_sync_mode),  \
-				 DT_INST_PROP(i2s_id, rx_sync_mode)),          \
-	}
-
-#define I2S_DEVICE_OBJECT_DECLARE(i2s_id)                                      \
-	DEVICE_DECLARE(I2S_DEVICE_NAME(i2s_id))
-
-#define I2S_DEVICE_OBJECT(i2s_id) DEVICE_GET(I2S_DEVICE_NAME(i2s_id))
-
-#define I2S_DEVICE_DATA_DEFINE(i2s_id)                                         \
-	static struct i2s_dev_data i2s_##i2s_id##_data = {\
-        .tx = {                     \
-            .dma_channel = CONFIG_I2S_EDMA_TX_CHANNEL, \
-            .dma_cfg = {                \
-                .source_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,\
-                .dest_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,\
-                .dma_callback = i2s_dma_tx_callback,    \
-                .user_data = (void *)I2S_DEVICE_OBJECT(i2s_id),\
-                .complete_callback_en = 1,  \
-                .error_callback_en = 1,     \
-                .block_count = 1,       \
-                .head_block =           \
-                &i2s_##i2s_id##_data.tx.dma_block,\
-                .channel_direction = MEMORY_TO_PERIPHERAL,\
-                .dma_slot = DT_INST_DMAS_CELL_BY_NAME(i2s_id, tx, source),\
-            },                  \
-        },                      \
-        .rx = {                     \
-            .dma_channel = CONFIG_I2S_EDMA_RX_CHANNEL, \
-            .dma_cfg = {                \
-                .source_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,\
-                .dest_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,\
-                .dma_callback = i2s_dma_rx_callback,\
-                .user_data = (void *)I2S_DEVICE_OBJECT(i2s_id),\
-                .complete_callback_en = 1,  \
-                .error_callback_en = 1,     \
-                .block_count = 1,       \
-                .head_block =           \
-                &i2s_##i2s_id##_data.rx.dma_block,\
-                .channel_direction = PERIPHERAL_TO_MEMORY,\
-                .dma_slot = DT_INST_DMAS_CELL_BY_NAME(i2s_id, rx, source),\
-                },              \
-        },                      \
-    }
-
-#define I2S_DEVICE_AND_API_INIT(i2s_id)                                        \
-	DEVICE_AND_API_INIT(I2S_DEVICE_NAME(i2s_id), DT_INST_LABEL(i2s_id),    \
-			    i2s_mcux_initialize,                               \
-			    &I2S_DEVICE_DATA_NAME(i2s_id),                     \
-			    &I2S_DEVICE_CONFIG_NAME(i2s_id), POST_KERNEL,      \
-			    CONFIG_I2S_INIT_PRIORITY, &i2s_mcux_driver_api)
-
 /*
  * This indicates the Tx/Rx stream. Most members of the stream are
  * self-explanatory
@@ -145,12 +69,11 @@ struct stream {
 struct i2s_mcux_config {
 	I2S_Type *base;
 	char *edma_name;
-	uint32_t irq_id;
 	uint32_t bus_id;
 	uint32_t rx_sync_mode;
 	uint32_t tx_sync_mode;
 	char *pinmux_name;
-	void (*irq_connect)(void);
+	void (*irq_connect)(const struct device *dev);
 };
 
 /* Device run time data */
@@ -171,15 +94,6 @@ struct pinmux_imx_config;
 	((const struct pinmux_imx_config *const)(dev)->config)
 #define DEV_PINMUX_BASE(dev) ((void *)DEV_CFG(dev)->base)
 
-#ifdef CONFIG_I2S_0
-I2S_DEVICE_OBJECT_DECLARE(0);
-#endif
-#ifdef CONFIG_I2S_1
-I2S_DEVICE_OBJECT_DECLARE(1);
-#endif
-#ifdef CONFIG_I2S_2
-I2S_DEVICE_OBJECT_DECLARE(2);
-#endif
 
 static void i2s_dma_tx_callback(const struct device *, void *, uint32_t, int);
 static void i2s_tx_stream_disable(const struct device *);
@@ -662,6 +576,7 @@ static int i2s_mcux_config(const struct device *dev, enum i2s_dir dir,
 		dev_data->tx.dma_cfg.source_burst_length =
 			i2s_cfg->word_size / 8;
 		dev_data->tx.dma_cfg.dest_burst_length = i2s_cfg->word_size / 8;
+		dev_data->tx.dma_cfg.user_data = (void *)dev;
 		dev_data->tx.state = I2S_STATE_READY;
 	} else {
 		memcpy(&dev_data->rx.cfg, i2s_cfg, sizeof(struct i2s_config));
@@ -687,11 +602,9 @@ static int i2s_mcux_config(const struct device *dev, enum i2s_dir dir,
 		dev_data->rx.dma_cfg.source_burst_length =
 			i2s_cfg->word_size / 8;
 		dev_data->rx.dma_cfg.dest_burst_length = i2s_cfg->word_size / 8;
+		dev_data->rx.dma_cfg.user_data = (void *)dev;
 		dev_data->rx.state = I2S_STATE_READY;
 	}
-
-	/* enable interrupt */
-	irq_enable(dev_cfg->irq_id);
 
 	return 0;
 }
@@ -727,7 +640,7 @@ static int i2s_tx_stream_start(const struct device *dev)
 	strm->dma_block.block_size = strm->cfg.block_size;
 	strm->dma_block.dest_address = (uint32_t)&DEV_BASE(dev)->RDR[data_path];
 	strm->dma_block.source_address = (uint32_t)buffer;
-#if 0
+
 	LOG_DBG("dma_slot is %d", strm->dma_cfg.dma_slot);
 	LOG_DBG("channel_direction is %d", strm->dma_cfg.channel_direction);
 	LOG_DBG("complete_callback_en is %d",
@@ -744,7 +657,7 @@ static int i2s_tx_stream_start(const struct device *dev)
 	LOG_DBG("source_burst_length is %d", strm->dma_cfg.source_burst_length);
 	LOG_DBG("dest_burst_length is %d", strm->dma_cfg.dest_burst_length);
 	LOG_DBG("block_count is %d", strm->dma_cfg.block_count);
-#endif
+
 	dma_config(dev_dma, strm->dma_channel, &strm->dma_cfg);
 
 	/* put buffer in output queue */
@@ -1084,7 +997,7 @@ static int i2s_mcux_initialize(const struct device *dev)
 		    sizeof(void *), CONFIG_I2S_RX_BLOCK_COUNT);
 
 	/* register ISR */
-	dev_cfg->irq_connect();
+	dev_cfg->irq_connect(dev);
 
 	/*clock configuration*/
 	audio_clock_settings(dev);
@@ -1134,35 +1047,65 @@ static const struct i2s_driver_api i2s_mcux_driver_api = {
 	.trigger = i2s_mcux_trigger,
 };
 
-#ifdef CONFIG_I2S_0
-static void i2s0_irq_connect(void)
-{
-	I2S_IRQ_CONNECT(0);
-}
+#define I2S_MCUX_INIT(i2s_id)										\
+	static void i2s_irq_connect_##i2s_id(const struct device *dev); \
+																	\
+	static const struct i2s_mcux_config i2s_##i2s_id##_config = {	\
+		.base = (I2S_Type *)DT_INST_REG_ADDR(i2s_id),				\
+		.edma_name = CONFIG_DMA_0_NAME,								\
+		.bus_id = i2s_id,											\
+		.pinmux_name = DT_PROP(DT_PHANDLE_BY_IDX(DT_DRV_INST(i2s_id),	\
+							 pinmuxs, 0), label),					\
+		.irq_connect = i2s_irq_connect_##i2s_id,					\
+		.tx_sync_mode =												\
+			UTIL_AND(DT_INST_NODE_HAS_PROP(i2s_id, nxp_tx_sync_mode),	\
+				 DT_INST_PROP(i2s_id, nxp_tx_sync_mode)),				\
+		.rx_sync_mode =												\
+			UTIL_AND(DT_INST_NODE_HAS_PROP(i2s_id, nxp_rx_sync_mode),	\
+				 DT_INST_PROP(i2s_id, nxp_rx_sync_mode)),				\
+	};																\
+																	\
+	static struct i2s_dev_data i2s_##i2s_id##_data = {				\
+		.tx = {														\
+			.dma_channel = DT_INST_PROP(i2s_id, nxp_tx_dma_channel),	\
+			.dma_cfg = {											\
+				.source_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,	\
+				.dest_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,	\
+				.dma_callback = i2s_dma_tx_callback,				\
+				.complete_callback_en = 1,							\
+				.error_callback_en = 1,								\
+				.block_count = 1,									\
+				.head_block = &i2s_##i2s_id##_data.tx.dma_block,	\
+				.channel_direction = MEMORY_TO_PERIPHERAL,			\
+				.dma_slot = DT_INST_DMAS_CELL_BY_NAME(i2s_id, tx, source),	\
+			},														\
+		},															\
+		.rx = {														\
+			.dma_channel = DT_INST_PROP(i2s_id, nxp_rx_dma_channel),	\
+			.dma_cfg = {											\
+				.source_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,	\
+				.dest_burst_length = CONFIG_I2S_EDMA_BURSE_SIZE,	\
+				.dma_callback = i2s_dma_rx_callback,				\
+				.complete_callback_en = 1,							\
+				.error_callback_en = 1,								\
+				.block_count = 1,									\
+				.head_block = &i2s_##i2s_id##_data.rx.dma_block,	\
+				.channel_direction = PERIPHERAL_TO_MEMORY,			\
+				.dma_slot = DT_INST_DMAS_CELL_BY_NAME(i2s_id, rx, source),	\
+			},														\
+		},															\
+	};																\
+																	\
+    DEVICE_DT_INST_DEFINE(i2s_id, &i2s_mcux_initialize, device_pm_control_nop,	\
+		    &i2s_##i2s_id##_data, &i2s_##i2s_id##_config, POST_KERNEL,			\
+		    CONFIG_I2S_INIT_PRIORITY, &i2s_mcux_driver_api);					\
+																	\
+	static void i2s_irq_connect_##i2s_id(const struct device *dev) 	\
+	{																\
+		IRQ_CONNECT(DT_INST_IRQ_BY_IDX(i2s_id, 0, irq),				\
+			DT_INST_IRQ_BY_IDX(i2s_id, 0, priority), i2s_mcux_isr,	\
+			DEVICE_DT_INST_GET(i2s_id), 0);							\
+		irq_enable(DT_INST_IRQN(i2s_id));							\
+	}
 
-I2S_DEVICE_CONFIG_DEFINE(0);
-I2S_DEVICE_DATA_DEFINE(0);
-I2S_DEVICE_AND_API_INIT(0);
-#endif
-
-#ifdef CONFIG_I2S_1
-static void i2s1_irq_connect(void)
-{
-	I2S_IRQ_CONNECT(1);
-}
-
-I2S_DEVICE_CONFIG_DEFINE(1);
-I2S_DEVICE_DATA_DEFINE(1);
-I2S_DEVICE_AND_API_INIT(1);
-#endif
-
-#ifdef CONFIG_I2S_2
-static void i2s2_irq_connect(void)
-{
-	I2S_IRQ_CONNECT(2);
-}
-
-I2S_DEVICE_CONFIG_DEFINE(2);
-I2S_DEVICE_DATA_DEFINE(2);
-I2S_DEVICE_AND_API_INIT(2);
-#endif
+DT_INST_FOREACH_STATUS_OKAY(I2S_MCUX_INIT)

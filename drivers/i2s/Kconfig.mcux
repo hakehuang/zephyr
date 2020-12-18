@@ -50,18 +50,6 @@ config I2S_EDMA_BURSE_SIZE
 	help
 	  DMA burse size in byte.
 
-config I2S_EDMA_RX_CHANNEL
-	int "DMA Channel for i2s rx"
-	default 0
-	help
-	  DMA Channel for i2s rx.
-
-config I2S_EDMA_TX_CHANNEL
-	int "DMA Channel for i2s tx"
-	default 1
-	help
-	  DMA Channel for i2s tx.
-
 endif # I2S_ENABLE_EDMA
 
 endif # I2S_MCUX_SAI

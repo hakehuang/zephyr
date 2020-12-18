@@ -17,17 +17,27 @@ properties:
     dma-names:
       required: true
 
-    tx_sync_mode:
+    nxp,tx-dma-channel:
+      type: int
+      required: true
+      description: tx dma channel number
+
+    nxp,rx-dma-channel:
+      type: int
+      required: true
+      description: rx dma channel number
+
+    nxp,tx-sync-mode:
       type: int
       required: false
       description: tx sync mode
 
-    rx_sync_mode:
+    nxp,rx-sync-mode:
       type: int
       required: false
       description: rx sync mode
 
-    pll_clocks:
+    pll-clocks:
       type: phandle-array
       required: true
       description: pll settings
@@ -36,3 +46,4 @@ properties:
       type: phandle-array
       required: true
       description: iomux settings
+

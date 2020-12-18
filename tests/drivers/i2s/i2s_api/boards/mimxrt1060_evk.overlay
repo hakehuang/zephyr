@@ -4,6 +4,6 @@
 * SPDX-License-Identifier: Apache-2.0
 */
 &sai1 {
-    tx_sync_mode = <0>;
-    rx_sync_mode = <1>;
+    nxp,tx-sync-mode = <0>;
+    nxp,rx-sync-mode = <1>;
 };

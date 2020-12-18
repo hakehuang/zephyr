@@ -20,7 +20,7 @@ properties:
       required: true
       description: Number of items to expect in a clock specifier
 
-    "#pll_clock-cells":
+    "#pll-clock-cells":
       type: int
       const: 4
       required: true
@@ -32,7 +32,7 @@ clock-cells:
   - bits
   - value
 
-pll_clock-cells:
+pll-clock-cells:
   - name
   - offset
   - bits
