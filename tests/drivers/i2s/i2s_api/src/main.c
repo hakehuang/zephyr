@@ -45,7 +45,6 @@ void test_main(void)
 			ztest_unit_test(test_i2s_transfer_tx_underrun));
 	ztest_run_test_suite(i2s_loopback_test);
 
-#if 0
 	ztest_test_suite(i2s_states_test,
 			ztest_unit_test(test_i2s_tx_transfer_configure_1),
 			ztest_unit_test(test_i2s_rx_transfer_configure_1),
@@ -56,6 +55,8 @@ void test_main(void)
 			ztest_unit_test(test_i2s_state_error_neg));
 	ztest_run_test_suite(i2s_states_test);
 
+
+#if 0
 	/* Now run all tests in user mode */
 	ztest_test_suite(i2s_user_loopback_test,
 			ztest_user_unit_test(test_i2s_tx_transfer_configure_0),

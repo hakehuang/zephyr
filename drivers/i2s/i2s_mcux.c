@@ -151,7 +151,7 @@ static void i2s_rx_stream_disable(const struct device *dev)
 	dma_stop(dev_dma, strm->dma_channel);
 
 	/* purge buffers queued in the stream */
-	i2s_purge_stream_buffers(strm, dev_data->rx.cfg.mem_slab);
+	// i2s_purge_stream_buffers(strm, dev_data->rx.cfg.mem_slab);
 
 	/* Disable the channel FIFO */
 	DEV_CFG(dev)->base->RCR3 &= ~I2S_RCR3_RCE_MASK;
@@ -176,12 +176,11 @@ static void i2s_dma_tx_callback(const struct device *dma_dev, void *arg,
 {
 	const struct device *dev = (struct device *)arg;
 	struct i2s_dev_data *dev_data = DEV_DATA(dev);
-
 	struct stream *strm = &dev_data->tx;
 	void *buffer = NULL;
 	int ret;
 
-	LOG_DBG("tx cb");
+	LOG_INF("tx cb");
 
 	ret = k_msgq_get(&strm->out_queue, &buffer, K_NO_WAIT);
 	if (ret == 0) {
@@ -191,11 +190,14 @@ static void i2s_dma_tx_callback(const struct device *dma_dev, void *arg,
 		LOG_ERR("no buffer in output queue for channel %u", channel);
 	}
 
-	LOG_INF("current in queue size %d", strm->in_queue.used_msgs);
 	switch (strm->state) {
 	case I2S_STATE_RUNNING:
 		/* get the next buffer from queue */
-
+		if (strm->in_queue.used_msgs == 0) {
+			LOG_INF("tx no more in queue data");
+			i2s_tx_stream_disable(dev);
+			return;
+		}
 		ret = k_msgq_get(&strm->in_queue, &buffer, K_NO_WAIT);
 		if (ret == 0) {
 			/* config the DMA */
@@ -232,6 +234,7 @@ static void i2s_dma_tx_callback(const struct device *dma_dev, void *arg,
 
 	case I2S_STATE_STOPPING:
 		i2s_tx_stream_disable(dev);
+		strm->state = I2S_STATE_READY;
 		break;
 	}
 }
@@ -263,7 +266,7 @@ static void i2s_dma_rx_callback(const struct device *dma_dev, void *arg,
 		/* allocate new buffer for next audio frame */
 		ret = k_mem_slab_alloc(strm->cfg.mem_slab, &buffer, K_NO_WAIT);
 		if (ret != 0) {
-			LOG_ERR("buffer alloc from slab %p err %d",
+			LOG_INF("buffer alloc from slab %p err %d",
 				strm->cfg.mem_slab, ret);
 			i2s_rx_stream_disable(dev);
 			strm->state = I2S_STATE_READY;
@@ -283,6 +286,8 @@ static void i2s_dma_rx_callback(const struct device *dma_dev, void *arg,
 			dma_config(dev_data->dev_dma, strm->dma_channel,
 				   &strm->dma_cfg);
 			dma_start(dev_data->dev_dma, strm->dma_channel);
+			/* disable rx interrupt and wait for next read*/
+			SAI_RxEnableDMA(DEV_CFG(dev)->base, kSAI_FIFORequestDMAEnable, false);
 		}
 		break;
 	case I2S_STATE_STOPPING:
@@ -350,6 +355,7 @@ static void get_mclk_rate(const struct device *dev, uint32_t *mclk)
 	const struct device *ccm_dev = NULL;
 	clock_control_subsys_t clk_sub_sys;
 	uint32_t rate = 0, pre_div, src_div;
+
 	switch (dev_cfg->bus_id) {
 	case 0:
 #ifdef CONFIG_I2S_0
@@ -406,43 +412,59 @@ static int i2s_mcux_config(const struct device *dev, enum i2s_dir dir,
 	uint8_t num_words = i2s_cfg->channels;
 	uint8_t word_size_bits = i2s_cfg->word_size;
 
-	LOG_DBG("i2s_config word_size = %d", i2s_cfg->word_size);
-	LOG_DBG("i2s_config channels = %d", i2s_cfg->channels);
-	LOG_DBG("i2s_config format = 0x%x", i2s_cfg->format);
-	LOG_DBG("i2s_config options = 0x%x", i2s_cfg->options);
-	LOG_DBG("i2s_config frame_clk_freq = %d", i2s_cfg->frame_clk_freq);
-	LOG_DBG("i2s_config mem_slab = 0x%x", (uint32_t)i2s_cfg->mem_slab);
-	LOG_DBG("i2s_config block_size = %d", i2s_cfg->block_size);
-	LOG_DBG("i2s_config timeout = %d", i2s_cfg->timeout);
-
 	if ((dev_data->tx.state != I2S_STATE_NOT_READY) &&
 	    (dev_data->tx.state != I2S_STATE_READY) &&
 	    (dev_data->rx.state != I2S_STATE_NOT_READY) &&
 	    (dev_data->rx.state != I2S_STATE_READY)) {
 		LOG_ERR("invalid state tx(%u) rx(%u)", dev_data->tx.state,
 			dev_data->rx.state);
+		if (dir == I2S_DIR_TX) {
+			dev_data->tx.state = I2S_STATE_NOT_READY;
+		} else {
+			dev_data->rx.state = I2S_STATE_NOT_READY;
+		}
 		return -EINVAL;
 	}
 
 	if (i2s_cfg->frame_clk_freq == 0U) {
 		LOG_ERR("Invalid frame_clk_freq %u", i2s_cfg->frame_clk_freq);
+		if (dir == I2S_DIR_TX) {
+			dev_data->tx.state = I2S_STATE_NOT_READY;
+		} else {
+			dev_data->rx.state = I2S_STATE_NOT_READY;
+		}
 		return -EINVAL;
 	}
 
 	if (word_size_bits < SAI_WORD_SIZE_BITS_MIN ||
 	    word_size_bits > SAI_WORD_SIZE_BITS_MAX) {
 		LOG_ERR("Unsupported I2S word size %u", word_size_bits);
+		if (dir == I2S_DIR_TX) {
+			dev_data->tx.state = I2S_STATE_NOT_READY;
+		} else {
+			dev_data->rx.state = I2S_STATE_NOT_READY;
+		}
 		return -EINVAL;
 	}
 
 	if (num_words < SAI_WORD_PER_FRAME_MIN ||
 	    num_words > SAI_WORD_PER_FRAME_MAX) {
 		LOG_ERR("Unsupported words per frame number %u", num_words);
+		if (dir == I2S_DIR_TX) {
+			dev_data->tx.state = I2S_STATE_NOT_READY;
+		} else {
+			dev_data->rx.state = I2S_STATE_NOT_READY;
+		}
 		return -EINVAL;
 	}
 
 	if ((i2s_cfg->options & I2S_OPT_PINGPONG) == I2S_OPT_PINGPONG) {
 		LOG_ERR("Ping-pong mode not supported");
+		if (dir == I2S_DIR_TX) {
+			dev_data->tx.state = I2S_STATE_NOT_READY;
+		} else {
+			dev_data->rx.state = I2S_STATE_NOT_READY;
+		}
 		return -ENOTSUP;
 	}
 
@@ -547,6 +569,11 @@ static int i2s_mcux_config(const struct device *dev, enum i2s_dir dir,
 		break;
 	default:
 		LOG_ERR("Unsupported I2S data format");
+		if (dir == I2S_DIR_TX) {
+			dev_data->tx.state = I2S_STATE_NOT_READY;
+		} else {
+			dev_data->rx.state = I2S_STATE_NOT_READY;
+		}
 		return -EINVAL;
 	}
 
@@ -641,23 +668,6 @@ static int i2s_tx_stream_start(const struct device *dev)
 	strm->dma_block.dest_address = (uint32_t)&DEV_BASE(dev)->RDR[data_path];
 	strm->dma_block.source_address = (uint32_t)buffer;
 
-	LOG_DBG("dma_slot is %d", strm->dma_cfg.dma_slot);
-	LOG_DBG("channel_direction is %d", strm->dma_cfg.channel_direction);
-	LOG_DBG("complete_callback_en is %d",
-		strm->dma_cfg.complete_callback_en);
-	LOG_DBG("error_callback_en is %d", strm->dma_cfg.error_callback_en);
-	LOG_DBG("source_handshake is %d", strm->dma_cfg.source_handshake);
-	LOG_DBG("dest_handshake is %d", strm->dma_cfg.dest_handshake);
-	LOG_DBG("channel_priority is %d", strm->dma_cfg.channel_priority);
-	LOG_DBG("source_chaining_en is %d", strm->dma_cfg.source_chaining_en);
-	LOG_DBG("dest_chaining_en is %d", strm->dma_cfg.dest_chaining_en);
-	LOG_DBG("linked_channel is %d", strm->dma_cfg.linked_channel);
-	LOG_DBG("source_data_size is %d", strm->dma_cfg.source_data_size);
-	LOG_DBG("dest_data_size is %d", strm->dma_cfg.dest_data_size);
-	LOG_DBG("source_burst_length is %d", strm->dma_cfg.source_burst_length);
-	LOG_DBG("dest_burst_length is %d", strm->dma_cfg.dest_burst_length);
-	LOG_DBG("block_count is %d", strm->dma_cfg.block_count);
-
 	dma_config(dev_dma, strm->dma_channel, &strm->dma_cfg);
 
 	/* put buffer in output queue */
@@ -696,7 +706,7 @@ static int i2s_rx_stream_start(const struct device *dev)
 	/* allocate receive buffer from SLAB */
 	ret = k_mem_slab_alloc(strm->cfg.mem_slab, &buffer, K_NO_WAIT);
 	if (ret != 0) {
-		LOG_ERR("buffer alloc from mem_slab failed (%d)", ret);
+		LOG_INF("buffer alloc from mem_slab failed (%d)", ret);
 		return ret;
 	}
 
@@ -704,23 +714,6 @@ static int i2s_rx_stream_start(const struct device *dev)
 	strm->dma_block.dest_address = (uint32_t)buffer;
 	strm->dma_block.source_address =
 		(uint32_t)&DEV_BASE(dev)->RDR[data_path];
-
-	LOG_DBG("dma_slot is %d", strm->dma_cfg.dma_slot);
-	LOG_DBG("channel_direction is %d", strm->dma_cfg.channel_direction);
-	LOG_DBG("complete_callback_en is %d",
-		strm->dma_cfg.complete_callback_en);
-	LOG_DBG("error_callback_en is %d", strm->dma_cfg.error_callback_en);
-	LOG_DBG("source_handshake is %d", strm->dma_cfg.source_handshake);
-	LOG_DBG("dest_handshake is %d", strm->dma_cfg.dest_handshake);
-	LOG_DBG("channel_priority is %d", strm->dma_cfg.channel_priority);
-	LOG_DBG("source_chaining_en is %d", strm->dma_cfg.source_chaining_en);
-	LOG_DBG("dest_chaining_en is %d", strm->dma_cfg.dest_chaining_en);
-	LOG_DBG("linked_channel is %d", strm->dma_cfg.linked_channel);
-	LOG_DBG("source_data_size is %d", strm->dma_cfg.source_data_size);
-	LOG_DBG("dest_data_size is %d", strm->dma_cfg.dest_data_size);
-	LOG_DBG("source_burst_length is %d", strm->dma_cfg.source_burst_length);
-	LOG_DBG("dest_burst_length is %d", strm->dma_cfg.dest_burst_length);
-	LOG_DBG("block_count is %d", strm->dma_cfg.block_count);
 
 	dma_config(dev_dma, strm->dma_channel, &strm->dma_cfg);
 	/* put buffer in input queue */
@@ -783,15 +776,25 @@ static int i2s_mcux_trigger(const struct device *dev, enum i2s_dir dir,
 		strm->state = I2S_STATE_RUNNING;
 		break;
 
-	case I2S_TRIGGER_STOP:
-	case I2S_TRIGGER_DRAIN:
+	
 	case I2S_TRIGGER_DROP:
+		i2s_purge_stream_buffers(strm, strm->cfg.mem_slab);
+		strm->state = I2S_STATE_READY;
+		break;
+	case I2S_TRIGGER_DRAIN:
+		i2s_purge_stream_buffers(strm, strm->cfg.mem_slab);
+	case I2S_TRIGGER_STOP:
 		if (strm->state != I2S_STATE_RUNNING) {
 			LOG_DBG("STOP/DRAIN/DROP trigger: invalid state");
 			ret = -EIO;
 			break;
 		}
-		strm->state = I2S_STATE_STOPPING;
+		if (dir == I2S_DIR_TX) {
+			i2s_tx_stream_disable(dev);
+		} else {
+			i2s_rx_stream_disable(dev);
+		}
+		strm->state = I2S_STATE_READY;
 		break;
 
 	case I2S_TRIGGER_PREPARE:
@@ -823,10 +826,12 @@ static int i2s_mcux_read(const struct device *dev, void **mem_block,
 	ret = k_msgq_get(&strm->out_queue, &buffer,
 			 SYS_TIMEOUT_MS(strm->cfg.timeout));
 	if (ret != 0) {
-		LOG_DBG("need retry");
+		LOG_INF("need retry");
 		return -EAGAIN;
 	}
 
+	SAI_RxEnableDMA(DEV_CFG(dev)->base, kSAI_FIFORequestDMAEnable, true);
+	/* restart tx stream */
 	*mem_block = buffer;
 	*size = strm->cfg.block_size;
 	return 0;
@@ -852,8 +857,14 @@ static int i2s_mcux_write(const struct device *dev, void *mem_block,
 		LOG_ERR("k_msgq_put failed %d", ret);
 		return ret;
 	}
+	/* restart tx stream */
+	if (strm->state == I2S_STATE_RUNNING) {
+		unsigned int key;
 
-	LOG_INF("in queue size %d", strm->in_queue.used_msgs);
+		key = irq_lock();
+		ret = i2s_tx_stream_start(dev);
+		irq_unlock(key);
+	}
 
 	return ret;
 }
@@ -890,7 +901,7 @@ static void i2s_mcux_isr(void *arg)
 		sai_driver_irq(dev);
 	}
 
-	if ((DEV_BASE(dev)->TCSR & I2S_TCSR_FEF_MASK) == I2S_TCSR_FEF_MASK) {
+	if ((DEV_BASE(dev)->TCSR & I2S_RCSR_FEF_MASK) == I2S_RCSR_FEF_MASK) {
 		sai_driver_irq(dev);
 	}
 /* Add for ARM errata 838869, affects Cortex-M4, Cortex-M4F Store immediate overlapping
@@ -944,9 +955,7 @@ static void audio_clock_settings(const struct device *dev)
 		den = DT_PHA_BY_IDX(DT_DRV_INST(2), pll_clocks, 4, bits);
 		clK_src = DT_CLOCKS_CELL_BY_IDX(DT_DRV_INST(2), 0, bits);
 		pre_div = DT_CLOCKS_CELL_BY_IDX(DT_DRV_INST(2), 1, bits);
-		;
 		src_div = DT_CLOCKS_CELL_BY_IDX(DT_DRV_INST(2), 2, bits);
-		;
 		/*Clock setting for SAI3*/
 		CLOCK_SetMux(kCLOCK_Sai3Mux, clK_src);
 		CLOCK_SetDiv(kCLOCK_Sai3PreDiv, pre_div);
@@ -961,15 +970,6 @@ static void audio_clock_settings(const struct device *dev)
 	audioPllConfig.numerator = num;
 	audioPllConfig.denominator = den;
 	audioPllConfig.src = src;
-
-	LOG_DBG("loopDivider = %d", lp);
-	LOG_DBG("postDivider = %d", pd);
-	LOG_DBG("numerator = %d", num);
-	LOG_DBG("denominator = %d", den);
-	LOG_DBG("src = %d", src);
-	LOG_DBG("clK_src = %d", clK_src);
-	LOG_DBG("pre_div = %d", pre_div);
-	LOG_DBG("src_div = %d", src_div);
 
 	CLOCK_InitAudioPll(&audioPllConfig);
 }
