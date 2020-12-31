@@ -86,8 +86,7 @@ int tx_block_write_slab(const struct device *dev_i2s, int att, int err,
 {
 	char tx_block[BLOCK_SIZE];
 	int ret;
-	
-	k_thread_access_grant(k_current_get(), &tx_block);
+
 	fill_buf((int16_t *)tx_block, att);
 	ret = i2s_buf_write(dev_i2s, tx_block, BLOCK_SIZE);
 	if (ret != err) {
@@ -106,7 +105,6 @@ int rx_block_read_slab(const struct device *dev_i2s, int att,
 	size_t rx_size;
 	int ret;
 
-	k_thread_access_grant(k_current_get(), &rx_block);
 	ret = i2s_buf_read(dev_i2s, rx_block, &rx_size);
 	if (ret < 0 || rx_size != BLOCK_SIZE) {
 		TC_PRINT("Error: Read failed\n");
