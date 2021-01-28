@@ -14,6 +14,7 @@
 #include <init.h>
 #include <kernel.h>
 #include <devicetree.h>
+#include <sys/atomic.h>
 #include <drivers/dma.h>
 #include <drivers/clock_control.h>
 
@@ -28,6 +29,7 @@ LOG_MODULE_REGISTER(dma_mcux_edma, CONFIG_DMA_LOG_LEVEL);
 struct dma_mcux_edma_config {
 	DMA_Type *base;
 	DMAMUX_Type *dmamux_base;
+	int dma_channels; /* count of channels */
 	void (*irq_config_func)(const struct device *dev);
 };
 
@@ -46,6 +48,9 @@ struct call_back {
 
 struct dma_mcux_edma_data {
 	struct call_back data_cb[DT_INST_PROP(0, dma_channels)];
+
+	ATOMIC_DEFINE(dma_channels, DT_INST_PROP(0, dma_channels));
+	struct k_mutex dma_mutex;
 };
 
 #define DEV_CFG(dev)                                                           \
@@ -402,12 +407,48 @@ static int dma_mcux_edma_get_status(const struct device *dev,
 	return 0;
 }
 
+static int dma_mcux_edma_request_channel(const struct device *dev,
+					 enum dma_channel_filter filter)
+{
+	int i = 0;
+	int channel = -EINVAL;
+
+	k_mutex_lock(&DEV_DATA(dev)->dma_mutex, K_FOREVER);
+
+	for (i = 0; i < DEV_CFG(dev)->dma_channels; i++) {
+		/* channel 0-3 is Period trigger enabled */
+		if (filter == DMA_CHANNEL_PERIODIC && i > 3) {
+			break;
+		}
+		if (!atomic_test_and_set_bit(DEV_DATA(dev)->dma_channels, i)) {
+			channel = i;
+			break;
+		}
+	}
+
+	k_mutex_unlock(&DEV_DATA(dev)->dma_mutex);
+
+	return channel;
+}
+
+static void dma_mcux_edma_release_channel(const struct device *dev,
+					  uint32_t channel)
+{
+	k_mutex_lock(&DEV_DATA(dev)->dma_mutex, K_FOREVER);
+	if (channel < DEV_CFG(dev)->dma_channels) {
+		atomic_test_and_clear_bit(DEV_DATA(dev)->dma_channels, channel);
+	}
+	k_mutex_unlock(&DEV_DATA(dev)->dma_mutex);
+}
+
 static const struct dma_driver_api dma_mcux_edma_api = {
 	.reload = dma_mcux_edma_reload,
 	.config = dma_mcux_edma_configure,
 	.start = dma_mcux_edma_start,
 	.stop = dma_mcux_edma_stop,
 	.get_status = dma_mcux_edma_get_status,
+	.request_channel = dma_mcux_edma_request_channel,
+	.release_channel = dma_mcux_edma_release_channel,
 };
 
 static int dma_mcux_edma_init(const struct device *dev)
@@ -421,6 +462,7 @@ static int dma_mcux_edma_init(const struct device *dev)
 	DEV_CFG(dev)->irq_config_func(dev);
 	memset(DEV_DATA(dev), 0, sizeof(struct dma_mcux_edma_data));
 	memset(tcdpool, 0, sizeof(tcdpool));
+	k_mutex_init(&DEV_DATA(dev)->dma_mutex);
 	return 0;
 }
 
@@ -429,6 +471,7 @@ static void dma_imx_config_func_0(const struct device *dev);
 static const struct dma_mcux_edma_config dma_config_0 = {
 	.base = (DMA_Type *)DT_INST_REG_ADDR(0),
 	.dmamux_base = (DMAMUX_Type *)DT_INST_REG_ADDR_BY_IDX(0, 1),
+	.dma_channels = DT_INST_PROP(0, dma_channels),
 	.irq_config_func = dma_imx_config_func_0,
 };
 
