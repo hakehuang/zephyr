@@ -20,10 +20,10 @@ properties:
     interrupts:
       required: true
 
-    dma-channel:
-      type: int
+    periodic-trigger:
+      type: boolean
       required: false
-      description: dma channel to use, for periodic trigger shall be 0-3
+      description: if periodic trigger enabled
 
     "#io-channel-cells":
       const: 1
