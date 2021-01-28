@@ -8,5 +8,5 @@
 	hw-trigger-src = <4>;
 	continuous-convert;
 	high-speed;
-	dma-channel = <0>;
+	periodic-trigger;
 };
