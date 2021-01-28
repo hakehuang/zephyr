@@ -31,12 +31,12 @@ struct mcux_adc16_config {
 	uint32_t long_sample;	/* ADC long sample mode selection */
 	uint32_t hw_trigger_src;  /* ADC hardware trigger source */
 				/* defined in SIM module SOPT7 */
-	uint32_t dma_channel;	/* ADC DMA channel to use */
 	uint32_t dma_slot;	/* ADC DMA MUX slot */
 	uint32_t trg_offset;
 	uint32_t trg_bits;
 	uint32_t alt_offset;
 	uint32_t alt_bits;
+	bool periodic_trigger; /* ADC enable periodic trigger */
 	bool channel_mux_b;
 	bool high_speed;	/* ADC enable high speed mode*/
 	bool continuous_convert; /* ADC enable continuous convert*/
@@ -378,7 +378,18 @@ static int mcux_adc16_init(const struct device *dev)
 	ADC16_EnableDMA(base, true);
 
 	data->adc_dma_config.dma_name = CONFIG_DMA_0_NAME;
-	data->adc_dma_config.dma_channel = config->dma_channel;
+	if (config->periodic_trigger) {
+		data->adc_dma_config.dma_channel = dma_request_channel(dev,
+											DMA_CHANNEL_PERIODIC);
+	} else {
+		data->adc_dma_config.dma_channel = dma_request_channel(dev,
+											DMA_CHANNEL_NORMAL);
+	}
+	if (data->adc_dma_config.dma_channel == -EINVAL) {
+		LOG_ERR("can not allocate dma channel");
+		return -EINVAL;
+	}
+	LOG_DBG("dma allocated channel %d", data->adc_dma_config.dma_channel);
 	data->adc_dma_config.dma_cfg.block_count = 1U;
 	data->adc_dma_config.dma_cfg.dma_slot = config->dma_slot;
 	data->adc_dma_config.dma_cfg.channel_direction = PERIPHERAL_TO_MEMORY;
@@ -422,11 +433,11 @@ static const struct adc_driver_api mcux_adc16_driver_api = {
 		.clk_source = DT_INST_PROP_OR(n, clk_source, 0),	\
 		.long_sample = DT_INST_PROP_OR(n, long_sample, 0),	\
 		.high_speed = DT_INST_PROP(n, high_speed),		\
+		.periodic_trigger = DT_INST_PROP(n, periodic_trigger),	\
 		.continuous_convert =				\
 			DT_INST_PROP(n, continuous_convert),	\
 		.hw_trigger_src =				\
 			DT_INST_PROP_OR(n, hw_trigger_src, 0),	\
-		.dma_channel = DT_INST_PROP_OR(n, dma_channel, 0),	\
 		.dma_slot = DT_INST_DMAS_CELL_BY_IDX(n, 0, source),	\
 		.trg_offset = DT_INST_CLOCKS_CELL_BY_IDX(n, 0, offset),	\
 		.trg_bits = DT_INST_CLOCKS_CELL_BY_IDX(n, 0, bits),	\
