@@ -42,6 +42,12 @@ enum dma_addr_adj {
 	DMA_ADDR_ADJ_NO_CHANGE,
 };
 
+/* channel attribute */
+enum dma_channel_filter {
+	DMA_CHANNEL_NORMAL,
+	DMA_CHANNEL_PERIODIC,
+};
+
 /**
  * @brief DMA block configuration structure.
  *
@@ -218,12 +224,20 @@ typedef int (*dma_api_stop)(const struct device *dev, uint32_t channel);
 typedef int (*dma_api_get_status)(const struct device *dev, uint32_t channel,
 				  struct dma_status *status);
 
+typedef int (*dma_api_request_channel)(const struct device *dev,
+				       enum dma_channel_filter flags);
+
+typedef void (*dma_api_release_channel)(const struct device *dev,
+					uint32_t channel);
+
 __subsystem struct dma_driver_api {
 	dma_api_config config;
 	dma_api_reload reload;
 	dma_api_start start;
 	dma_api_stop stop;
 	dma_api_get_status get_status;
+	dma_api_request_channel request_channel;
+	dma_api_release_channel release_channel;
 };
 /**
  * @endcond
@@ -326,6 +340,52 @@ static inline int z_impl_dma_stop(const struct device *dev, uint32_t channel)
 
 	return api->stop(dev, channel);
 }
+
+/**
+ * @brief request DMA channel.
+ *
+ * request DMA channel resources 
+ * return -EINVAL if there is no valid channel available.
+ *
+ * @param dev     Pointer to the device structure for the driver instance.
+ * @param fliter  channel filter
+ *
+ * @retval dma channel if successful.
+ * @retval Negative errno code if failure.
+ */
+__syscall int dma_request_channel(const struct device *dev,
+				  enum dma_channel_filter filter);
+
+static inline int z_impl_dma_request_channel(const struct device *dev,
+					     enum dma_channel_filter filter)
+{
+	const struct dma_driver_api *api =
+		(const struct dma_driver_api *)dev->api;
+
+	return api->request_channel(dev, filter);
+}
+
+/**
+ * @brief release DMA channel.
+ *
+ * release DMA channel resources 
+ *
+ * @param dev     Pointer to the device structure for the driver instance.
+ * @param channel  channel number
+ *
+ */
+__syscall void dma_release_channel(const struct device *dev,
+				   uint32_t channel);
+
+static inline void z_impl_dma_release_channel(const struct device *dev,
+					     uint32_t channel)
+{
+	const struct dma_driver_api *api =
+		(const struct dma_driver_api *)dev->api;
+
+	api->release_channel(dev, channel);
+}
+
 
 /**
  * @brief get current runtime status of DMA transfer
