@@ -1,0 +1,9 @@
+# Cryptography primitive options for TENSFLOW
+
+# Copyright (c) 2021 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig TENSFLOW
+	bool "TENSFLOW Support"
+	help
+	  This option enables the TENSFLOW library.

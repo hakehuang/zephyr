@@ -21,6 +21,8 @@ manifest:
   remotes:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: tf_lite
+      url-base: https://github.com/hakehuang
 
   #
   # Please add items below based on alphabetical order
@@ -136,6 +138,10 @@ manifest:
     - name: trusted-firmware-m
       path: modules/tee/tfm
       revision: 7e51033f7bf4ad54a008e5c3cdf244d1d6954af0
+    - name: tensorflow
+      path: modules/tf_lite
+      remote: tf_lite 
+      revision: 255a314badfe538f7ddaa6345ef774755973143d
 
   self:
     path: zephyr
