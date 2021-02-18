@@ -7,3 +7,13 @@ menuconfig TENSFLOW
 	bool "TENSFLOW Support"
 	help
 	  This option enables the TENSFLOW library.
+
+menuconfig TENSFLOW_LITE
+	bool "TENSFLOW LITE Support"
+	help
+	  This option enables the TENSFLOW library.
+
+menuconfig TENSFLOW_LITE_MICRO
+	bool "TENSFLOW LITE MICRO Support"
+	help
+	  This option enables the TENSFLOW library.
