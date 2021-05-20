@@ -21,6 +21,8 @@ manifest:
   remotes:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: test_ptp
+      url-base: https://github.com/hakehuang/hal_nxp/
 
   #
   # Please add items below based on alphabetical order
@@ -100,7 +102,8 @@ manifest:
       revision: f49bd1354616fae4093bf36e5eaee43c51a55127
       path: tools/net-tools
     - name: hal_nxp
-      revision: 0d11138724959e1162777d9206f841ccdf64348e
+      remote: test_ptp
+      revision: a8fe934d34dcb708d340655ce547f61d4ce20540 
       path: modules/hal/nxp
     - name: open-amp
       revision: 6010f0523cbc75f551d9256cf782f173177acdef

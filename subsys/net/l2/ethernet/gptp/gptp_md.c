@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdio.h>
 #include <logging/log.h>
 LOG_MODULE_DECLARE(net_gptp, CONFIG_NET_GPTP_LOG_LEVEL);
 
@@ -331,7 +332,11 @@ static void gptp_md_compute_prop_time(int port)
 	prop_time = t4_ns - t1_ns;
 
 	turn_around = t3_ns - t2_ns;
-
+	
+	printf("t1_ns = %" PRIu64 "\n", t1_ns);
+	printf("t2_ns = %" PRIu64 "\n", t2_ns);
+	printf("t3_ns = %" PRIu64 "\n", t3_ns);
+	printf("t4_ns = %" PRIu64 "\n", t4_ns);
 	/* Adjusting the turn-around time for peer to local clock rate
 	 * difference. The check is implemented the same way as how Avnu/gptp
 	 * daemon is doing it. This comment is also found in their source
