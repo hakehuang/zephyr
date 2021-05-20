@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdio.h>
 #include <logging/log.h>
 LOG_MODULE_DECLARE(net_gptp, CONFIG_NET_GPTP_LOG_LEVEL);
 
@@ -583,6 +584,12 @@ static void gptp_md_pdelay_req_state_machine(int port)
 		state->state = GPTP_PDELAY_REQ_NOT_ENABLED;
 	}
 
+	while(1) {
+		if (net_if_flag_is_set(GPTP_PORT_IFACE(port), NET_IF_UP)) {
+			break;
+		}
+		k_sleep(K_MSEC(1000));
+	}
 	switch (state->state) {
 	case GPTP_PDELAY_REQ_NOT_ENABLED:
 		if (port_ds->ptt_port_enabled) {

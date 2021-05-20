@@ -21,6 +21,8 @@ manifest:
   remotes:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: test_ptp
+      url-base: https://github.com/hakehuang/hal_nxp/
 
   #
   # Please add items below based on alphabetical order
@@ -179,6 +181,10 @@ manifest:
     - name: nrf_hw_models
       revision: a47e326ca772ddd14cc3b9d4ca30a9ab44ecca16
       path: modules/bsim_hw_models/nrf_hw_models
+    - name: hal_nxp
+      remote: test_ptp
+      revision: e561180ea2671a6b17e9c115a5b3a472f97f13c2 
+      path: modules/hal/nxp
     - name: open-amp
       revision: 6010f0523cbc75f551d9256cf782f173177acdef
       path: modules/lib/open-amp
