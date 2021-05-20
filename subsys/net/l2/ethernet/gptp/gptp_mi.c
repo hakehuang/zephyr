@@ -1501,7 +1501,6 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 			gptp_change_pa_info_state(port, state,
 						  GPTP_PA_INFO_AGED);
 		}
-
 		break;
 
 	case GPTP_PA_INFO_RECEIVE:
