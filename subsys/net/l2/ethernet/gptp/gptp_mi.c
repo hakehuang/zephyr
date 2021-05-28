@@ -1425,7 +1425,9 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 	struct gptp_hdr *hdr;
 	struct gptp_port_bmca_data *bmca_data;
 	struct gptp_pss_rcv_state *pss_rcv;
-
+#if 0
+	static enum gptp_pa_info_states former_state;
+#endif
 	bmca_data = GPTP_PORT_BMCA_DATA(port);
 	state = &GPTP_PORT_STATE(port)->pa_info;
 	port_ds = GPTP_PORT_DS(port);
@@ -1438,6 +1440,12 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 
 	switch (state->state) {
 	case GPTP_PA_INFO_DISABLED:
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_DISABLED");
+			former_state = state->state;
+		}
+#endif
 		bmca_data->rcvd_msg = false;
 		bmca_data->info_is = GPTP_INFO_IS_DISABLED;
 		SET_RESELECT(global_ds, port);
@@ -1449,6 +1457,12 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 		__fallthrough;
 
 	case GPTP_PA_INFO_POST_DISABLED:
+#if 0
+		if (former_state != GPTP_PA_INFO_POST_DISABLED) {
+			NET_WARN("GPTP_PA_INFO_POST_DISABLED");
+			former_state = GPTP_PA_INFO_POST_DISABLED;
+		}
+#endif
 		if (port_ds->ptt_port_enabled && port_ds->as_capable) {
 			gptp_change_pa_info_state(port, state,
 						  GPTP_PA_INFO_AGED);
@@ -1460,6 +1474,12 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 		break;
 
 	case GPTP_PA_INFO_AGED:
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_AGED");
+			former_state = state->state;
+		}
+#endif
 		bmca_data->info_is = GPTP_INFO_IS_AGED;
 		CLEAR_SELECTED(global_ds, port);
 		SET_RESELECT(global_ds, port);
@@ -1468,6 +1488,17 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 		break;
 
 	case GPTP_PA_INFO_UPDATE:
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_UPDATE");
+			former_state = state->state;
+		}
+#endif
+		#if 0
+		while(1) {
+			k_sleep(K_MSEC(1000));
+		}
+		#endif
 		if (IS_SELECTED(global_ds, port) && bmca_data->updt_info) {
 			memcpy(&bmca_data->port_priority,
 			       &bmca_data->master_priority,
@@ -1485,6 +1516,12 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 		break;
 
 	case GPTP_PA_INFO_CURRENT:
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_CURRENT");
+			former_state = state->state;
+		}
+#endif
 		pss_rcv = &GPTP_PORT_STATE(port)->pss_rcv;
 		if (IS_SELECTED(global_ds, port) && bmca_data->updt_info) {
 			gptp_change_pa_info_state(port, state,
@@ -1501,10 +1538,20 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 			gptp_change_pa_info_state(port, state,
 						  GPTP_PA_INFO_AGED);
 		}
-
+#if 0
+		while(1) {
+			k_sleep(K_MSEC(1000));
+		}
+#endif
 		break;
 
 	case GPTP_PA_INFO_RECEIVE:
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_RECEIVE");
+			former_state = state->state;
+		}
+#endif
 		switch (rcv_info(port)) {
 		case GPTP_RCVD_INFO_SUPERIOR_MASTER_INFO:
 			gptp_change_pa_info_state(port, state,
@@ -1529,7 +1576,12 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 		 * priority vector without using an intermediate
 		 * messagePrioriry structure.
 		 */
-
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_SUPERIOR_MASTER_PORT");
+			former_state = state->state;
+		}
+#endif
 		if (!bmca_data->rcvd_announce_ptr) {
 			/* Shouldn't be reached. Checked for safety reason. */
 			bmca_data->rcvd_msg = false;
@@ -1554,6 +1606,12 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 		__fallthrough;
 
 	case GPTP_PA_INFO_REPEATED_MASTER_PORT:
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_REPEATED_MASTER_PORT");
+			former_state = state->state;
+		}
+#endif
 		k_timer_stop(&state->ann_rcpt_expiry_timer);
 		state->ann_expired = false;
 		k_timer_start(&state->ann_rcpt_expiry_timer,
@@ -1563,6 +1621,12 @@ static void gptp_mi_port_announce_information_state_machine(int port)
 		__fallthrough;
 
 	case GPTP_PA_INFO_INFERIOR_MASTER_OR_OTHER_PORT:
+#if 0
+		if (former_state != state->state) {
+			NET_WARN("GPTP_PA_INFO_INFERIOR_MASTER_OR_OTHER_PORT");
+			former_state = state->state;
+		}
+#endif
 		if (bmca_data->rcvd_announce_ptr != NULL) {
 			net_pkt_unref(bmca_data->rcvd_announce_ptr);
 			bmca_data->rcvd_announce_ptr = NULL;

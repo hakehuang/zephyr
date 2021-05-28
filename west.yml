@@ -103,7 +103,7 @@ manifest:
       path: tools/net-tools
     - name: hal_nxp
       remote: test_ptp
-      revision: a8fe934d34dcb708d340655ce547f61d4ce20540 
+      revision: 5b76dbfcbed702dc083f2226e044a22cde4a1228 
       path: modules/hal/nxp
     - name: open-amp
       revision: 6010f0523cbc75f551d9256cf782f173177acdef

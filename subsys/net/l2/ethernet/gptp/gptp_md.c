@@ -333,10 +333,10 @@ static void gptp_md_compute_prop_time(int port)
 
 	turn_around = t3_ns - t2_ns;
 	
-	printf("t1_ns = %" PRIu64 "\n", t1_ns);
-	printf("t2_ns = %" PRIu64 "\n", t2_ns);
-	printf("t3_ns = %" PRIu64 "\n", t3_ns);
-	printf("t4_ns = %" PRIu64 "\n", t4_ns);
+	NET_WARN("t1_ns = %" PRIu64 "\n", t1_ns);
+	NET_WARN("t2_ns = %" PRIu64 "\n", t2_ns);
+	NET_WARN("t3_ns = %" PRIu64 "\n", t3_ns);
+	NET_WARN("t4_ns = %" PRIu64 "\n", t4_ns);
 	/* Adjusting the turn-around time for peer to local clock rate
 	 * difference. The check is implemented the same way as how Avnu/gptp
 	 * daemon is doing it. This comment is also found in their source
@@ -408,6 +408,7 @@ static void gptp_md_pdelay_compute(int port)
 	if ((port_ds->neighbor_prop_delay <=
 	     port_ds->neighbor_prop_delay_thresh)) {
 		port_ds->as_capable = true;
+		NET_INFO("AS_CAPABLE = True");
 	} else {
 		port_ds->as_capable = false;
 
@@ -491,12 +492,14 @@ static void gptp_md_init_pdelay_req_state_machine(int port)
 	struct gptp_pdelay_req_state *state;
 
 	state = &GPTP_PORT_STATE(port)->pdelay_req;
+        NET_WARN("state timeout = %lld", state->pdelay_timer.timeout.dticks);
 
 	k_timer_init(&state->pdelay_timer, gptp_md_pdelay_req_timeout, NULL);
 
 	state->state = GPTP_PDELAY_REQ_NOT_ENABLED;
 
 	state->neighbor_rate_ratio_valid = false;
+	/* do we need set to true  */
 	state->init_pdelay_compute = true;
 	state->rcvd_pdelay_resp = 0U;
 	state->rcvd_pdelay_follow_up = 0U;
@@ -571,6 +574,7 @@ static void gptp_md_pdelay_req_state_machine(int port)
 	struct gptp_port_ds *port_ds;
 	struct gptp_pdelay_req_state *state;
 	struct net_pkt *pkt;
+        static enum gptp_pdelay_req_states former_state = -1;
 
 	state = &GPTP_PORT_STATE(port)->pdelay_req;
 	port_ds = GPTP_PORT_DS(port);
@@ -588,8 +592,18 @@ static void gptp_md_pdelay_req_state_machine(int port)
 		state->state = GPTP_PDELAY_REQ_NOT_ENABLED;
 	}
 
+	while(1) {
+		if (net_if_flag_is_set(GPTP_PORT_IFACE(port), NET_IF_UP)) {
+			break;
+		}
+		k_sleep(K_MSEC(1000));
+	}
 	switch (state->state) {
 	case GPTP_PDELAY_REQ_NOT_ENABLED:
+		if (former_state != GPTP_PDELAY_REQ_NOT_ENABLED) {
+			NET_WARN("GPTP_PDELAY_REQ_NOT_ENABLED");
+			former_state = state->state;
+                }
 		if (port_ds->ptt_port_enabled) {
 			/* (Re)Init interval (as defined in
 			 * LinkDelaySyncIntervalSetting state machine).
@@ -610,16 +624,26 @@ static void gptp_md_pdelay_req_state_machine(int port)
 		break;
 
 	case GPTP_PDELAY_REQ_RESET:
+                if (former_state != GPTP_PDELAY_REQ_RESET) {
+                  NET_WARN("GPTP_PDELAY_REQ_RESET");
+                  former_state = state->state;
+                }
 		gptp_md_pdelay_reset(port);
 		/* Send a request on the next timer expiry. */
 		state->state = GPTP_PDELAY_REQ_WAIT_ITV_TIMER;
 		break;
 
 	case GPTP_PDELAY_REQ_INITIAL_SEND_REQ:
+                NET_WARN("GPTP_PDELAY_REQ_INITIAL_SEND_REQ");
+                former_state = state->state;
 		gptp_md_start_pdelay_req(port);
 		__fallthrough;
 
 	case GPTP_PDELAY_REQ_SEND_REQ:
+                if (former_state != GPTP_PDELAY_REQ_SEND_REQ) {
+                  NET_WARN("GPTP_PDELAY_REQ_SEND_REQ");
+                  former_state = state->state;
+                }
 		if (state->tx_pdelay_req_ptr) {
 			net_pkt_unref(state->tx_pdelay_req_ptr);
 			state->tx_pdelay_req_ptr = NULL;
@@ -652,6 +676,10 @@ static void gptp_md_pdelay_req_state_machine(int port)
 		break;
 
 	case GPTP_PDELAY_REQ_WAIT_RESP:
+                if (former_state != GPTP_PDELAY_REQ_WAIT_RESP) {
+                  NET_WARN("GPTP_PDELAY_REQ_WAIT_RESP");
+                  former_state = state->state;
+                }
 		if (state->pdelay_timer_expired) {
 			state->state = GPTP_PDELAY_REQ_RESET;
 		} else if (state->rcvd_pdelay_resp != 0U) {
@@ -666,6 +694,10 @@ static void gptp_md_pdelay_req_state_machine(int port)
 		break;
 
 	case GPTP_PDELAY_REQ_WAIT_FOLLOW_UP:
+                if (former_state != GPTP_PDELAY_REQ_WAIT_FOLLOW_UP) {
+                  NET_WARN("GPTP_PDELAY_REQ_WAIT_FOLLOW_UP");
+                  former_state = state->state;
+                }
 		if (state->pdelay_timer_expired) {
 			state->state = GPTP_PDELAY_REQ_RESET;
 		} else if (state->rcvd_pdelay_follow_up != 0U) {
@@ -673,6 +705,11 @@ static void gptp_md_pdelay_req_state_machine(int port)
 			if (!gptp_handle_pdelay_follow_up(port, pkt)) {
 				gptp_md_pdelay_compute(port);
 				state->state = GPTP_PDELAY_REQ_WAIT_ITV_TIMER;
+				#if 0
+				while(1) {
+					k_sleep(K_MSEC(1000));
+				}
+				#endif
 			} else {
 				state->state = GPTP_PDELAY_REQ_RESET;
 			}
@@ -681,13 +718,16 @@ static void gptp_md_pdelay_req_state_machine(int port)
 		break;
 
 	case GPTP_PDELAY_REQ_WAIT_ITV_TIMER:
+                if (former_state != GPTP_PDELAY_REQ_WAIT_ITV_TIMER) {
+                  NET_WARN("GPTP_PDELAY_REQ_WAIT_ITV_TIMER");
+                  former_state = state->state;
+                }
 		if (state->pdelay_timer_expired) {
 			gptp_md_pdelay_check_multiple_resp(port);
 
 			state->rcvd_pdelay_resp = 0U;
 			state->rcvd_pdelay_follow_up = 0U;
 		}
-
 		break;
 	}
 }

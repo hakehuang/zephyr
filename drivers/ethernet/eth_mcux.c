@@ -667,6 +667,7 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	imask = irq_lock();
 
 	if (net_pkt_read(pkt, context->frame_buf, total_len)) {
+		NET_WARN("eth_tx error");
 		irq_unlock(imask);
 		return -EIO;
 	}
@@ -676,16 +677,18 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	if (timestamped_frame) {
 		status = ENET_SendFrame(context->base, &context->enet_handle,
 					  context->frame_buf, total_len, RING_ID, true, NULL);
-
 		if (!status) {
 			ts_tx_pkt[ts_tx_wr] = net_pkt_ref(pkt);
 		} else {
 			ts_tx_pkt[ts_tx_wr] = NULL;
 		}
-
 		ts_tx_wr++;
 		if (ts_tx_wr >= CONFIG_ETH_MCUX_TX_BUFFERS) {
 			ts_tx_wr = 0;
+			if (ts_tx_pkt[ts_tx_wr] != NULL) {
+				net_pkt_unref(ts_tx_pkt[ts_tx_wr]);
+				ts_tx_pkt[ts_tx_wr] = NULL;
+			}
 		}
 	} else
 #endif
@@ -701,6 +704,7 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 		return -1;
 	}
 
+	NET_WARN("eth_tx sucess");
 	k_sem_take(&context->tx_buf_sem, K_FOREVER);
 
 	return 0;
@@ -1161,10 +1165,12 @@ static void eth_mcux_common_isr(const struct device *dev)
 	uint32_t EIR = ENET_GetInterruptStatus(context->base);
 	int irq_lock_key = irq_lock();
 
-	if (EIR & (kENET_RxBufferInterrupt | kENET_RxFrameInterrupt)) {
-		ENET_ReceiveIRQHandler(context->base, &context->enet_handle);
-	} else if (EIR & (kENET_TxBufferInterrupt | kENET_TxFrameInterrupt)) {
+	if (EIR & (kENET_TxBufferInterrupt | kENET_TxFrameInterrupt)) {
+		NET_WARN("tx process");
 		ENET_TransmitIRQHandler(context->base, &context->enet_handle);
+	} else if (EIR & (kENET_RxBufferInterrupt | kENET_RxFrameInterrupt)) {
+		NET_WARN("rx process");
+		ENET_ReceiveIRQHandler(context->base, &context->enet_handle);
 	} else if (EIR & ENET_EIR_MII_MASK) {
 		k_work_submit(&context->phy_work);
 		ENET_ClearInterruptStatus(context->base, kENET_MiiInterrupt);
