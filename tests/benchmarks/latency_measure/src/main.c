@@ -44,17 +44,18 @@ void test_thread(void *arg1, void *arg2, void *arg3)
 	thread_switch_yield();
 
 	coop_ctx_switch();
-
+#if 0
 	int_to_thread();
 
 	int_to_thread_evt();
 
 	suspend_resume();
-
+#endif
 	sema_test_signal();
 
+#if 0
 	sema_context_switch();
-
+#endif
 	mutex_lock_unlock();
 
 	TC_END_REPORT(error_count);

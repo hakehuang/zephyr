@@ -85,17 +85,20 @@ int sema_test_signal(void)
 	uint32_t diff;
 	timing_t timestamp_start;
 	timing_t timestamp_end;
+	unsigned int key;
 
 	bench_test_start();
 	timing_start();
 
-	timestamp_start = timing_counter_get();
 
+	key = irq_lock();
+	timestamp_start = timing_counter_get();
 	for (i = 0; i < N_TEST_SEMA; i++) {
 		k_sem_give(&lock_unlock_sema);
 	}
-
 	timestamp_end = timing_counter_get();
+	irq_unlock(key);
+
 	timing_stop();
 
 	if (bench_test_end() == 0) {
@@ -109,13 +112,15 @@ int sema_test_signal(void)
 	bench_test_start();
 	timing_start();
 
-	timestamp_start = timing_counter_get();
 
+	key = irq_lock();
+	timestamp_start = timing_counter_get();
 	for (i = 0; i < N_TEST_SEMA; i++) {
 		k_sem_take(&lock_unlock_sema, K_FOREVER);
 	}
-
 	timestamp_end = timing_counter_get();
+	irq_unlock(key);
+
 	timing_stop();
 
 	if (bench_test_end() == 0) {
