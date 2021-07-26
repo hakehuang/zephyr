@@ -41,7 +41,6 @@ struct spi_mcux_config {
 	uint32_t pcs_sck_delay;
 	uint32_t sck_pcs_delay;
 	uint32_t transfer_delay;
-	uint32_t whichPcs;
 	uint32_t whichCtar;
 	uint32_t samplePoint;
 	bool enableContinuousSCK;
@@ -233,7 +232,7 @@ static void mcux_init_inner_buffer_with_cmd(const struct device *dev,
 	uint32_t command;
 	int i = 0;
 
-	commandStruct.whichPcs = config->whichPcs;
+	commandStruct.whichPcs = data->whichPcs;
 
 	commandStruct.isEndOfQueue = false;
 	commandStruct.clearTransferCount = false;
@@ -578,7 +577,7 @@ static int spi_mcux_configure(const struct device *dev,
 
 	DSPI_MasterGetDefaultConfig(&master_config);
 
-	config->whichPcs = spi_cfg->slave;
+	data->whichPcs = spi_cfg->slave;
 	master_config.whichPcs = spi_cfg->slave;
 	master_config.whichCtar = config->whichCtar;
 	master_config.pcsActiveHighOrLow =
