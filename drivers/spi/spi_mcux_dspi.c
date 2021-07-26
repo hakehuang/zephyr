@@ -63,6 +63,7 @@ struct spi_mcux_data {
 	int frame_size;
 	int tx_transfer_count;
 	int rx_transfer_count;
+	uint32_t whichPcs;
 #endif
 	struct spi_buf *inner_tx_buffer;
 	struct spi_buf *inner_rx_buffer;
@@ -561,7 +562,7 @@ static void spi_mcux_master_transfer_callback(SPI_Type *base,
 static int spi_mcux_configure(const struct device *dev,
 			      const struct spi_config *spi_cfg)
 {
-	struct spi_mcux_config *config = (struct spi_mcux_config *) dev->config;
+	const struct spi_mcux_config *config = dev->config;
 	struct spi_mcux_data *data = dev->data;
 	SPI_Type *base = config->base;
 	dspi_master_config_t master_config;
@@ -577,7 +578,6 @@ static int spi_mcux_configure(const struct device *dev,
 
 	DSPI_MasterGetDefaultConfig(&master_config);
 
-	data->whichPcs = spi_cfg->slave;
 	master_config.whichPcs = spi_cfg->slave;
 	master_config.whichCtar = config->whichCtar;
 	master_config.pcsActiveHighOrLow =
@@ -641,6 +641,8 @@ static int spi_mcux_configure(const struct device *dev,
 	DSPI_ClearStatusFlags(DEV_BASE(dev), (uint32_t)kDSPI_AllStatusFlag);
 	/* record frame_size setting for DMA */
 	data->frame_size = word_size;
+	/* keep the pcs settings */
+	data->whichPcs = spi_cfg->slave;
 #ifdef CONFIG_MCUX_DSPI_EDMA_SHUFFLE_DATA
 	mcux_init_inner_buffer_with_cmd(dev, 0);
 #endif
