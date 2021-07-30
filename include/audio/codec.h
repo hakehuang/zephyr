@@ -88,12 +88,12 @@ typedef enum {
 /*
  * DAI Route types
  */
-typedef enum {
+enum audio_route_t {
 	AUDIO_ROUTE_BYPASS,
-	AUDIO_ROUTE_PALYBACK,
-	AUDIO_ROUTE_PACKBACK_CAPTURE,
+	AUDIO_ROUTE_PLAYBACK,
+	AUDIO_ROUTE_PLAYBACK_CAPTURE,
 	AUDIO_ROUTE_CAPTURE,
-} audio_route_t;
+};
 
 /**
  * Digital Audio Interface Configuration
@@ -112,7 +112,7 @@ struct audio_codec_cfg {
 	uint32_t			mclk_freq;	/* MCLK input frequency in Hz */
 	audio_dai_type_t	dai_type;	/* Digital interface type */
 	audio_dai_cfg_t		dai_cfg;	/* DAI configuration info */
-	audio_route_t 		dai_route;  /* DAI route info */
+	enum audio_route_t  dai_route;  /* DAI route info */
 };
 
 /**
