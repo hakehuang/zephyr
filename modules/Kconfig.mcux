@@ -283,4 +283,9 @@ config HAS_MCUX_RCM
 	  Set if the Reset Control Module (RCM) module is present in
 	  the SoC.
 
+config HAS_MCUX_I2S
+	bool
+	help
+	  Set if the I2S/SAI module is present on the Soc
+
 endif # HAS_MCUX
