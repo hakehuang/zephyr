@@ -1,0 +1,18 @@
+# MCUXpresso SDK pinmux for RT
+
+# Copyright (c) 2020, NXP
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig PINMUX_MCUX_RT
+	bool "MCUX RT pinmux driver"
+	depends on SOC_SERIES_IMX_RT
+	help
+	  Enable the MCUX RT pinmux driver.
+
+if PINMUX_MCUX_RT
+
+config PINMUX_MCUX_RT_GPR_NAME
+	string "Pinmux GPR driver name"
+	default "IOMUX_GPR"
+
+endif # PINMUX_MCUX_RT
