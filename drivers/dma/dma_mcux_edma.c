@@ -66,6 +66,10 @@ struct dma_mcux_edma_data {
 #define DEV_EDMA_HANDLE(dev, ch)                                               \
 	((edma_handle_t *)(&(DEV_CHANNEL_DATA(dev, ch)->edma_handle)))
 
+static int dma_mcux_edma_get_status(const struct device *dev,
+				    uint32_t channel,
+				    struct dma_status *status);
+
 static void nxp_edma_callback(edma_handle_t *handle, void *param,
 			      bool transferDone, uint32_t tcds)
 {
@@ -163,6 +167,7 @@ static void dma_mcux_edma_error_irq_handler(const struct device *dev)
 {
 	int i = 0;
 	uint32_t flag = 0;
+	struct dma_status status;
 
 	for (i = 0; i < DT_INST_PROP(0, dma_channels); i++) {
 		if (DEV_CHANNEL_DATA(dev, i)->busy) {
@@ -170,6 +175,7 @@ static void dma_mcux_edma_error_irq_handler(const struct device *dev)
 			LOG_INF("channel %d error status is 0x%x", i, flag);
 			EDMA_ClearChannelStatusFlags(DEV_BASE(dev), i,
 						     0xFFFFFFFF);
+			dma_mcux_edma_get_status(dev, i, &status);
 			EDMA_AbortTransfer(DEV_EDMA_HANDLE(dev, i));
 			DEV_CHANNEL_DATA(dev, i)->busy = false;
 		}
