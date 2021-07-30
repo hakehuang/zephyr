@@ -103,7 +103,7 @@ static inline void unit_test_noop(void)
  */
 
 #define ztest_user_unit_test_setup_teardown(fn, setup, teardown) { \
-		STRINGIFY(fn), fn, setup, teardown, K_USER \
+		STRINGIFY(fn), fn, setup, teardown, K_USER | K_INHERIT_PERMS \
 }
 
 /**
