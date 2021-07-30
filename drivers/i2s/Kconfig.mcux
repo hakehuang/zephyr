@@ -1,0 +1,55 @@
+# MCUX I2S driver configuration options
+
+# Copyright (c) 2020, NXP
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig I2S_MCUX_SAI
+	bool "NXP MCUX I2S controller driver"
+	depends on SOC_SERIES_IMX_RT
+	help
+	  Enable I2S support on the I.MX family of processors.
+
+if I2S_MCUX_SAI
+
+config I2S_0
+	bool "I2S port 0"
+	help
+	  Enable I2S controller port 0.
+
+config I2S_1
+	bool "I2S port 1"
+	help
+	  Enable I2S controller port 1.
+
+config I2S_2
+	bool "I2S port 2"
+	help
+	  Enable I2S controller port 2.
+
+
+config I2S_ENABLE_EDMA
+	bool "ENABLE EDMA for I2S driver"
+	default y
+	depends on HAS_MCUX_I2S && HAS_MCUX_EDMA
+	help
+	  Enable the MCUX I2S driver.
+
+config I2S_RX_BLOCK_COUNT
+	int "RX queue length"
+	default 4
+
+config I2S_TX_BLOCK_COUNT
+	int "TX queue length"
+	default 4
+
+if I2S_ENABLE_EDMA
+
+config I2S_EDMA_BURSE_SIZE
+	int "DMA BURSE SIZE"
+	default 2
+	help
+	  DMA burse size in byte.
+
+endif # I2S_ENABLE_EDMA
+
+endif # I2S_MCUX_SAI
