@@ -159,6 +159,12 @@ arduino_serial: &lpuart3 {};
 		label = "FT5336";
 		int-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 	};
+
+	audio_codec: wm8960@1a {
+		compatible = "wolfson,wm8960";
+		reg = <0x1a>;
+		label = "WM8960";
+	};
 };
 
 &lpuart1 {
@@ -194,5 +200,9 @@ arduino_serial: &lpuart3 {};
 };
 
 &wdog0 {
+	status = "okay";
+};
+
+&sai1 {
 	status = "okay";
 };
