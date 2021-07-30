@@ -316,6 +316,8 @@ void test_i2s_state_error_neg(void)
 			break;
 		}
 	}
+
+	#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	zassert_equal(ret, -EIO, "RX overrun error not detected");
 
 	/* Send invalid triggers, expect failure */
@@ -353,6 +355,7 @@ void test_i2s_state_error_neg(void)
 	zassert_equal(ret, 0, "RX START trigger failed");
 	ret = i2s_trigger(dev_i2s_tx, I2S_DIR_TX, I2S_TRIGGER_START);
 	zassert_equal(ret, 0, "TX START trigger failed");
+	#endif
 	ret = i2s_trigger(dev_i2s_tx, I2S_DIR_TX, I2S_TRIGGER_DRAIN);
 	zassert_equal(ret, 0, "TX DRAIN trigger failed");
 	ret = i2s_trigger(dev_i2s_rx, I2S_DIR_RX, I2S_TRIGGER_STOP);

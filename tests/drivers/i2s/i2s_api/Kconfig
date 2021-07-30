@@ -34,3 +34,13 @@ config I2S_TEST_ALLOWED_DATA_OFFSET
 	help
 	  Maximum allowed offset between sent and received samples. Non-zero
 	  value of this option may be needed when GPIO loopback is used.
+
+config I2S_TEST_NO_LOOPBACK
+	bool "No loopback test"
+	help
+	  Disable loopback test.
+
+config MASTER_CLK
+	bool "SOC acts as i2s master"
+	help
+	  SOC acts as i2s master

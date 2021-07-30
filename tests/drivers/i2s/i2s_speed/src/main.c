@@ -19,6 +19,11 @@ void test_i2s_dir_both_transfer_long(void);
 
 void test_main(void)
 {
+	#ifdef CONFIG_AUDIO_CODEC
+	extern int set_codec_loop(void);
+	set_codec_loop();
+	#endif
+
 	ztest_test_suite(i2s_speed_test,
 			ztest_unit_test(test_i2s_tx_transfer_configure),
 			ztest_unit_test(test_i2s_rx_transfer_configure),

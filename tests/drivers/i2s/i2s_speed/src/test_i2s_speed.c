@@ -89,6 +89,7 @@ static int verify_buf(int16_t *rx_block, int att)
 	sample_no -= offset;
 #endif
 
+	#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	for (int i = 0; i < sample_no; i++) {
 		if (rx_block[2 * i] != data_l[i] >> att) {
 			TC_PRINT("Error: att %d: data_l mismatch at position "
@@ -103,6 +104,7 @@ static int verify_buf(int16_t *rx_block, int att)
 			return -TC_FAIL;
 		}
 	}
+	#endif
 
 	return TC_PASS;
 }

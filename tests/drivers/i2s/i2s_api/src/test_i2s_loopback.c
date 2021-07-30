@@ -196,9 +196,11 @@ void test_i2s_rx_sync_start(void)
 	zassert_equal(ret, 0, "RX START trigger failed");
 	ret = i2s_buf_read(dev_i2s_rx, buf, &rx_size);
 	zassert_equal(ret, TC_PASS, NULL);
+#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	ret = verify_buf_const((uint16_t *)buf, 1, 2);
 
 	zassert_equal(ret, TC_PASS, NULL);
+#endif
 	TC_PRINT("%d<-OK\n", 1);
 
 	/* All data written, drop TX, RX queue and stop the transmission */
@@ -320,15 +322,18 @@ void test_i2s_transfer_restart(void)
  */
 void test_i2s_transfer_rx_overrun(void)
 {
+
 	if (IS_ENABLED(CONFIG_I2S_TEST_USE_I2S_DIR_BOTH)) {
 		TC_PRINT("RX/TX transfer requires use of I2S_DIR_BOTH.\n");
 		ztest_test_skip();
 		return;
 	}
 
+#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	size_t rx_size;
-	int ret;
 	char rx_buf[BLOCK_SIZE];
+#endif
+	int ret;
 
 	/* Prefill TX queue */
 	ret = tx_block_write(dev_i2s_tx, 0, 0);
@@ -360,6 +365,7 @@ void test_i2s_transfer_rx_overrun(void)
 	ret = rx_block_read(dev_i2s_rx, 0);
 	zassert_equal(ret, TC_PASS, NULL);
 
+	#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	/* Attempt to read more data blocks than are available in the RX queue */
 	for (int i = 0; i < NUM_RX_BLOCKS; i++) {
 		ret = i2s_buf_read(dev_i2s_rx, rx_buf, &rx_size);
@@ -381,6 +387,7 @@ void test_i2s_transfer_rx_overrun(void)
 	zassert_equal(ret, 0, "TX START trigger failed");
 	ret = i2s_trigger(dev_i2s_tx, I2S_DIR_TX, I2S_TRIGGER_DRAIN);
 	zassert_equal(ret, 0, "TX DRAIN trigger failed");
+	#endif
 	ret = i2s_trigger(dev_i2s_rx, I2S_DIR_RX, I2S_TRIGGER_STOP);
 	zassert_equal(ret, 0, "RX STOP trigger failed");
 	ret = rx_block_read(dev_i2s_rx, 0);
@@ -427,6 +434,7 @@ void test_i2s_transfer_tx_underrun(void)
 
 	k_sleep(K_MSEC(200));
 
+	#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	/* Write one more TX data block, expect an error */
 	ret = tx_block_write(dev_i2s_tx, 2, -EIO);
 	zassert_equal(ret, TC_PASS, NULL);
@@ -447,12 +455,15 @@ void test_i2s_transfer_tx_underrun(void)
 	zassert_equal(ret, 0, "TX START trigger failed");
 	ret = rx_block_read(dev_i2s_rx, 1);
 	zassert_equal(ret, TC_PASS, NULL);
+	#endif
 	ret = i2s_trigger(dev_i2s_tx, I2S_DIR_TX, I2S_TRIGGER_DRAIN);
 	zassert_equal(ret, 0, "TX DRAIN trigger failed");
+	#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	ret = i2s_trigger(dev_i2s_rx, I2S_DIR_RX, I2S_TRIGGER_STOP);
 	zassert_equal(ret, 0, "RX STOP trigger failed");
 	ret = rx_block_read(dev_i2s_rx, 1);
 	zassert_equal(ret, TC_PASS, NULL);
+	#endif
 
 	k_sleep(K_MSEC(200));
 }

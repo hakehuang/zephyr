@@ -38,6 +38,7 @@ static void fill_buf(int16_t *tx_block, int att)
 
 static int verify_buf(int16_t *rx_block, int att)
 {
+#ifndef CONFIG_I2S_TEST_NO_LOOPBACK
 	int sample_no = SAMPLE_NO;
 
 #if (CONFIG_I2S_TEST_ALLOWED_DATA_OFFSET > 0)
@@ -73,7 +74,7 @@ static int verify_buf(int16_t *rx_block, int att)
 			return -TC_FAIL;
 		}
 	}
-
+#endif
 	return TC_PASS;
 }
 
@@ -111,7 +112,7 @@ static int tx_block_write_slab(const struct device *dev_i2s, int att, int err,
 	char tx_block[BLOCK_SIZE];
 	int ret;
 
-	fill_buf((uint16_t *)tx_block, att);
+	fill_buf((int16_t *)tx_block, att);
 	ret = i2s_buf_write(dev_i2s, tx_block, BLOCK_SIZE);
 	if (ret != err) {
 		TC_PRINT("Error: i2s_write failed expected %d, actual %d\n",

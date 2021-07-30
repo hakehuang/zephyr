@@ -1,12 +1,13 @@
 /*
  * Copyright (c) 2017 comsuisse AG
  * Copyright (c) 2018 Intel Corporation
+ * Copyright (c) 2021 NXP
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef I2S_API_TEST_H
-#define I2S_API_TEST_H
+#ifndef _I2S_API_TEST_H_
+#define _I2S_API_TEST_H_
 
 #include <kernel.h>
 #include <drivers/i2s.h>
@@ -49,6 +50,12 @@ extern struct k_mem_slab tx_mem_slab;
 #define TIMEOUT		2000
 #define FRAME_CLK_FREQ	8000
 
+#ifdef CONFIG_MASTER_CLK
+#define CODEC_I2S_OPTIONS (I2S_OPT_FRAME_CLK_SLAVE | I2S_OPT_BIT_CLK_MASTER)
+#else
+#define CODEC_I2S_OPTIONS (I2S_OPT_FRAME_CLK_SLAVE | I2S_OPT_BIT_CLK_SLAVE)
+#endif
+
 extern int16_t data_l[SAMPLE_NO];
 extern int16_t data_r[SAMPLE_NO];
 
@@ -58,6 +65,9 @@ extern int16_t data_r[SAMPLE_NO];
 #else
 #define I2S_DEV_NAME_TX "I2S_0"
 #endif
+#define I2S_DEV_NAME "I2S_0"
+#define CODEC_DEV_NAME DT_LABEL(DT_INST(0, wolfson_wm8960))
+
 #define BLOCK_SIZE (2 * sizeof(data_l))
 
 #define NUM_RX_BLOCKS	4
