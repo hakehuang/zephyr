@@ -159,7 +159,8 @@ static int init_app(void)
 
 void main(void)
 {
-	init_app();
 
-	init_testing();
+  init_app();
+  init_testing();
+
 }

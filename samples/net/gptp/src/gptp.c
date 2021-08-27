@@ -17,9 +17,18 @@ LOG_MODULE_DECLARE(net_gptp_sample);
 #include "ethernet/gptp/gptp_messages.h"
 #include "ethernet/gptp/gptp_data_set.h"
 
+/*USER BEGIN INCLUDES*/
+#include <net/ptp_time.h>
+#include <sys/printk.h>
+#include <sys/util.h>
+/*USER END INCLUDES*/
+
 static int run_duration = CONFIG_NET_SAMPLE_RUN_DURATION;
 static struct k_work_delayable stop_sample;
 static struct k_sem quit_lock;
+
+/*USER BEGIN VARIABLES*/
+static struct net_ptp_time slave_time;
 
 static void stop_handler(struct k_work *work)
 {
@@ -58,13 +67,10 @@ static int get_current_status(void)
 	case GPTP_PORT_PRE_MASTER:
 	case GPTP_PORT_PASSIVE:
 	case GPTP_PORT_UNCALIBRATED:
-		printk("FAIL\n");
 		return 0;
 	case GPTP_PORT_MASTER:
-		printk("MASTER\n");
 		return 1;
 	case GPTP_PORT_SLAVE:
-		printk("SLAVE\n");
 		return 2;
 	}
 
@@ -73,11 +79,30 @@ static int get_current_status(void)
 
 void init_testing(void)
 {
+	bool gm_present;
+	uint64_t prevsecond = 0;
+	uint32_t prevnanosecond = 0;
 	uint32_t uptime = k_uptime_get_32();
 	int ret;
+	int status;
 
 	if (run_duration == 0) {
-		return;
+		/* USER BEGIN MAIN.C*/
+		while(1){
+			ret = get_current_status();
+			if (ret == 2){
+				status = gptp_event_capture(&slave_time, &gm_present);
+				if ( slave_time.second == prevsecond ) {
+					if (slave_time.nanosecond == prevnanosecond)
+					{
+						LOG_ERR("gPTP time ERROR: %u.%u != %u.%u", prevsecond, prevnanosecond, slave_time.second, slave_time.nanosecond);
+					}
+				}
+				prevsecond = slave_time.second;
+				prevnanosecond = slave_time.nanosecond;
+			}
+			k_msleep(100); //sleep time in ms
+		}
 	}
 
 	k_sem_init(&quit_lock, 0, K_SEM_MAX_LIMIT);
