@@ -1152,7 +1152,7 @@ static const struct ethernet_api api_funcs = {
 static void eth_mcux_ptp_isr(const struct device *dev)
 {
 	struct eth_context *context = dev->data;
-
+	printf("TS Timer\r\n");
 	ENET_TimeStampIRQHandler(context->base, &context->enet_handle);
 }
 #endif
@@ -1164,21 +1164,21 @@ static void eth_mcux_common_isr(const struct device *dev)
 	uint32_t EIR = ENET_GetInterruptStatus(context->base);
 	int irq_lock_key = irq_lock();
 
-	if (EIR & (kENET_TxBufferInterrupt | kENET_TxFrameInterrupt)) {
-		ENET_TransmitIRQHandler(context->base, &context->enet_handle);
-	}
-	if (EIR & (kENET_RxBufferInterrupt | kENET_RxFrameInterrupt)) {
-		ENET_ReceiveIRQHandler(context->base, &context->enet_handle);
-	}
-	if (EIR & ENET_EIR_MII_MASK) {
-		k_work_submit(&context->phy_work);
-		ENET_ClearInterruptStatus(context->base, kENET_MiiInterrupt);
-	}
 	if (EIR) {
 		ENET_ClearInterruptStatus(context->base,
 		  ~(kENET_TxBufferInterrupt | kENET_TxFrameInterrupt
 		    | kENET_RxBufferInterrupt | kENET_RxFrameInterrupt
-		    | ENET_EIR_MII_MASK | kENET_TsTimerInterrupt));
+		    | ENET_EIR_MII_MASK));
+	}
+	if (EIR & (kENET_RxBufferInterrupt | kENET_RxFrameInterrupt)) {
+		ENET_ReceiveIRQHandler(context->base, &context->enet_handle);
+	}
+	if (EIR & (kENET_TxBufferInterrupt | kENET_TxFrameInterrupt)) {
+		ENET_TransmitIRQHandler(context->base, &context->enet_handle);
+	}
+	if (EIR & ENET_EIR_MII_MASK) {
+		k_work_submit(&context->phy_work);
+		ENET_ClearInterruptStatus(context->base, kENET_MiiInterrupt);
 	}
 
 	irq_unlock(irq_lock_key);
