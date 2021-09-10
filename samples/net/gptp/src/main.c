@@ -16,6 +16,20 @@ LOG_MODULE_REGISTER(net_gptp_sample, LOG_LEVEL_DBG);
 #include <net/ethernet.h>
 #include <net/gptp.h>
 
+/*USER BEGIN INCLUDES*/
+#include <net/ptp_time.h>
+#include <sys/printk.h>
+#include <sys/util.h>
+/*USER END INCLUDES*/
+
+
+/*USER BEGIN VARIABLES*/
+static struct net_ptp_time slave_time;
+//struct gptp_clk_src_time_invoke_params src_time_invoke_parameters;
+bool gm_present;
+int status;
+/*USER END VARIABLES*/
+
 extern void init_testing(void);
 
 static struct gptp_phase_dis_cb phase_dis;
@@ -159,7 +173,27 @@ static int init_app(void)
 
 void main(void)
 {
-	init_app();
+  uint64_t prevsecond = 0;
+  uint32_t prevnanosecond = 0;
 
-	init_testing();
+  init_app();
+  init_testing();
+
+  /* USER BEGIN MAIN.C*/
+  while(1){
+
+      status=gptp_event_capture(&slave_time, &gm_present);
+
+      //LOG_INF("gPTP time %u.%u", slave_time.second, slave_time.nanosecond);
+      if ( slave_time.second == prevsecond ) {
+          if (slave_time.nanosecond != prevnanosecond)
+              LOG_ERR("gPTP time ERROR: %u.%u != %u.%u", prevsecond, prevnanosecond, slave_time.second, slave_time.nanosecond);
+          else
+              LOG_WRN("gPTP time ERROR: %u.%u == %u.%u", prevsecond, prevnanosecond, slave_time.second, slave_time.nanosecond);
+      }
+      prevsecond = slave_time.second;
+      prevnanosecond = slave_time.nanosecond;
+      k_msleep(1000); //sleep time in ms
+  }
+  /* USER END MAIN.C*/
 }

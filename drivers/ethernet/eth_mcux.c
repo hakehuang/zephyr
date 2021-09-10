@@ -113,6 +113,7 @@ static const char *eth_name(ENET_Type *base)
 	}
 }
 
+
 struct eth_context {
 	ENET_Type *base;
 	void (*config_func)(void);
@@ -157,7 +158,7 @@ struct eth_context {
 	 * Note that we do not copy FCS into this buffer thus the
 	 * size is 1514 bytes.
 	 */
-	uint8_t frame_buf[NET_ETH_MAX_FRAME_SIZE]; /* Max MTU + ethernet header */
+	uint8_t * frame_buf; /* Max MTU + ethernet header */
 };
 
 #if defined(CONFIG_PTP_CLOCK_MCUX)
@@ -729,7 +730,7 @@ static void eth_rx(struct eth_context *context)
 		goto flush;
 	}
 
-	if (sizeof(context->frame_buf) < frame_length) {
+	if (NET_ETH_MAX_FRAME_SIZE < frame_length) {
 		LOG_ERR("frame too large (%d)", frame_length);
 		goto flush;
 	}
@@ -1354,12 +1355,16 @@ static void eth_mcux_err_isr(const struct device *dev)
 									\
 	static void eth##n##_config_func(void);				\
 									\
+	static NOCACHE uint8_t						\ 
+		enet_frame_##n##_buf[NET_ETH_MAX_FRAME_SIZE];		\
+									\
 	static struct eth_context eth##n##_context = {			\
 		.base = (ENET_Type *)DT_INST_REG_ADDR(n),		\
 		.config_func = eth##n##_config_func,			\
 		.phy_addr = 0U,						\
 		.phy_duplex = kPHY_FullDuplex,				\
 		.phy_speed = kPHY_Speed100M,				\
+                .frame_buf = enet_frame_##n##_buf,			\
 		ETH_MCUX_MAC_ADDR(n)					\
 		ETH_MCUX_POWER(n)					\
 	};								\
