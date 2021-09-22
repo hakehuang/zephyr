@@ -183,7 +183,7 @@ manifest:
       path: modules/bsim_hw_models/nrf_hw_models
     - name: hal_nxp
       remote: test_ptp
-      revision: e561180ea2671a6b17e9c115a5b3a472f97f13c2 
+      revision: d665cdf0b297c20b65a1bb104382a27553f95b48 
       path: modules/hal/nxp
     - name: open-amp
       revision: 6010f0523cbc75f551d9256cf782f173177acdef
