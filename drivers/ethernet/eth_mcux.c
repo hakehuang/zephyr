@@ -1153,7 +1153,6 @@ static const struct ethernet_api api_funcs = {
 static void eth_mcux_ptp_isr(const struct device *dev)
 {
 	struct eth_context *context = dev->data;
-	LOG_INF("TS Timer\r\n");
 	ENET_TimeStampIRQHandler(context->base, &context->enet_handle);
 }
 #endif
