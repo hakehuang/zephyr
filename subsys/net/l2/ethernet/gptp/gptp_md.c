@@ -347,10 +347,9 @@ static void gptp_md_compute_prop_time(int port)
 	prop_time -= turn_around;
 	prop_time /= 2;
 	if (prop_time > port_ds->neighbor_prop_delay_thresh) {
-		NET_WARN("prop time low is %u", (uint32_t)prop_time);
-		NET_WARN("prop time high is %u", (uint32_t)(prop_time>>32));
-		NET_WARN("turn_around low is %u", (uint32_t)turn_around);
-		NET_WARN("turn_around high is %u", (uint32_t)(turn_around>>32));
+		NET_WARN("port_ds->neighbor_rate_ratio %f", port_ds->neighbor_rate_ratio);
+		NET_WARN("prop time is %f", prop_time);
+		NET_WARN("turn_around is %f", turn_around);
 		NET_WARN("t1_ns low is %u", (uint32_t)t1_ns);
 		NET_WARN("t1_ns high is %u", (uint32_t)(t1_ns>>32));
 		NET_WARN("t2_ns low is %u", (uint32_t)t2_ns);
