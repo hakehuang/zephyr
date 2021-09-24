@@ -130,6 +130,7 @@ struct eth_context {
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	const struct device *ptp_clock;
 	enet_ptp_config_t ptp_config;
+	struct k_sem ptp_read_sem;
 	float clk_ratio;
 #endif
 	struct k_sem tx_buf_sem;
@@ -1448,8 +1449,11 @@ static int ptp_clock_mcux_get(const struct device *dev,
 	struct eth_context *context = ptp_context->eth_context;
 	enet_ptp_time_t enet_time;
 
+	k_sem_take(&context->ptp_read_sem, K_FOREVER);
+
 	ENET_Ptp1588GetTimer(context->base, &context->enet_handle, &enet_time);
 
+	k_sem_give(&context->ptp_read_sem);
 	tm->second = enet_time.second;
 	tm->nanosecond = enet_time.nanosecond;
 	return 0;
@@ -1546,6 +1550,7 @@ static int ptp_mcux_init(const struct device *port)
 	struct ptp_context *ptp_context = port->data;
 
 	context->ptp_clock = port;
+	k_sem_init(&context->ptp_read_sem, 0, 1);
 	ptp_context->eth_context = context;
 
 	return 0;
