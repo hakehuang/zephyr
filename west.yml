@@ -91,7 +91,7 @@ manifest:
         - hal
     - name: hal_nxp
       remote: test_ptp
-      revision: a075300a4353812a8080f59e2473bca18241b368
+      revision: c0e2e65bc0f9f09be52e58da291fb5711b751d3a
       path: modules/hal/nxp
       groups:
         - hal
