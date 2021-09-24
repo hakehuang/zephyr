@@ -101,7 +101,7 @@ void init_testing(void)
 				prevsecond = slave_time.second;
 				prevnanosecond = slave_time.nanosecond;
 			}
-			k_msleep(1000); //sleep time in ms
+			k_msleep(100); //sleep time in ms
 		}
 	}
 
