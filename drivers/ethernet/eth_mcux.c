@@ -131,6 +131,7 @@ struct eth_context {
 	const struct device *ptp_clock;
 	enet_ptp_config_t ptp_config;
 	float clk_ratio;
+	struct k_sem ptp_read_sem;
 #endif
 	struct k_sem tx_buf_sem;
 	enum eth_mcux_phy_state phy_state;
@@ -1434,10 +1435,15 @@ static int ptp_clock_mcux_set(const struct device *dev,
 	struct eth_context *context = ptp_context->eth_context;
 	enet_ptp_time_t enet_time;
 
+	k_sem_take(&context->ptp_read_sem, K_FOREVER);
+
 	enet_time.second = tm->second;
 	enet_time.nanosecond = tm->nanosecond;
 
 	ENET_Ptp1588SetTimer(context->base, &context->enet_handle, &enet_time);
+
+	k_sem_give(&context->ptp_read_sem);
+
 	return 0;
 }
 
@@ -1448,7 +1454,11 @@ static int ptp_clock_mcux_get(const struct device *dev,
 	struct eth_context *context = ptp_context->eth_context;
 	enet_ptp_time_t enet_time;
 
+	k_sem_take(&context->ptp_read_sem, K_FOREVER);
+
 	ENET_Ptp1588GetTimer(context->base, &context->enet_handle, &enet_time);
+
+	k_sem_give(&context->ptp_read_sem);
 
 	tm->second = enet_time.second;
 	tm->nanosecond = enet_time.nanosecond;
@@ -1462,6 +1472,8 @@ static int ptp_clock_mcux_adjust(const struct device *dev, int increment)
 	int key, ret;
 
 	ARG_UNUSED(dev);
+
+	k_sem_take(&context->ptp_read_sem, K_FOREVER);
 
 	if ((increment <= -NSEC_PER_SEC) || (increment >= NSEC_PER_SEC)) {
 		ret = -EINVAL;
@@ -1479,6 +1491,8 @@ static int ptp_clock_mcux_adjust(const struct device *dev, int increment)
 		irq_unlock(key);
 	}
 
+	k_sem_give(&context->ptp_read_sem);
+
 	return ret;
 }
 
@@ -1495,6 +1509,8 @@ static int ptp_clock_mcux_rate_adjust(const struct device *dev, float ratio)
 	if (ratio == 1.0) {
 		return 0;
 	}
+
+	k_sem_take(&context->ptp_read_sem, K_FOREVER);
 
 	ratio *= context->clk_ratio;
 
@@ -1529,6 +1545,8 @@ static int ptp_clock_mcux_rate_adjust(const struct device *dev, float ratio)
 
 	ENET_Ptp1588AdjustTimer(context->base, corr, mul);
 
+	k_sem_give(&context->ptp_read_sem);
+
 	return 0;
 }
 
@@ -1547,6 +1565,7 @@ static int ptp_mcux_init(const struct device *port)
 
 	context->ptp_clock = port;
 	ptp_context->eth_context = context;
+	k_sem_init(&context->ptp_read_sem, 1, 1);
 
 	return 0;
 }
