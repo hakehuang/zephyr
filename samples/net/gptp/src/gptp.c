@@ -81,7 +81,7 @@ void init_testing(void)
 {
 	bool gm_present;
 	uint64_t prevsecond = 0;
-	uint32_t prevnanosecond = 0;
+	uint64_t prevnanosecond = 0;
 	uint32_t uptime = k_uptime_get_32();
 	int ret;
 	int status;
@@ -90,14 +90,15 @@ void init_testing(void)
 		/* USER BEGIN MAIN.C*/
 		while(1){
 			ret = get_current_status();
-			if (ret == 2){
+			if (ret != 2){
 				status = gptp_event_capture(&slave_time, &gm_present);
 				if ( slave_time.second == prevsecond ) {
 					if (slave_time.nanosecond == prevnanosecond)
 					{
-						LOG_ERR("gPTP time ERROR: %u.%u != %u.%u", prevsecond, prevnanosecond, slave_time.second, slave_time.nanosecond);
+						LOG_ERR("gPTP time ERROR: %llu.%llu != %llu.%llu\n", prevsecond, prevnanosecond, slave_time.second, slave_time.nanosecond);
 					}
 				}
+				printk("read time %llu.%llu\n", slave_time.second, slave_time.nanosecond);
 				prevsecond = slave_time.second;
 				prevnanosecond = slave_time.nanosecond;
 			}
