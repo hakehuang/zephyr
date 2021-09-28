@@ -1,5 +1,6 @@
 /* MCUX Ethernet Driver
  *
+	context-> 
  *  Copyright (c) 2016-2017 ARM Ltd
  *  Copyright (c) 2016 Linaro Ltd
  *  Copyright (c) 2018 Intel Corporation
@@ -131,6 +132,7 @@ struct eth_context {
 	const struct device *ptp_clock;
 	enet_ptp_config_t ptp_config;
 	float clk_ratio;
+	struct k_mutex ptp_mutex;
 #endif
 	struct k_sem tx_buf_sem;
 	enum eth_mcux_phy_state phy_state;
@@ -789,8 +791,10 @@ static void eth_rx(struct eth_context *context)
 
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	if (eth_get_ptp_data(get_iface(context, vlan_tag), pkt)) {
+		k_mutex_lock(&context->ptp_mutex, K_FOREVER);
 		ENET_Ptp1588GetTimer(context->base, &context->enet_handle,
 					&ptpTimeData);
+		k_mutex_unlock(&context->ptp_mutex);
 		/* If latest timestamp reloads after getting from Rx BD,
 		 * then second - 1 to make sure the actual Rx timestamp is
 		 * accurate
@@ -1434,10 +1438,12 @@ static int ptp_clock_mcux_set(const struct device *dev,
 	struct eth_context *context = ptp_context->eth_context;
 	enet_ptp_time_t enet_time;
 
+	k_mutex_lock(&context->ptp_mutex, K_FOREVER);
 	enet_time.second = tm->second;
 	enet_time.nanosecond = tm->nanosecond;
 
 	ENET_Ptp1588SetTimer(context->base, &context->enet_handle, &enet_time);
+	k_mutex_unlock(&context->ptp_mutex);
 	return 0;
 }
 
@@ -1447,8 +1453,10 @@ static int ptp_clock_mcux_get(const struct device *dev,
 	struct ptp_context *ptp_context = dev->data;
 	struct eth_context *context = ptp_context->eth_context;
 	enet_ptp_time_t enet_time;
-
+	
+	k_mutex_lock(&context->ptp_mutex, K_FOREVER);
 	ENET_Ptp1588GetTimer(context->base, &context->enet_handle, &enet_time);
+	k_mutex_unlock(&context->ptp_mutex);
 
 	tm->second = enet_time.second;
 	tm->nanosecond = enet_time.nanosecond;
@@ -1526,9 +1534,10 @@ static int ptp_clock_mcux_rate_adjust(const struct device *dev, float ratio)
 	} else {
 		mul = val;
 	}
-
+	
+	k_mutex_lock(&context->ptp_mutex, K_FOREVER);
 	ENET_Ptp1588AdjustTimer(context->base, corr, mul);
-
+	k_mutex_unlock(&context->ptp_mutex);
 	return 0;
 }
 
@@ -1547,6 +1556,7 @@ static int ptp_mcux_init(const struct device *port)
 
 	context->ptp_clock = port;
 	ptp_context->eth_context = context;
+	k_mutex_init(&context->ptp_mutex);
 
 	return 0;
 }
