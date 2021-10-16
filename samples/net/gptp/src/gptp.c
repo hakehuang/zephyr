@@ -13,13 +13,23 @@ LOG_MODULE_DECLARE(net_gptp_sample);
 
 #include <net/net_core.h>
 #include <net/gptp.h>
+#include <drivers/ptp_clock.h>
 
 #include "ethernet/gptp/gptp_messages.h"
 #include "ethernet/gptp/gptp_data_set.h"
 
+/*USER BEGIN INCLUDES*/
+#include <net/ptp_time.h>
+#include <sys/printk.h>
+#include <sys/util.h>
+/*USER END INCLUDES*/
+
 static int run_duration = CONFIG_NET_SAMPLE_RUN_DURATION;
 static struct k_work_delayable stop_sample;
 static struct k_sem quit_lock;
+
+/*USER BEGIN VARIABLES*/
+static struct net_ptp_time slave_time;
 
 static void stop_handler(struct k_work *work)
 {
@@ -58,13 +68,10 @@ static int get_current_status(void)
 	case GPTP_PORT_PRE_MASTER:
 	case GPTP_PORT_PASSIVE:
 	case GPTP_PORT_UNCALIBRATED:
-		printk("FAIL\n");
 		return 0;
 	case GPTP_PORT_MASTER:
-		printk("MASTER\n");
 		return 1;
 	case GPTP_PORT_SLAVE:
-		printk("SLAVE\n");
 		return 2;
 	}
 
@@ -75,9 +82,19 @@ void init_testing(void)
 {
 	uint32_t uptime = k_uptime_get_32();
 	int ret;
+	const struct device *clk;	
+
+	clk = device_get_binding("PTP_CLOCK");
+	if (clk != NULL) {
+		k_object_access_grant(clk, k_current_get());
+	}
 
 	if (run_duration == 0) {
-		return;
+		/* USER BEGIN MAIN.C*/
+		while(1){
+			ptp_clock_get(clk, &slave_time);
+			k_msleep(200); //sleep time in ms
+		}
 	}
 
 	k_sem_init(&quit_lock, 0, K_SEM_MAX_LIMIT);
