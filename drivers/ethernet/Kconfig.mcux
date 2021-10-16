@@ -58,7 +58,7 @@ config ETH_MCUX_RX_BUFFERS
 config ETH_MCUX_TX_BUFFERS
 	int "Number of MCUX TX buffers"
 	default 1
-	range 1 1
+	range 1 16
 	help
 	  Set the number of TX buffers provided to the MCUX driver.
 
@@ -91,6 +91,13 @@ config ETH_MCUX_PTP_CLOCK_INIT_PRIO
 	  MCUX PTP Clock initialization priority level. There is
 	  a dependency from the network stack that this device
 	  initializes before network stack (NET_INIT_PRIO).
+
+config PTP_UPDATE_THREAD_PRI
+	int
+	default 10
+	help
+	  MCUX need a thread to update the ptp inner counter. This
+	  is a lower priority task.
 
 endif # PTP_CLOCK_MCUX
 

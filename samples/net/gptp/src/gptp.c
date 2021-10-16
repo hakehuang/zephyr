@@ -29,7 +29,6 @@ static struct k_work_delayable stop_sample;
 static struct k_sem quit_lock;
 
 /*USER BEGIN VARIABLES*/
-static struct net_ptp_time slave_time;
 
 static void stop_handler(struct k_work *work)
 {
@@ -92,7 +91,8 @@ void init_testing(void)
 	if (run_duration == 0) {
 		/* USER BEGIN MAIN.C*/
 		while(1){
-			ptp_clock_get(clk, &slave_time);
+			//static struct net_ptp_time slave_time;
+			//ptp_clock_get(clk, &slave_time);
 			k_msleep(200); //sleep time in ms
 		}
 	}
