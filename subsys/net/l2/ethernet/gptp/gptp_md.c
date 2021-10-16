@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdio.h>
 #include <logging/log.h>
 LOG_MODULE_DECLARE(net_gptp, CONFIG_NET_GPTP_LOG_LEVEL);
 
@@ -345,7 +346,12 @@ static void gptp_md_compute_prop_time(int port)
 
 	prop_time -= turn_around;
 	prop_time /= 2;
-
+	if (prop_time > port_ds->neighbor_prop_delay_thresh) {
+		NET_WARN("t1_ns is %llu", t1_ns);
+		NET_WARN("t2_ns is %llu", t2_ns);
+		NET_WARN("t3_ns is %llu", t3_ns);
+		NET_WARN("t4_ns is %llu", t4_ns);
+	}
 	port_ds->neighbor_prop_delay = prop_time;
 }
 
@@ -582,7 +588,12 @@ static void gptp_md_pdelay_req_state_machine(int port)
 		k_timer_stop(&state->pdelay_timer);
 		state->state = GPTP_PDELAY_REQ_NOT_ENABLED;
 	}
-
+	while(1) {
+		if (net_if_flag_is_set(GPTP_PORT_IFACE(port), NET_IF_UP)) {
+			break;
+		}
+		k_sleep(K_MSEC(1000));
+	}
 	switch (state->state) {
 	case GPTP_PDELAY_REQ_NOT_ENABLED:
 		if (port_ds->ptt_port_enabled) {
