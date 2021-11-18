@@ -144,6 +144,8 @@ struct eth_context {
 	bool enabled;
 	bool link_up;
 	uint32_t phy_addr;
+	uint32_t rx_irq_num;
+	uint32_t tx_irq_num;
 	phy_duplex_t phy_duplex;
 	phy_speed_t phy_speed;
 	uint8_t mac_addr[6];
@@ -154,7 +156,6 @@ struct eth_context {
 	struct k_thread rx_thread;
 	K_KERNEL_STACK_MEMBER(tx_thread_stack, 1600);
 	struct k_thread tx_thread;
-	struct k_mutex frame_buf_mutex;
 	/* TODO: FIXME. This Ethernet frame sized buffer is used for
 	 * interfacing with MCUX. How it works is that hardware uses
 	 * DMA scatter buffers to receive a frame, and then public
@@ -170,7 +171,10 @@ struct eth_context {
 	 * Note that we do not copy FCS into this buffer thus the
 	 * size is 1514 bytes.
 	 */
-	uint8_t * frame_buf; /* Max MTU + ethernet header */
+	struct k_mutex tx_frame_buf_mutex;
+	struct k_mutex rx_frame_buf_mutex;
+	uint8_t * tx_frame_buf; /* Max MTU + ethernet header */
+	uint8_t * rx_frame_buf; /* Max MTU + ethernet header */
 };
 
 /* Use ENET_FRAME_MAX_VLANFRAMELEN for VLAN frame size
@@ -694,14 +698,10 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	bool timestamped_frame;
 #endif
+	k_mutex_lock(&context->tx_frame_buf_mutex, K_FOREVER);
 
-	/* As context->frame_buf is shared resource used by both eth_tx
-	 * and eth_rx, we need to protect it with irq_lock.
-	 */
-	k_mutex_lock(&context->frame_buf_mutex, K_FOREVER);
-
-	if (net_pkt_read(pkt, context->frame_buf, total_len)) {
-		k_mutex_unlock(&context->frame_buf_mutex);
+	if (net_pkt_read(pkt, context->tx_frame_buf, total_len)) {
+		k_mutex_unlock(&context->tx_frame_buf_mutex);
 		return -EIO;
 	}
 
@@ -709,7 +709,7 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	timestamped_frame = eth_get_ptp_data(net_pkt_iface(pkt), pkt);
 	if (timestamped_frame) {
 		status = ENET_SendFrame(context->base, &context->enet_handle,
-					  context->frame_buf, total_len, RING_ID, true, NULL);
+					  context->tx_frame_buf, total_len, RING_ID, true, NULL);
 
 		if (!status) {
 			context->ts_tx_pkt = net_pkt_ref(pkt);
@@ -721,16 +721,16 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 #endif
 	{
 		status = ENET_SendFrame(context->base, &context->enet_handle,
-					context->frame_buf, total_len, RING_ID, false, NULL);
+					context->tx_frame_buf, total_len, RING_ID, false, NULL);
 	}
-
-	k_mutex_unlock(&context->frame_buf_mutex);
 
 	if (status) {
 		LOG_ERR("ENET_SendFrame error: %d", (int)status);
+		k_mutex_unlock(&context->tx_frame_buf_mutex);
 		return -1;
 	}
 
+	k_mutex_unlock(&context->tx_frame_buf_mutex);
 	k_sem_take(&context->tx_buf_sem, K_FOREVER);
 
 	return 0;
@@ -773,22 +773,24 @@ static int eth_rx(struct eth_context *context)
 	/* As context->frame_buf is shared resource used by both eth_tx
 	 * and eth_rx, we need to protect it with irq_lock.
 	 */
-	k_mutex_lock(&context->frame_buf_mutex, K_FOREVER);
+	k_mutex_lock(&context->rx_frame_buf_mutex, K_FOREVER);
 	status = ENET_ReadFrame(context->base, &context->enet_handle,
-				context->frame_buf, frame_length, RING_ID, &ts);
+				context->rx_frame_buf, frame_length, RING_ID, &ts);
 	if (status) {
-		k_mutex_unlock(&context->frame_buf_mutex);
 		LOG_ERR("ENET_ReadFrame failed: %d", (int)status);
 		net_pkt_unref(pkt);
+		k_mutex_unlock(&context->rx_frame_buf_mutex);
 		goto error;
 	}
 
-	if (net_pkt_write(pkt, context->frame_buf, frame_length)) {
-		k_mutex_unlock(&context->frame_buf_mutex);
+	if (net_pkt_write(pkt, context->rx_frame_buf, frame_length)) {
 		LOG_ERR("Unable to write frame into the pkt");
 		net_pkt_unref(pkt);
+		k_mutex_unlock(&context->rx_frame_buf_mutex);
 		goto error;
 	}
+
+	k_mutex_unlock(&context->rx_frame_buf_mutex);
 
 #if defined(CONFIG_NET_VLAN)
 	{
@@ -826,7 +828,6 @@ static int eth_rx(struct eth_context *context)
 		k_mutex_unlock(&context->ptp_mutex);
 	}
 #endif
-	k_mutex_unlock(&context->frame_buf_mutex);
 
 	iface = get_iface(context, vlan_tag);
 #if IS_ENABLED(CONFIG_NET_DSA)
@@ -834,6 +835,7 @@ static int eth_rx(struct eth_context *context)
 #endif
 	if (net_recv_data(iface, pkt) < 0) {
 		net_pkt_unref(pkt);
+		k_mutex_unlock(&context->rx_frame_buf_mutex);
 		goto error;
 	}
 
@@ -944,12 +946,6 @@ static void eth_tx_thread(void *arg1, void *unused1, void *unused2)
 
 	while(1) {
 		if (k_sem_take(&context->tx_thread_sem, K_FOREVER) == 0) {
-			/* fix me
-			 * mutex here is to protect the bd index
-			 * as they maybe overlapped which will cause
-			 * timestamp corrupt
-			 */
-			k_mutex_lock(&context->frame_buf_mutex, K_FOREVER);
 			if (context->enet_handle.txReclaimEnable[RING_ID])
  			{
 				ENET_ReclaimTxDescriptor(context->base,
@@ -964,7 +960,6 @@ static void eth_tx_thread(void *arg1, void *unused1, void *unused2)
 						NULL, handle->userData);
 				}
 			}
-			k_mutex_unlock(&context->frame_buf_mutex);
 			ENET_EnableInterrupts(context->base,
 			  kENET_TxBufferInterrupt | kENET_TxFrameInterrupt);
     		}
@@ -1073,7 +1068,8 @@ static int eth_init(const struct device *dev)
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	k_mutex_init(&context->ptp_mutex);
 #endif
-	k_mutex_init(&context->frame_buf_mutex);
+	k_mutex_init(&context->rx_frame_buf_mutex);
+	k_mutex_init(&context->tx_frame_buf_mutex);
 
 	k_sem_init(&context->rx_thread_sem, 0, CONFIG_ETH_MCUX_RX_BUFFERS);
 	k_sem_init(&context->tx_thread_sem, 0, CONFIG_ETH_MCUX_TX_BUFFERS);
@@ -1254,20 +1250,22 @@ static void eth_mcux_common_isr(const struct device *dev)
 
 	if (EIR & (kENET_RxBufferInterrupt | kENET_RxFrameInterrupt)) {
         	/* disable the IRQ for RX */
-		ENET_DisableInterrupts(context->base, kENET_RxFrameInterrupt | kENET_RxBufferInterrupt);
+		context->rx_irq_num++;
 		ENET_ReceiveIRQHandler(context->base, &context->enet_handle);
+		ENET_DisableInterrupts(context->base, kENET_RxFrameInterrupt | kENET_RxBufferInterrupt);
 	}
 
 	if (EIR & kENET_TxFrameInterrupt) {
-		ENET_DisableInterrupts(context->base, kENET_TxFrameInterrupt);
+		context->tx_irq_num++;
 		ENET_ClearInterruptStatus(context->base, kENET_TxFrameInterrupt);
+		ENET_DisableInterrupts(context->base, kENET_TxFrameInterrupt);
 		/* schedule tx thread back */
 		k_sem_give(&context->tx_thread_sem);
 	}
 
 	if (EIR | kENET_TxBufferInterrupt) {
-		ENET_DisableInterrupts(context->base, kENET_TxBufferInterrupt);
 		ENET_ClearInterruptStatus(context->base, kENET_TxBufferInterrupt);
+		ENET_DisableInterrupts(context->base, kENET_TxBufferInterrupt);
 	}
 
 	if (EIR & ENET_EIR_MII_MASK) {
@@ -1460,7 +1458,9 @@ static void eth_mcux_err_isr(const struct device *dev)
 									\
 	static void eth##n##_config_func(void);				\
 	static NOCACHE uint8_t						\
-		enet_frame_##n##_buf[NET_ETH_MAX_FRAME_SIZE];		\
+		tx_enet_frame_##n##_buf[NET_ETH_MAX_FRAME_SIZE];	\
+	static NOCACHE uint8_t						\
+		rx_enet_frame_##n##_buf[NET_ETH_MAX_FRAME_SIZE];	\
 									\
 	static struct eth_context eth##n##_context = {			\
 		.base = (ENET_Type *)DT_INST_REG_ADDR(n),		\
@@ -1468,7 +1468,8 @@ static void eth_mcux_err_isr(const struct device *dev)
 		.phy_addr = 0U,						\
 		.phy_duplex = kPHY_FullDuplex,				\
 		.phy_speed = kPHY_Speed100M,				\
-		.frame_buf = enet_frame_##n##_buf,			\
+		.tx_frame_buf = tx_enet_frame_##n##_buf,		\
+		.rx_frame_buf = rx_enet_frame_##n##_buf,		\
 		ETH_MCUX_MAC_ADDR(n)					\
 		ETH_MCUX_POWER(n)					\
 	};								\
@@ -1576,7 +1577,7 @@ static int ptp_clock_mcux_set(const struct device *dev,
 	return 0;
 }
 
-static int ptp_clock_mcux_adjust(const struct device *dev, int increment)
+static int ptp_clock_mcux_adjust(const struct device *dev, int64_t increment)
 {
 	struct ptp_context *ptp_context = dev->data;
 	struct eth_context *context = ptp_context->eth_context;
