@@ -1034,11 +1034,43 @@ static int cmd_tcp_download(const struct shell *shell, size_t argc,
 	}
 }
 
+void is_idle_thread(const struct k_thread *thread,
+				   void *user_data)
+{
+#ifdef CONFIG_THREAD_NAME
+	unsigned int * cal_ms = user_data;
+
+	if(0 == strncmp(thread->name, "idle", 4))
+	{
+		k_thread_runtime_stats_t rt_stats_thread;
+		k_thread_runtime_stats_t rt_stats_all;
+
+		k_thread_runtime_stats_get((struct k_thread *)thread, &rt_stats_thread);
+		k_thread_runtime_stats_all_get(&rt_stats_all);
+		*cal_ms = 100 - (rt_stats_thread.execution_cycles * 100U) /
+			rt_stats_all.execution_cycles;
+	}
+#endif
+}
+
 static int cmd_version(const struct shell *shell, size_t argc, char *argv[])
 {
 	shell_fprintf(shell, SHELL_NORMAL, "Version: %s\nConfig: %s\n",
 		      VERSION, CONFIG);
 
+	return 0;
+}
+
+static int cmd_load(const struct shell *shell, size_t argc, char *argv[])
+{
+	unsigned int interval = 1000;
+
+	if (argc >= 2) {
+		interval = strtoul(argv[1], NULL, 10);
+	}
+
+	k_thread_foreach(is_idle_thread, &interval);
+	shell_fprintf(shell, SHELL_NORMAL, "cpu loading is %d%\n", interval);
 	return 0;
 }
 
@@ -1200,6 +1232,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(zperf_commands,
 	SHELL_CMD(version, NULL,
 		  "Zperf version",
 		  cmd_version),
+	SHELL_CMD(load, NULL,
+		  "cpu loading",
+		  cmd_load),
 	SHELL_SUBCMD_SET_END
 );
 
