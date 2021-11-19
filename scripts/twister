@@ -244,6 +244,16 @@ def export_tests(filename, tests):
             else:
                 logger.error("{} can't be exported: ".format(test))
 
+def export_tests_path(filename, test_suite):
+    with open(filename, "wt") as csvfile:
+        fieldnames = ['path', 'tag']
+        cw = csv.DictWriter(csvfile, fieldnames, lineterminator=os.linesep)
+        for key, _value in test_suite.testcases.items():
+            rowdict = {
+                "tag": os.path.basename(key),
+                "path": os.path.dirname(key),
+            }
+            cw.writerow(rowdict)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
@@ -1102,7 +1112,8 @@ def main():
             if options.export_tests:
                 tests = [x.testcase.cases for x in inst.values()]
                 merged = list(itertools.chain(*tests))
-                export_tests(options.export_tests, merged)
+                # export_tests(options.export_tests, merged)
+                export_tests_path(options.export_tests, suite)
                 return
 
             count = 0
