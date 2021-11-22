@@ -1037,7 +1037,7 @@ static void eth_mcux_init(const struct device *dev)
 	context->clk_ratio = 1.0;
 
 	ENET_Ptp1588SetChannelMode(context->base, kENET_PtpTimerChannel3,
-			kENET_PtpChannelClearCompareSetOverflow, false);
+			kENET_PtpChannelClearCompareSetOverflow, true);
 	ENET_Ptp1588Configure(context->base, &context->enet_handle,
 			      &context->ptp_config);
 #endif
@@ -1245,7 +1245,16 @@ static void eth_mcux_ptp_isr(const struct device *dev)
 {
 	struct eth_context *context = dev->data;
 	int irq_lock_key = irq_lock();
+	enet_ptp_timer_channel_t channel;
 
+	/* clear channel */
+	for(channel = kENET_PtpTimerChannel1; channel <= kENET_PtpTimerChannel4; channel++)
+	{
+		if (ENET_Ptp1588GetChannelStatus(context->base, channel)) 
+		{
+			ENET_Ptp1588ClearChannelStatus(context->base, channel);
+		}
+	}
 	ENET_TimeStampIRQHandler(context->base, &context->enet_handle);
 	irq_unlock(irq_lock_key);
 }
