@@ -219,6 +219,14 @@ static int mimxrt1060_evk_init(const struct device *dev)
 	/* pull up the ENET_INT before RESET. */
 	GPIO_WritePinOutput(GPIO1, 10, 1);
 	GPIO_WritePinOutput(GPIO1, 9, 0);
+
+#if defined(CONFIG_PTP_CLOCK_MCUX)
+	/* GPIO_AD_B1_02 is configured as 1588_EVENT2_OUT */
+	IOMUXC_SetPinMux(IOMUXC_GPIO_AD_B1_02_ENET_1588_EVENT2_OUT, 0U);
+	/* GPIO_AD_B0_12 PAD functional properties */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_B1_02_ENET_1588_EVENT2_OUT, 0x10B0u);
+#endif
+
 #endif
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(lcdif), okay) && CONFIG_DISPLAY

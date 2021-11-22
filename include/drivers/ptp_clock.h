@@ -25,7 +25,7 @@ extern "C" {
 __subsystem struct ptp_clock_driver_api {
 	int (*set)(const struct device *dev, struct net_ptp_time *tm);
 	int (*get)(const struct device *dev, struct net_ptp_time *tm);
-	int (*adjust)(const struct device *dev, int increment);
+	int (*adjust)(const struct device *dev, int64_t increment);
 	int (*rate_adjust)(const struct device *dev, float ratio);
 };
 

@@ -698,6 +698,7 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	bool timestamped_frame;
 #endif
+
 	k_mutex_lock(&context->tx_frame_buf_mutex, K_FOREVER);
 
 	if (net_pkt_read(pkt, context->tx_frame_buf, total_len)) {
@@ -705,12 +706,12 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 		return -EIO;
 	}
 
+
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	timestamped_frame = eth_get_ptp_data(net_pkt_iface(pkt), pkt);
 	if (timestamped_frame) {
 		status = ENET_SendFrame(context->base, &context->enet_handle,
 					  context->tx_frame_buf, total_len, RING_ID, true, NULL);
-
 		if (!status) {
 			context->ts_tx_pkt = net_pkt_ref(pkt);
 		} else {
@@ -727,6 +728,8 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	if (status) {
 		LOG_ERR("ENET_SendFrame error: %d", (int)status);
 		k_mutex_unlock(&context->tx_frame_buf_mutex);
+		ENET_ReclaimTxDescriptor(context->base,
+					&context->enet_handle, RING_ID);
 		return -1;
 	}
 
@@ -770,15 +773,17 @@ static int eth_rx(struct eth_context *context)
 		goto flush;
 	}
 
-	/* As context->frame_buf is shared resource used by both eth_tx
-	 * and eth_rx, we need to protect it with irq_lock.
+	/* in case multiply thread access
+	 * we need to protect it with mutex.
 	 */
 	k_mutex_lock(&context->rx_frame_buf_mutex, K_FOREVER);
+
 	status = ENET_ReadFrame(context->base, &context->enet_handle,
 				context->rx_frame_buf, frame_length, RING_ID, &ts);
 	if (status) {
 		LOG_ERR("ENET_ReadFrame failed: %d", (int)status);
 		net_pkt_unref(pkt);
+
 		k_mutex_unlock(&context->rx_frame_buf_mutex);
 		goto error;
 	}
@@ -835,7 +840,6 @@ static int eth_rx(struct eth_context *context)
 #endif
 	if (net_recv_data(iface, pkt) < 0) {
 		net_pkt_unref(pkt);
-		k_mutex_unlock(&context->rx_frame_buf_mutex);
 		goto error;
 	}
 
@@ -1026,11 +1030,14 @@ static void eth_mcux_init(const struct device *dev)
 	ENET_AddMulticastGroup(context->base, ptp_multicast);
 	ENET_AddMulticastGroup(context->base, ptp_peer_multicast);
 
-	context->ptp_config.channel = kENET_PtpTimerChannel1;
+	/* only for ERRATA_2579 */
+	context->ptp_config.channel = kENET_PtpTimerChannel3;
 	context->ptp_config.ptp1588ClockSrc_Hz =
 					CONFIG_ETH_MCUX_PTP_CLOCK_SRC_HZ;
 	context->clk_ratio = 1.0;
 
+	ENET_Ptp1588SetChannelMode(context->base, kENET_PtpTimerChannel3,
+			kENET_PtpChannelClearCompareSetOverflow, false);
 	ENET_Ptp1588Configure(context->base, &context->enet_handle,
 			      &context->ptp_config);
 #endif
@@ -1237,7 +1244,10 @@ static const struct ethernet_api api_funcs = {
 static void eth_mcux_ptp_isr(const struct device *dev)
 {
 	struct eth_context *context = dev->data;
+	int irq_lock_key = irq_lock();
+
 	ENET_TimeStampIRQHandler(context->base, &context->enet_handle);
+	irq_unlock(irq_lock_key);
 }
 #endif
 
