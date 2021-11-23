@@ -1037,7 +1037,7 @@ static void eth_mcux_init(const struct device *dev)
 	context->clk_ratio = 1.0;
 
 	ENET_Ptp1588SetChannelMode(context->base, kENET_PtpTimerChannel3,
-			kENET_PtpChannelClearCompareSetOverflow, true);
+			kENET_PtpChannelPulseHighonCompare, true);
 	ENET_Ptp1588Configure(context->base, &context->enet_handle,
 			      &context->ptp_config);
 #endif
