@@ -244,14 +244,18 @@ def export_tests(filename, tests):
             else:
                 logger.error("{} can't be exported: ".format(test))
 
-def export_tests_path(filename, test_suite):
+def export_tests_path(filename, test_suite, discards):
     with open(filename, "wt") as csvfile:
-        fieldnames = ['path', 'tag']
+        fieldnames = ['path', 'tag', 'platform', 'arch']
         cw = csv.DictWriter(csvfile, fieldnames, lineterminator=os.linesep)
-        for key, _value in test_suite.testcases.items():
+        for i, p in test_suite.instances.items():
+            if p in discards:
+                continue
             rowdict = {
-                "tag": os.path.basename(key),
-                "path": os.path.dirname(key),
+                "tag":  os.path.basename(p.testcase.name),
+                "path": os.path.dirname(p.testcase.name),
+                "platform":  p.platform.name,
+                "arch":  p.platform.arch,
             }
             cw.writerow(rowdict)
 
@@ -1113,7 +1117,7 @@ def main():
                 tests = [x.testcase.cases for x in inst.values()]
                 merged = list(itertools.chain(*tests))
                 # export_tests(options.export_tests, merged)
-                export_tests_path(options.export_tests, suite)
+                export_tests_path(options.export_tests, suite, discards)
                 return
 
             count = 0
