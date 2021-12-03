@@ -766,6 +766,8 @@ static void gptp_update_local_port_clock(void)
 		(global_ds->sync_receipt_time.fract_nsecond / GPTP_POW2_16) -
 		(global_ds->sync_receipt_local_time % NSEC_PER_SEC);
 
+	printk("XXX sdiff: %lld, nsdiff: %lld\n", second_diff, nanosecond_diff);
+
 	clk = net_eth_get_ptp_clock(GPTP_PORT_IFACE(port));
 	if (!clk) {
 		return;
@@ -781,8 +783,9 @@ static void gptp_update_local_port_clock(void)
 		nanosecond_diff = -NSEC_PER_SEC + nanosecond_diff;
 	}
 
-	ptp_clock_rate_adjust(clk, port_ds->neighbor_rate_ratio);
 
+	ptp_clock_rate_adjust(clk, port_ds->neighbor_rate_ratio);
+#if 0
 	/* If time difference is too high, set the clock value.
 	 * Otherwise, adjust it.
 	 */
@@ -840,6 +843,18 @@ static void gptp_update_local_port_clock(void)
 
 		ptp_clock_adjust(clk, nanosecond_diff);
 	}
+#else
+	uint64_t gptp_sync_receipt_time_ns = global_ds->sync_receipt_time.second *NSEC_PER_SEC \
+				+ global_ds->sync_receipt_time.fract_nsecond / GPTP_POW2_16;
+	int64_t offset_ns = gptp_sync_receipt_time_ns - global_ds->sync_receipt_local_time;
+	
+	if (offset_ns < -200 || offset_ns > 200) {
+		ptp_clock_adjust(clk, offset_ns);
+	} else {
+		ptp_clock_adjust(clk, 0);
+	}
+
+#endif
 }
 #endif /* CONFIG_NET_GPTP_USE_DEFAULT_CLOCK_UPDATE */
 

@@ -1618,7 +1618,8 @@ static int ptp_clock_mcux_rate_adjust(const struct device *dev, float ratio)
 	float val;
 
 	/* No change needed. */
-	if (ratio == 1.0) {
+	if ((ratio > 1.0 && ratio - 1.0 < 0.00000001) ||
+	   (ratio < 1.0 && 1.0 - ratio < 0.00000001)) {
 		return 0;
 	}
 
@@ -1627,15 +1628,17 @@ static int ptp_clock_mcux_rate_adjust(const struct device *dev, float ratio)
 	/* Limit possible ratio. */
 	if ((ratio > 1.0 + 1.0/(2 * hw_inc)) ||
 			(ratio < 1.0 - 1.0/(2 * hw_inc))) {
+		LOG_INF("ratial is invalid");
 		return -EINVAL;
 	}
 
+	printf("ratio is %f\r\n", ratio);
 	/* Save new ratio. */
 	context->clk_ratio = ratio;
 
 	if (ratio < 1.0) {
 		corr = hw_inc - 1;
-		val = 1.0 / (hw_inc * (1.0 - ratio));
+		val = 1.0 / ( hw_inc * (1.0 - ratio));
 	} else if (ratio > 1.0) {
 		corr = hw_inc + 1;
 		val = 1.0 / (hw_inc * (ratio-1.0));
@@ -1652,7 +1655,12 @@ static int ptp_clock_mcux_rate_adjust(const struct device *dev, float ratio)
 	} else {
 		mul = val;
 	}
-
+	printk("hw_inc is %u\r\n", hw_inc);
+	printk("mul is %u\r\n", mul);
+	#if 0
+	corr = hw_inc;
+	mul =0;
+	#endif
 	k_mutex_lock(&context->ptp_mutex, K_FOREVER);
 	ENET_Ptp1588AdjustTimer(context->base, corr, mul);
 	k_mutex_unlock(&context->ptp_mutex);
