@@ -22,7 +22,7 @@ manifest:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
     - name: test_ptp_dev
-      url-base: ssh://git@bitbucket.sw.nxp.com/~nxa22633
+      url-base: https://github.com/hakehuang
 
   #
   # Please add items below based on alphabetical order
@@ -91,7 +91,7 @@ manifest:
         - hal
     - name: hal_nxp
       remote: test_ptp_dev
-      revision: 1980526df6091fe0ac21079835ea5cf110c9fac2
+      revision: 2d7a8a4de179e9010b3be013a2f64f0103768c06
       path: modules/hal/nxp
       groups:
         - hal
