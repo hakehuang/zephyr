@@ -998,13 +998,13 @@ static void audio_clock_settings(const struct device *dev)
 		LOG_ERR("wrong clock system configured");
 		return;
 	}
+	audioPllConfig.src = dev_cfg->pll_src;
 #endif
 
 	audioPllConfig.loopDivider = dev_cfg->pll_lp;
 	audioPllConfig.postDivider = dev_cfg->pll_pd;
 	audioPllConfig.numerator = dev_cfg->pll_num;
 	audioPllConfig.denominator = dev_cfg->pll_den;
-	audioPllConfig.src = dev_cfg->pll_src;
 
 	CLOCK_InitAudioPll(&audioPllConfig);
 }

@@ -841,6 +841,121 @@
 			#io-channel-cells = <1>;
 		};
 
+		anatop: anatop@40c84000 {
+			compatible = "nxp,imx-anatop";
+			reg = <0x40c84000 0x4000>;
+			label = "CCM_ANA";
+			#clock-cells = <4>;
+			#pll-clock-cells = <3>;
+		};
+
+		iomuxcgpr: iomuxcgpr@400e4000 {
+			compatible = "nxp,imx-pinmux";
+			reg = <0x400E4000 0x4000>;
+			label = "IOMUX_GPR";
+			#pinmux-cells = <2>;
+		};
+
+		sai1: sai@40404000 {
+			compatible = "nxp,mcux-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			#pinmux-cells = <2>;
+			reg = <0x40404000 0x4000>;
+			clocks = <&ccm IMX_CCM_SAI1_CLK 0x2004 4>;
+			podf = <4>;
+			pll-clocks = <&anatop 0 0 0>,
+					<&anatop 0 0 30>,
+					<&anatop 0 0 1>,
+					<&anatop 0 0 77>,
+					<&anatop 0 0 100>;
+			pll-clock-names = "src", "lp", "pd", "num", "den";
+			pinmuxes = <&iomuxcgpr 0x0 0x100>;
+			interrupts = <76 0>;
+			dmas = <&edma0 0 54>, <&edma0 0 55>;
+			dma-names = "rx", "tx";
+			nxp,tx-channel = <1>;
+			nxp,tx-dma-channel = <0>;
+			nxp,rx-dma-channel = <1>;
+			status = "disabled";
+			label = "I2S_0";
+		};
+
+		sai2: sai@40408000 {
+			compatible = "nxp,mcux-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			#pinmux-cells = <2>;
+			reg = <0x40408000 0x4000>;
+			clocks = <&ccm IMX_CCM_SAI2_CLK 0x2084 4>;
+			podf = <63>;
+			pll-clocks = <&anatop 0 0 0>,
+					<&anatop 0 0 30>,
+					<&anatop 0 0 1>,
+					<&anatop 0 0 77>,
+					<&anatop 0 0 100>;
+			pll-clock-names = "src", "lp", "pd", "num", "den";
+			pinmuxes = <&iomuxcgpr 0x4 0x100>;
+			interrupts = <77 0>;
+			dmas = <&edma0 0 56>, <&edma0 0 57>;
+			dma-names = "rx", "tx";
+			nxp,tx-channel = <1>;
+			nxp,tx-dma-channel = <3>;
+			nxp,rx-dma-channel = <4>;
+			status = "disabled";
+			label = "I2S_1";
+		};
+
+		sai3: sai@4040c000 {
+			compatible = "nxp,mcux-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			#pinmux-cells = <2>;
+			reg = <0x4040c000 0x4000>;
+			clocks = <&ccm IMX_CCM_SAI3_CLK 0x2104 4>;
+			podf = <63>;
+			pll-clocks = <&anatop 0 0 0>,
+					<&anatop 0 0 30>,
+					<&anatop 0 0 1>,
+					<&anatop 0 0 77>,
+					<&anatop 0 0 100>;
+			pll-clock-names = "src", "lp", "pd", "num", "den";
+			pinmuxes = <&iomuxcgpr 0x8 0x100>;
+			interrupts = <78 0>, <79 0>;
+			dmas = <&edma0 0 58>, <&edma0 0 59>;
+			dma-names = "rx", "tx";
+			nxp,tx-channel = <1>;
+			nxp,tx-dma-channel = <5>;
+			nxp,rx-dma-channel = <6>;
+			status = "disabled";
+			label = "I2S_2";
+		};
+
+		sai4: sai@40c0000 {
+			compatible = "nxp,mcux-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			#pinmux-cells = <2>;
+			reg = <0x40c0000 0x4000>;
+			clocks = <&ccm IMX_CCM_SAI4_CLK 0x2184 6>;
+			podf = <63>;
+			pll-clocks = <&anatop 0 0 0>,
+					<&anatop 0 0 30>,
+					<&anatop 0 0 1>,
+					<&anatop 0 0 77>,
+					<&anatop 0 0 100>;
+			pll-clock-names = "src", "lp", "pd", "num", "den";
+			pinmuxes = <&iomuxcgpr 0x8 0x200>;
+			interrupts = <80 0>, <81 0>;
+			dmas = <&edma0 0 60>, <&edma0 0 61>;
+			dma-names = "rx", "tx";
+			nxp,tx-channel = <1>;
+			nxp,tx-dma-channel = <7>;
+			nxp,rx-dma-channel = <8>;
+			status = "disabled";
+			label = "I2S_3";
+		};
+
 	};
 };
 
