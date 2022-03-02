@@ -6,7 +6,7 @@
  */
 
 
-#define MY_PORT 4242
+#define MY_PORT 7
 #if defined(CONFIG_NET_SOCKETS_SOCKOPT_TLS) || defined(CONFIG_NET_TCP) || \
 	defined(CONFIG_COVERAGE)
 #define STACK_SIZE 4096
