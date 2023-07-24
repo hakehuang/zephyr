@@ -45,6 +45,15 @@
 			drive-strength = "high";
 		};
 	};
+	
+	pinmux_pdm0: pinmux_pdm0 {
+		group0 {
+			pinmux = <>;
+			input-enable;
+			slew-rate = "normal";
+			drive-strength = "high";			
+		};
+	};
 
 	pinmux_flexcomm4_i2c: pinmux_flexcomm4_i2c {
 		group0 {

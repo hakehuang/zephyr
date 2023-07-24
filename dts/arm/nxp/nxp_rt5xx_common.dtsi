@@ -389,6 +389,16 @@
 		status = "disabled";
 		#dma-cells = <1>;
 	};
+	
+	pdm0: dmic@121000 {
+	    compatible = "nxp,mcux-pdm";
+	    reg = <0x121000 0x1000>;
+	    interrupts = <25 0>;
+	    pinctrl-0 = <>
+	    queue-size = 16; 
+	    status = disabled;
+	    
+	};
 
 	os_timer: timers@113000 {
 		compatible = "nxp,os-timer";
