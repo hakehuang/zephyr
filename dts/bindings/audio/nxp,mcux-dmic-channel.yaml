@@ -1,0 +1,15 @@
+# Copyright 2023 NXP
+# SPDX-License-Identifier: Apache-2.0
+
+description: NXP DMIC CHANNEL
+
+compatible: "nxp,mcux-dmic-channel"
+
+include: [base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  dmas:
+    required: true

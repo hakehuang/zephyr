@@ -391,13 +391,61 @@
 	};
 	
 	pdm0: dmic@121000 {
-	    compatible = "nxp,mcux-pdm";
+	    compatible = "nxp,mcux-dmic";
 	    reg = <0x121000 0x1000>;
 	    interrupts = <25 0>;
-	    pinctrl-0 = <>
-	    queue-size = 16; 
-	    status = disabled;
+	    pinctrl = <>;		/* all active PDM's */
+	    fifo-size = 16;
 	    
+		pdmc0: dmic-channel@0 {
+		        compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		has-hwvad;
+	    		status = "disabled";
+	    	}; 
+
+		pdmc1: dmic-channel@1 {
+			compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		status = "disabled";
+	    	}; 
+
+		pdmc2: dmic-channel@2 {
+			compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		pinctrl = <>;
+	    		status = "disabled";
+	    	}; 
+
+		pdmc3: dmic-channel@3 {
+			compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		status = "disabled";
+	    	}; 
+	    	
+		pdmc4: pdm-channe@@4 {
+			compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		status = "disabled";
+	    	}; 
+	    	
+		pdmc5: dmic-channel@5 {
+			compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		status = "disabled";
+	    	}; 
+	    	
+		pdmc6: dmic-channel@6 {
+			compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		status = "disabled";
+	    	}; 
+	    	
+	    	pdmc7: dmic-channel@7 {
+			compatiple = "nxp,mcux-dmic-channel";
+	    		dmas = <>;
+	    		status = "disabled";
+	    	}; 
 	};
 
 	os_timer: timers@113000 {

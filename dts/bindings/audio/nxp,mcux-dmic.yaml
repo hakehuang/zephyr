@@ -1,0 +1,25 @@
+# Copyright (c) 2019 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+description: NXP DMIC
+
+compatible: "nxp,mcux-dmic"
+
+include: [base.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  fifo-size:
+    type: int
+    default: 16
+    description: |
+      Size of the queue of received audio data blocks to be used
+      by the driver.
