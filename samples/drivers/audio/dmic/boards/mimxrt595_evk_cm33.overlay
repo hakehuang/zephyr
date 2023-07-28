@@ -1,0 +1,4 @@
+dmic_dev: &dmic0 {
+        status = "okay";
+};
+

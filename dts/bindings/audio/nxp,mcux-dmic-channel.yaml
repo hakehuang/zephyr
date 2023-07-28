@@ -13,3 +13,9 @@ properties:
 
   dmas:
     required: true
+
+  has-hwvad:
+    required: false
+    type: boolean
+    default: false
+

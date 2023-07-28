@@ -390,15 +390,19 @@
 		#dma-cells = <1>;
 	};
 	
-	pdm0: dmic@121000 {
+	dmic0: dmic@121000 {
+            #address-cells=<1>;
+ 	    #size-cells=<0>;
 	    compatible = "nxp,mcux-dmic";
 	    reg = <0x121000 0x1000>;
 	    interrupts = <25 0>;
-	    pinctrl = <>;		/* all active PDM's */
-	    fifo-size = 16;
+	    clock-source="hello";
+	    fifo-size = <16>;
+	    status = "disabled";
 	    
 		pdmc0: dmic-channel@0 {
 		        compatiple = "nxp,mcux-dmic-channel";
+			reg = <0>;
 	    		dmas = <>;
 	    		has-hwvad;
 	    		status = "disabled";
@@ -406,12 +410,14 @@
 
 		pdmc1: dmic-channel@1 {
 			compatiple = "nxp,mcux-dmic-channel";
+			reg = <1>;
 	    		dmas = <>;
 	    		status = "disabled";
 	    	}; 
 
 		pdmc2: dmic-channel@2 {
 			compatiple = "nxp,mcux-dmic-channel";
+			reg = <2>;
 	    		dmas = <>;
 	    		pinctrl = <>;
 	    		status = "disabled";
@@ -419,30 +425,35 @@
 
 		pdmc3: dmic-channel@3 {
 			compatiple = "nxp,mcux-dmic-channel";
+			reg = <3>;
 	    		dmas = <>;
 	    		status = "disabled";
 	    	}; 
 	    	
-		pdmc4: pdm-channe@@4 {
+		pdmc4: pdm-channe@4 {
 			compatiple = "nxp,mcux-dmic-channel";
+			reg = <4>;
 	    		dmas = <>;
 	    		status = "disabled";
 	    	}; 
 	    	
 		pdmc5: dmic-channel@5 {
 			compatiple = "nxp,mcux-dmic-channel";
+			reg = <5>;
 	    		dmas = <>;
 	    		status = "disabled";
 	    	}; 
 	    	
 		pdmc6: dmic-channel@6 {
 			compatiple = "nxp,mcux-dmic-channel";
+			reg = <6>;
 	    		dmas = <>;
 	    		status = "disabled";
 	    	}; 
 	    	
 	    	pdmc7: dmic-channel@7 {
 			compatiple = "nxp,mcux-dmic-channel";
+			reg = <7>;
 	    		dmas = <>;
 	    		status = "disabled";
 	    	}; 

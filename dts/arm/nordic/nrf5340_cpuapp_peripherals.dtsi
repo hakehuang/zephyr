@@ -408,7 +408,7 @@ pwm3: pwm@24000 {
 	#pwm-cells = <3>;
 };
 
-pdm0: pdm@26000 {
+pdm: pdm@26000 {
 	compatible = "nordic,nrf-pdm";
 	reg = <0x26000 0x1000>;
 	interrupts = <38 NRF_DEFAULT_IRQ_PRIORITY>;

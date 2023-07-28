@@ -14,8 +14,14 @@ properties:
   interrupts:
     required: true
 
+# TODO
   pinctrl-0:
-    required: true
+    required: false 
+
+# TODO
+  clock-source:
+    type: string
+    required: false
 
   fifo-size:
     type: int
