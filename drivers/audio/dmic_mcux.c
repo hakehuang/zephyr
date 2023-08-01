@@ -172,6 +172,11 @@ static void init_clock_manager(const struct device *dev)
 	return;
 }
 
+static void dmic_mcux_isr(const struct device *dev) {
+
+	return;
+}
+
 static const struct _dmic_ops dmic_ops = {
 	.configure = dmic_mcux_configure,
 	.trigger = dmic_mcux_trigger,
@@ -180,26 +185,28 @@ static const struct _dmic_ops dmic_ops = {
 
 #define DMIC(idx) DT_NODELABEL(dmic##idx)
 #define DMIC_CLK_SRC(idx) DT_STRING_TOKEN(DMIC(idx), clock_source)
-#define PDM_DMIC_CHAN_SET_STATUS(pdm_chan_node_id, idx) \
+#define PDM_DMIC_CHAN_SET_STATUS(pdm_chan_node_id, idx) 						\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).enabled=true;
 
-#define MCUX_DMIC_DEVICE(idx)						     \
-	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; \
-	static struct mcux_dmic_drv_data mcux_dmic_data##idx = { \
-		.pdm_channels = pdm_channels##idx,			\
-		.base_address = (uint32_t) DT_REG_ADDR(DMIC(idx)),	\
-	};								\
-	static struct mcux_dmic_cfg mcux_dmic_cfg##idx;			\
-	static int mcux_dmic_init##idx(const struct device *dev)	     \
-	{								     \
-        	DT_FOREACH_CHILD_STATUS_OKAY_VARGS(DT_DRV_INST(idx), PDM_DMIC_CHAN_SET_STATUS, idx)\
+#define MCUX_DMIC_DEVICE(idx)						     				\
+	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
+	static struct mcux_dmic_drv_data mcux_dmic_data##idx = { 					\
+		.pdm_channels = pdm_channels##idx,							\
+		.base_address = (uint32_t) DT_REG_ADDR(DMIC(idx)),					\
+	};												\
+	static struct mcux_dmic_cfg mcux_dmic_cfg##idx;							\
+	static int mcux_dmic_init##idx(const struct device *dev)	     				\
+	{								     				\
+        	DT_FOREACH_CHILD_STATUS_OKAY_VARGS(DT_DRV_INST(idx), PDM_DMIC_CHAN_SET_STATUS, idx)	\
+		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   				\
+			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);					\
 		DMIC_Init((DMIC_Type *)(mcux_dmic_data##idx).base_address);				\
-		return 0;						     \
-	}								     \
-	PINCTRL_DT_DEFINE(DMIC(idx));				     \
-	DEVICE_DT_DEFINE(DMIC(idx), mcux_dmic_init##idx, NULL,		     \
-			 &mcux_dmic_data##idx, &mcux_dmic_cfg##idx,  \
-			 POST_KERNEL, CONFIG_AUDIO_DMIC_INIT_PRIORITY,	     \
+		return 0;						     				\
+	}								     				\
+	PINCTRL_DT_DEFINE(DMIC(idx));				     					\
+	DEVICE_DT_DEFINE(DMIC(idx), mcux_dmic_init##idx, NULL,		     				\
+			 &mcux_dmic_data##idx, &mcux_dmic_cfg##idx,  					\
+			 POST_KERNEL, CONFIG_AUDIO_DMIC_INIT_PRIORITY,	     				\
 			 &dmic_ops);
 
 /* Existing SoCs only have one PDM instance. */
