@@ -405,7 +405,7 @@
 			reg = <0>;
 	    		dmas = <>;
 	    		has-hwvad;
-	    		status = "disabled";
+	    		status = "okay";
 	    	}; 
 
 		pdmc1: dmic-channel@1 {
@@ -420,7 +420,7 @@
 			reg = <2>;
 	    		dmas = <>;
 	    		pinctrl = <>;
-	    		status = "disabled";
+	    		status = "okay";
 	    	}; 
 
 		pdmc3: dmic-channel@3 {
