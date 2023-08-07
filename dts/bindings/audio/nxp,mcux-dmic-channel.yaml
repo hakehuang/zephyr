@@ -14,8 +14,10 @@ properties:
   dmas:
     required: true
 
-  has-hwvad:
+  use2fs:
     required: false
     type: boolean
-    default: false
 
+  hwvad:
+    required: false
+    type: boolean

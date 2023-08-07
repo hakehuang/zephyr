@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <zephyr/drivers/dma.h>
 #include <zephyr/audio/dmic.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <soc.h>
@@ -24,6 +25,7 @@ struct mcux_dmic_pdm_chan {
      bool active;
      bool hwvad_enabled;
      bool use2fs;
+     struct device *dev_dma;
 };
 
 struct mcux_dmic_drv_data {
@@ -36,7 +38,7 @@ struct mcux_dmic_drv_data {
 	bool configured    : 1;
 	volatile bool active;
 	volatile bool stopping;
-	uint32_t base_address;
+	DMIC_Type *base_address;
 	struct mcux_dmic_pdm_chan *pdm_channels;
 };
 
@@ -128,11 +130,24 @@ static void free_buffer(struct mcux_dmic_drv_data *drv_data, void *buffer)
 //	return false;
 //}
 
+/*
+ * For now, we will support only one stream, max two channels. Other use cases
+ * are unclear at this point
+ * */
 static int dmic_mcux_configure(const struct device *dev,
 				   struct dmic_cfg *config)
 {
 
-	if(dev == NULL || config == NULL) return 1;
+	struct mcux_dmic_drv_data *drv_data = dev->data;
+	struct mcux_dmic_cfg *config = dev->config;
+	struct pdm_chan_cfg *channel = &config->channel;
+        struct pcm_stream_cfg *stream = &config->streams[0];
+
+	if (drv_data->active) {
+                LOG_ERR("Cannot configure device while it is active");
+                return -EBUSY;
+        }
+
 	return 0;
 }
 
@@ -186,28 +201,37 @@ static const struct _dmic_ops dmic_ops = {
 #define DMIC(idx) DT_NODELABEL(dmic##idx)
 #define DMIC_CLK_SRC(idx) DT_STRING_TOKEN(DMIC(idx), clock_source)
 #define PDM_DMIC_CHAN_SET_STATUS(pdm_chan_node_id, idx) 						\
-	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).enabled=true;
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).enabled=true;				\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).active=false;				\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).use2fs=				\
+		(bool)DT_PROP(pdm_chan_node_id, use2fs);						\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).hwvad_enabled=				\
+		(bool)DT_PROP(pdm_chan_node_id, hwvad);
+	//BUILD_ASSERT((DT_NODE_CHILD_IDX(pdm_chan_node_id) != 0) & !(bool)DT_PROP(pdm_chan_node_id, hwvad), "error: hwvad can only be enabled on channel 0");
 
 #define MCUX_DMIC_DEVICE(idx)						     				\
 	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
 	static struct mcux_dmic_drv_data mcux_dmic_data##idx = { 					\
 		.pdm_channels = pdm_channels##idx,							\
-		.base_address = (uint32_t) DT_REG_ADDR(DMIC(idx)),					\
+		.base_address = (DMIC_Type *) DT_REG_ADDR(DMIC(idx)),					\
+		.active = false,
 	};												\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx;							\
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
-	{								     				\
-        	DT_FOREACH_CHILD_STATUS_OKAY_VARGS(DT_DRV_INST(idx), PDM_DMIC_CHAN_SET_STATUS, idx)	\
+	{												\
+		DT_FOREACH_CHILD_STATUS_OKAY_VARGS(DT_DRV_INST(idx), PDM_DMIC_CHAN_SET_STATUS, idx)     \
 		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   				\
 			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);					\
-		DMIC_Init((DMIC_Type *)(mcux_dmic_data##idx).base_address);				\
+		DMIC_Init((mcux_dmic_data##idx).base_address);						\
 		return 0;						     				\
 	}								     				\
-	PINCTRL_DT_DEFINE(DMIC(idx));				     					\
+        PINCTRL_DT_DEFINE(DMIC(idx));									\
 	DEVICE_DT_DEFINE(DMIC(idx), mcux_dmic_init##idx, NULL,		     				\
 			 &mcux_dmic_data##idx, &mcux_dmic_cfg##idx,  					\
 			 POST_KERNEL, CONFIG_AUDIO_DMIC_INIT_PRIORITY,	     				\
 			 &dmic_ops);
+
+
 
 /* Existing SoCs only have one PDM instance. */
 DT_INST_FOREACH_STATUS_OKAY(MCUX_DMIC_DEVICE)
