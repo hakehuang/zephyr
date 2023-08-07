@@ -477,4 +477,15 @@ zephyr_udc0: &usbhs {
 &mipi_dsi {
 	dmas = <&smartdma>;
 	dma-names = "smartdma";
+
+&dmic0 {
+	status = "okay";
+};
+
+&pdmc0 {
+	status = "okay";
+};
+
+&pdmc1 {
+	status = "disabled";
 };

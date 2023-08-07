@@ -403,65 +403,20 @@
 		pdmc0: dmic-channel@0 {
 		        compatible = "nxp,mcux-dmic-channel";
 			reg = <0>;
-	    		dmas = <&dma0 0>;
-	    		status = "okay";
+	    		dmas = <&dma0 16>;
+			use2fs;
+	    		status = "disabled";
 	    	}; 
 
 		pdmc1: dmic-channel@1 {
 			compatible = "nxp,mcux-dmic-channel";
 			reg = <1>;
-			dmas = <&dma0 0>;
+			dmas = <&dma0 17>;
 			use2fs;
+			paired;
 	    		status = "disabled";
 	    	}; 
 
-		pdmc2: dmic-channel@2 {
-			compatible = "nxp,mcux-dmic-channel";
-			reg = <2>;
-	    		dmas = <&dma0 0>;
-			use2fs;
-	    		status = "okay";
-	    	}; 
-
-		pdmc3: dmic-channel@3 {
-			compatible = "nxp,mcux-dmic-channel";
-			reg = <3>;
-                        dmas = <&dma0 0>;
-			use2fs;
-	    		status = "disabled";
-	    	}; 
-	    	
-		pdmc4: pdm-channe@4 {
-			compatible = "nxp,mcux-dmic-channel";
-			reg = <4>;
-                        dmas = <&dma0 0>;
-			use2fs;
-	    		status = "disabled";
-	    	}; 
-	    	
-		pdmc5: dmic-channel@5 {
-			compatible = "nxp,mcux-dmic-channel";
-			reg = <5>;
-                        dmas = <&dma0 0>;
-			use2fs;
-	    		status = "disabled";
-	    	}; 
-	    	
-		pdmc6: dmic-channel@6 {
-			compatible = "nxp,mcux-dmic-channel";
-			reg = <6>;
-                        dmas = <&dma0 0>;
-			use2fs;
-	    		status = "disabled";
-	    	}; 
-	    	
-	    	pdmc7: dmic-channel@7 {
-			compatible = "nxp,mcux-dmic-channel";
-			reg = <7>;
-                        dmas = <&dma0 0>;
-			use2fs;
-	    		status = "disabled";
-	    	}; 
 	};
 
 	os_timer: timers@113000 {

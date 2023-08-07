@@ -18,6 +18,10 @@ properties:
     required: false
     type: boolean
 
+  paired:
+    required: false
+    type: boolean
+
   hwvad:
     required: false
     type: boolean

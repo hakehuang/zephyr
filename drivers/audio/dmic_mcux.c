@@ -139,18 +139,44 @@ static int dmic_mcux_configure(const struct device *dev,
 {
 
 	struct mcux_dmic_drv_data *drv_data = dev->data;
-	struct mcux_dmic_cfg *config = dev->config;
+	struct mcux_dmic_cfg *dmic_cfg = dev->config;
 	struct pdm_chan_cfg *channel = &config->channel;
         struct pcm_stream_cfg *stream = &config->streams[0];
+	uint32_t map;
 
 	if (drv_data->active) {
                 LOG_ERR("Cannot configure device while it is active");
                 return -EBUSY;
         }
 
+	/* for now we support only channels #0 and #1 */
+	switch(channel->req_num_chan) {
+		case 1:
+			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT);
+			channel->act_num_chan = 1;
+			break;
+		case 2:
+			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT)
+				| dmic_build_channel_map(1, 0, PDM_CHAN_RIGHT);
+			channel->act_num_chan = 2;
+			break;
+		default:
+			LOG_ERR("Requested number of channels is invalid");
+			return -EINVAL;
+	}
+
+	channel->act_num_streams = 1;
+	channel->act_chan_map_hi = 0;
+	channel->act_chan_map_lo = map;
+
+	if (channel->req_num_streams != 1 ||
+	    channel->req_chan_map_lo != map) {
+		LOG_ERR("Requested number of channels is invalid");
+		return -EINVAL;
+	}
+
 	return 0;
 }
-
 //static int start_transfer(struct dmic_nrfx_pdm_drv_data *drv_data)
 //{
 //	return 0;
@@ -214,7 +240,7 @@ static const struct _dmic_ops dmic_ops = {
 	static struct mcux_dmic_drv_data mcux_dmic_data##idx = { 					\
 		.pdm_channels = pdm_channels##idx,							\
 		.base_address = (DMIC_Type *) DT_REG_ADDR(DMIC(idx)),					\
-		.active = false,
+		.active = false,									\
 	};												\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx;							\
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
