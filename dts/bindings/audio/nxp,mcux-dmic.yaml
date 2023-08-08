@@ -16,7 +16,7 @@ properties:
 
 # TODO
   pinctrl-0:
-    required: false 
+    required: true
 
 # TODO
   clock-source:

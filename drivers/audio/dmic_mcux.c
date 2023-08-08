@@ -26,6 +26,7 @@ struct mcux_dmic_pdm_chan {
      bool hwvad_enabled;
      bool use2fs;
      struct device *dev_dma;
+     dmic_channel_config_t dmic_channel_cfg;
 };
 
 struct mcux_dmic_drv_data {
@@ -130,6 +131,27 @@ static void free_buffer(struct mcux_dmic_drv_data *drv_data, void *buffer)
 //	return false;
 //}
 
+/** TODO: change this with device tree configurations **/
+static void _init_channels_with_default_cfg(uint8_t num_chan, struct mcux_dmic_pdm_chan *pdm_channels) {
+
+	for(uint8_t i=0;i<num_chan;i++) {
+
+		pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
+		pdm_channels[i].dmic_channel_cfg.osr                 = 25U;
+		pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;
+		pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero;
+		pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero;
+		pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;
+		pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;
+		pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;
+		pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;
+		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
+			pdm_channels[i].dmic_channel_cfg.enableSignExtend = true;
+		#endif
+	}
+
+	return;
+}
 /*
  * For now, we will support only one stream, max two channels. Other use cases
  * are unclear at this point
@@ -142,6 +164,7 @@ static int dmic_mcux_configure(const struct device *dev,
 	struct mcux_dmic_cfg *dmic_cfg = dev->config;
 	struct pdm_chan_cfg *channel = &config->channel;
         struct pcm_stream_cfg *stream = &config->streams[0];
+
 	uint32_t map;
 
 	if (drv_data->active) {
@@ -174,7 +197,22 @@ static int dmic_mcux_configure(const struct device *dev,
 		LOG_ERR("Requested number of channels is invalid");
 		return -EINVAL;
 	}
+	
+	if (stream->pcm_rate == 0 || stream->pcm_width == 0) {
+		if (drv_data->configured) {
+			DMIC_DeInit(drv_data->base_address);
+			drv_data->configured = false;
+		}
 
+		return 0;
+	}
+
+	if (stream->pcm_width != 16 || stream->pcm_width != 24) {
+		LOG_ERR("Only 16-bit and 24-bit samples are supported");
+		return -EINVAL;
+	}
+
+	_init_channels_with_default_cfg(channel->act_num_chan, drv_data->pdm_channels);
 	return 0;
 }
 //static int start_transfer(struct dmic_nrfx_pdm_drv_data *drv_data)

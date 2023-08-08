@@ -480,6 +480,8 @@ zephyr_udc0: &usbhs {
 
 &dmic0 {
 	status = "okay";
+	pinctrl-0 = <&pinmux_dmic0>;
+	pinctrl-names = "default";
 };
 
 &pdmc0 {

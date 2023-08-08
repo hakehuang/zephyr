@@ -46,9 +46,16 @@
 		};
 	};
 	
-	pinmux_pdm0: pinmux_pdm0 {
+	pinmux_dmic0: pinmux_dmic0 {
 		group0 {
-			pinmux = <>;
+			pinmux = <DMIC0_DATA01_PIO5_8>;
+			slew-rate = "normal";
+			drive-strength = "high";			
+			input-enable;
+		};
+
+		group1 {
+			pinmux = <DMIC0_CLK01_PIO5_4>;
 			input-enable;
 			slew-rate = "normal";
 			drive-strength = "high";			
