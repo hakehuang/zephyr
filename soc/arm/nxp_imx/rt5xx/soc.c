@@ -419,7 +419,15 @@ static void clock_init(void)
 #endif
 
 #if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(dmic0), nxp_mcux_dmic, okay)
-	CLOCK_AttachClk(kFRO_DIV4_to_DMIC);
+	/* Using the Audio PLL as input clock leads to better clock dividers 
+	 * for typical PCM sample rates ({8,16,24,32,48,96} kHz.
+	 */
+	CLOCK_AttachClk(kAUDIO_PLL_to_DMIC);
+	/* with energy consumption in mind, an initial DMIC subsystem clock 
+	 * divider of 32 provides a DMIC clock of 768 kHz, close enough to
+	 * 800 kHz used for quality?
+	 */
+	CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 16);
 #endif
 
 	/* Set SystemCoreClock variable. */

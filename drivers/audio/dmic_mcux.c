@@ -131,27 +131,42 @@ static void free_buffer(struct mcux_dmic_drv_data *drv_data, void *buffer)
 //	return false;
 //}
 
-/** TODO: change this with device tree configurations **/
-static void _init_channels_with_default_cfg(uint8_t num_chan, struct mcux_dmic_pdm_chan *pdm_channels) {
+static uint8_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
+
+	uint32_t use2fs_div = use2fs ? 2 : 1;
+	uint8_t osr;
+	const uint32_t dmic_clk = 768000;
+	/* the DMIC clock frequency is set to 24.576MHz/16 = 768kHz */
+        osr = (uint8_t)(dmic_clk/(pcm_rate * use2fs_div));
+
+	LOG_INF("osr = %u\n", osr);
+
+	return osr;
+}
+
+static void _init_channels(uint8_t num_chan, struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
 	for(uint8_t i=0;i<num_chan;i++) {
 
 		pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
-		pdm_channels[i].dmic_channel_cfg.osr                 = 25U;
-		pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;
-		pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero;
-		pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero;
-		pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;
-		pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;
-		pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;
-		pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;
+		pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
+		pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;		    /* default */
+		pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
+		pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
+		pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
+		pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;		    /* default */
+		pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;		    /* default */
+		pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
 		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
 			pdm_channels[i].dmic_channel_cfg.enableSignExtend = true;
 		#endif
+
+
 	}
 
 	return;
 }
+
 /*
  * For now, we will support only one stream, max two channels. Other use cases
  * are unclear at this point
@@ -212,7 +227,7 @@ static int dmic_mcux_configure(const struct device *dev,
 		return -EINVAL;
 	}
 
-	_init_channels_with_default_cfg(channel->act_num_chan, drv_data->pdm_channels);
+	_init_channels(channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
 	return 0;
 }
 //static int start_transfer(struct dmic_nrfx_pdm_drv_data *drv_data)
@@ -228,14 +243,49 @@ static int dmic_mcux_configure(const struct device *dev,
 //	return;
 //}
 
-//static int trigger_start(const struct device *dev)
-//{
-//	return 0;
-//}
+
+static int dmic_mcux_stop(const struct device *dev)
+{
+        struct mcux_dmic_drv_data *drv_data = dev->data;
+        struct mcux_dmic_cfg *dmic_cfg = dev->config;
+
+	return 0;
+}
+static int dmic_mcux_start(const struct device *dev)
+{
+
+	return 0;
+}
 
 static int dmic_mcux_trigger(const struct device *dev,
 				 enum dmic_trigger cmd)
 {
+	struct mcux_dmic_drv_data *drv_data = dev->data;
+
+	switch (cmd) {
+	case DMIC_TRIGGER_PAUSE:
+	case DMIC_TRIGGER_STOP:
+		if (drv_data->active) {
+			drv_data->stopping = true;
+			dmic_mcux_stop(dev);
+		}
+		break;
+
+	case DMIC_TRIGGER_RELEASE:
+	case DMIC_TRIGGER_START:
+		if (!drv_data->configured) {
+			LOG_ERR("Device is not configured");
+			return -EIO;
+		} else if (!drv_data->active) {
+			drv_data->stopping = false;
+			return dmic_mcux_start(dev);
+		}
+		break;
+
+	default:
+		LOG_ERR("Invalid command: %d", cmd);
+		return -EINVAL;
+	}
 	return 0;
 }
 
@@ -280,7 +330,9 @@ static const struct _dmic_ops dmic_ops = {
 		.base_address = (DMIC_Type *) DT_REG_ADDR(DMIC(idx)),					\
 		.active = false,									\
 	};												\
-	static struct mcux_dmic_cfg mcux_dmic_cfg##idx;							\
+	static struct mcux_dmic_cfg mcux_dmic_cfg##idx = {						\
+		.pcfg = NULL,										\
+	};												\
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
 	{												\
 		DT_FOREACH_CHILD_STATUS_OKAY_VARGS(DT_DRV_INST(idx), PDM_DMIC_CHAN_SET_STATUS, idx)     \
