@@ -34,7 +34,6 @@ struct mcux_dmic_drv_data {
 	//struct onoff_client clk_cli;
 	struct k_mem_slab *mem_slab;
 	uint32_t block_size;
-	struct k_msgq rx_queue;
 	bool request_clock : 1;
 	bool configured    : 1;
 	volatile bool active;
@@ -45,6 +44,8 @@ struct mcux_dmic_drv_data {
 
 struct mcux_dmic_cfg {
 	const struct pinctrl_dev_config *pcfg;
+	struct k_msgq rx_queue;
+	struct k_msgq rx_buffer;
 };
 
 static void free_buffer(struct mcux_dmic_drv_data *drv_data, void *buffer)
@@ -193,11 +194,13 @@ static int dmic_mcux_configure(const struct device *dev,
 			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT);
 			channel->act_num_chan = 1;
 			break;
+/* More than one channel is not supported yet
 		case 2:
 			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT)
 				| dmic_build_channel_map(1, 0, PDM_CHAN_RIGHT);
 			channel->act_num_chan = 2;
 			break;
+*/
 		default:
 			LOG_ERR("Requested number of channels is invalid");
 			return -EINVAL;
@@ -253,6 +256,8 @@ static int dmic_mcux_stop(const struct device *dev)
 }
 static int dmic_mcux_start(const struct device *dev)
 {
+        struct mcux_dmic_drv_data *drv_data = dev->data;
+        struct mcux_dmic_cfg *dmic_cfg = dev->config;
 
 	return 0;
 }
@@ -293,6 +298,9 @@ static int dmic_mcux_read(const struct device *dev,
 			      uint8_t stream,
 			      void **buffer, size_t *size, int32_t timeout)
 {
+	struct mcux_dmic_drv_data *drv_data = dev->data;
+	
+
 	return 0;
 }
 
@@ -325,6 +333,7 @@ static const struct _dmic_ops dmic_ops = {
 
 #define MCUX_DMIC_DEVICE(idx)						     				\
 	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
+	static uint32_t *rx_msgs##idx[DT_PROP(DMIC(idx), fifo_size)];            				\
 	static struct mcux_dmic_drv_data mcux_dmic_data##idx = { 					\
 		.pdm_channels = pdm_channels##idx,							\
 		.base_address = (DMIC_Type *) DT_REG_ADDR(DMIC(idx)),					\
@@ -336,6 +345,9 @@ static const struct _dmic_ops dmic_ops = {
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
 	{												\
 		DT_FOREACH_CHILD_STATUS_OKAY_VARGS(DT_DRV_INST(idx), PDM_DMIC_CHAN_SET_STATUS, idx)     \
+		k_msgq_init(&mcux_dmic_cfg##idx.rx_queue,               				\
+                            (char *)rx_msgs##idx, sizeof(uint32_t *),            			\
+                            ARRAY_SIZE(rx_msgs##idx));							\
 		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   				\
 			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);					\
 		DMIC_Init((mcux_dmic_data##idx).base_address);						\

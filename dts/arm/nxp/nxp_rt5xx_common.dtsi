@@ -408,15 +408,6 @@
 	    		status = "disabled";
 	    	}; 
 
-		pdmc1: dmic-channel@1 {
-			compatible = "nxp,mcux-dmic-channel";
-			reg = <1>;
-			dmas = <&dma0 17>;
-			use2fs;
-			paired;
-	    		status = "disabled";
-	    	}; 
-
 	};
 
 	os_timer: timers@113000 {
