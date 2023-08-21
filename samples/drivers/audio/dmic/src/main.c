@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(dmic_sample);
  * Application, after getting a given block from the driver and processing its
  * data, needs to free that block.
  */
-#define MAX_BLOCK_SIZE   BLOCK_SIZE(MAX_SAMPLE_RATE, 2)
+#define MAX_BLOCK_SIZE   BLOCK_SIZE(MAX_SAMPLE_RATE, 1)
 #define BLOCK_COUNT      4
 K_MEM_SLAB_DEFINE_STATIC(mem_slab, MAX_BLOCK_SIZE, BLOCK_COUNT, 4);
 
@@ -61,7 +61,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 
 		LOG_INF("%d - got buffer %p of %u bytes", i, buffer, size);
 
-		k_mem_slab_free(&mem_slab, buffer);
+		k_mem_slab_free(&mem_slab, &buffer);
 	}
 
 	ret = dmic_trigger(dmic_dev, DMIC_TRIGGER_STOP);

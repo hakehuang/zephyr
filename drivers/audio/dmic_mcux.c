@@ -20,6 +20,9 @@ LOG_MODULE_REGISTER(dmic_mcux, CONFIG_AUDIO_DMIC_LOG_LEVEL);
 
 #define DT_DRV_COMPAT nxp_mcux_dmic
 
+// DEBUG DEBUG DEBUG
+uint32_t isr_counter = 0;
+
 struct mcux_dmic_pdm_chan {
      bool enabled;
      bool active;
@@ -34,6 +37,7 @@ struct mcux_dmic_drv_data {
 	//struct onoff_client clk_cli;
 	struct k_mem_slab *mem_slab;
 	uint32_t block_size;
+	uint8_t fifo_size;
 	bool request_clock : 1;
 	bool configured    : 1;
 	volatile bool active;
@@ -136,7 +140,7 @@ static uint8_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 
 	uint32_t use2fs_div = use2fs ? 2 : 1;
 	uint8_t osr;
-	const uint32_t dmic_clk = 768000;
+	const uint32_t dmic_clk = 3072000;
 	/* the DMIC clock frequency is set to 24.576MHz/16 = 768kHz */
         osr = (uint8_t)(dmic_clk/(pcm_rate * use2fs_div));
 
@@ -145,7 +149,8 @@ static uint8_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 	return osr;
 }
 
-static void _init_channels(uint8_t num_chan, struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
+static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
+			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
 	for(uint8_t i=0;i<num_chan;i++) {
 
@@ -161,8 +166,16 @@ static void _init_channels(uint8_t num_chan, struct mcux_dmic_pdm_chan *pdm_chan
 		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
 			pdm_channels[i].dmic_channel_cfg.enableSignExtend = true;
 		#endif
-
-
+		
+		DMIC_ConfigChannel(drv_data->base_address,
+		                  (dmic_channel_t)i, 
+		                  (stereo_side_t)(i%2), 
+		                  &pdm_channels[i]);
+		                  
+		DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
+		DMIC_EnableChannnel(drv_data->base_address, (uint32_t) i);
+		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size, 0, 1);
+;
 	}
 
 	return;
@@ -230,7 +243,9 @@ static int dmic_mcux_configure(const struct device *dev,
 		return -EINVAL;
 	}
 
-	_init_channels(channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
+	DMIC_Use2fs(drv_data->base_address, true);
+	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
+	
 	return 0;
 }
 //static int start_transfer(struct dmic_nrfx_pdm_drv_data *drv_data)
@@ -252,6 +267,9 @@ static int dmic_mcux_stop(const struct device *dev)
         struct mcux_dmic_drv_data *drv_data = dev->data;
         struct mcux_dmic_cfg *dmic_cfg = dev->config;
 
+	/* disable FIFO */
+   	DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)0,  drv_data->fifo_size, 0, 1);
+   	
 	return 0;
 }
 static int dmic_mcux_start(const struct device *dev)
@@ -259,6 +277,9 @@ static int dmic_mcux_start(const struct device *dev)
         struct mcux_dmic_drv_data *drv_data = dev->data;
         struct mcux_dmic_cfg *dmic_cfg = dev->config;
 
+        /* Enable Fifo */
+        DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)0, drv_data->fifo_size, 1, 1);
+        
 	return 0;
 }
 
@@ -299,8 +320,10 @@ static int dmic_mcux_read(const struct device *dev,
 			      void **buffer, size_t *size, int32_t timeout)
 {
 	struct mcux_dmic_drv_data *drv_data = dev->data;
+        int ret;
+        	
+	ret = k_mem_slab_alloc(drv_data->mem_slab, &buffer, K_NO_WAIT);
 	
-
 	return 0;
 }
 
@@ -311,6 +334,10 @@ static void init_clock_manager(const struct device *dev)
 
 static void dmic_mcux_isr(const struct device *dev) {
 
+        struct mcux_dmic_drv_data *drv_data = dev->data;
+        
+	DMIC_FifoClearStatus(drv_data->base_address, (dmic_channel_t)0, 0x1);
+	isr_counter++;
 	return;
 }
 
@@ -331,13 +358,21 @@ static const struct _dmic_ops dmic_ops = {
 		(bool)DT_PROP(pdm_chan_node_id, hwvad);
 	//BUILD_ASSERT((DT_NODE_CHILD_IDX(pdm_chan_node_id) != 0) & !(bool)DT_PROP(pdm_chan_node_id, hwvad), "error: hwvad can only be enabled on channel 0");
 
-#define MCUX_DMIC_DEVICE(idx)						     				\
-	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
-	static uint32_t *rx_msgs##idx[DT_PROP(DMIC(idx), fifo_size)];            				\
+#if !(defined(FSL_FEATURE_DMIC_HAS_NO_IOCFG) && FSL_FEATURE_DMIC_HAS_NO_IOCFG)
+	static bool no_iocfg = true;
+#else
+	static bool no_iocfg = false;
+#endif
+ 
+
+#define MCUX_DMIC_DEVICE(idx)	 									\
+       	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
+	static uint32_t *rx_msgs##idx[DT_PROP(DMIC(idx), fifo_size)];            			\
 	static struct mcux_dmic_drv_data mcux_dmic_data##idx = { 					\
 		.pdm_channels = pdm_channels##idx,							\
 		.base_address = (DMIC_Type *) DT_REG_ADDR(DMIC(idx)),					\
 		.active = false,									\
+		.fifo_size = 	DT_PROP(DMIC(idx), fifo_size),						\
 	};												\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx = {						\
 		.pcfg = NULL,										\
@@ -351,6 +386,10 @@ static const struct _dmic_ops dmic_ops = {
 		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   				\
 			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);					\
 		DMIC_Init((mcux_dmic_data##idx).base_address);						\
+		COND_CODE_1(no_iocfg, 									\
+			    (DMIC_SetIOCFG((mcux_dmic_data##idx).base_address, kDMIC_PdmDual);), 	\
+			    (while(0) {};))								\
+													\
 		return 0;						     				\
 	}								     				\
         PINCTRL_DT_DEFINE(DMIC(idx));									\

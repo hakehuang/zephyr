@@ -424,10 +424,9 @@ static void clock_init(void)
 	 */
 	CLOCK_AttachClk(kAUDIO_PLL_to_DMIC);
 	/* with energy consumption in mind, an initial DMIC subsystem clock 
-	 * divider of 32 provides a DMIC clock of 768 kHz, close enough to
-	 * 800 kHz used for quality?
+	 * divider of 32 provides a DMIC clock of 3,072 kHz
 	 */
-	CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 16);
+	CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 8);
 #endif
 
 	/* Set SystemCoreClock variable. */
