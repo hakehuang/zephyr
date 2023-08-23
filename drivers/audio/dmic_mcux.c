@@ -152,8 +152,10 @@ static uint8_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
+	LOG_INF("_init_channels: in");
 	for(uint8_t i=0;i<num_chan;i++) {
 
+		LOG_INF("configure: chan %u", i);
 		pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
 		pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
 		pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;		    /* default */
@@ -173,8 +175,9 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		                  &pdm_channels[i]);
 		                  
 		DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
-		DMIC_EnableChannnel(drv_data->base_address, (uint32_t) i);
-		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size, 0, 1);
+		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size, 1, 1);
+		
+		
 ;
 	}
 
@@ -196,6 +199,7 @@ static int dmic_mcux_configure(const struct device *dev,
 
 	uint32_t map;
 
+	LOG_INF("configure: in");
 	if (drv_data->active) {
                 LOG_ERR("Cannot configure device while it is active");
                 return -EBUSY;
@@ -204,6 +208,7 @@ static int dmic_mcux_configure(const struct device *dev,
 	/* for now we support only channels #0 and #1 */
 	switch(channel->req_num_chan) {
 		case 1:
+			LOG_INF("configure: one channel");
 			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT);
 			channel->act_num_chan = 1;
 			break;
@@ -238,14 +243,18 @@ static int dmic_mcux_configure(const struct device *dev,
 		return 0;
 	}
 
-	if (stream->pcm_width != 16 || stream->pcm_width != 24) {
+	LOG_INF("configure: one channelPCM width = %u", stream->pcm_width);
+	if (stream->pcm_width != 16 && stream->pcm_width != 24) {
 		LOG_ERR("Only 16-bit and 24-bit samples are supported");
 		return -EINVAL;
 	}
 
+	drv_data->mem_slab   = stream->mem_slab;
+	
 	DMIC_Use2fs(drv_data->base_address, true);
 	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
 	
+	drv_data->configured=true;
 	return 0;
 }
 //static int start_transfer(struct dmic_nrfx_pdm_drv_data *drv_data)
@@ -268,7 +277,7 @@ static int dmic_mcux_stop(const struct device *dev)
         struct mcux_dmic_cfg *dmic_cfg = dev->config;
 
 	/* disable FIFO */
-   	DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)0,  drv_data->fifo_size, 0, 1);
+   	DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(0));
    	
 	return 0;
 }
@@ -277,8 +286,9 @@ static int dmic_mcux_start(const struct device *dev)
         struct mcux_dmic_drv_data *drv_data = dev->data;
         struct mcux_dmic_cfg *dmic_cfg = dev->config;
 
+	LOG_INF("dmic_mcux_start: in");
         /* Enable Fifo */
-        DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)0, drv_data->fifo_size, 1, 1);
+        DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(1));
         
 	return 0;
 }
@@ -288,9 +298,11 @@ static int dmic_mcux_trigger(const struct device *dev,
 {
 	struct mcux_dmic_drv_data *drv_data = dev->data;
 
+	LOG_INF("trigger: in");
 	switch (cmd) {
 	case DMIC_TRIGGER_PAUSE:
 	case DMIC_TRIGGER_STOP:
+		LOG_INF("trigger: start");
 		if (drv_data->active) {
 			drv_data->stopping = true;
 			dmic_mcux_stop(dev);
@@ -299,6 +311,7 @@ static int dmic_mcux_trigger(const struct device *dev,
 
 	case DMIC_TRIGGER_RELEASE:
 	case DMIC_TRIGGER_START:
+		LOG_INF("trigger: start");
 		if (!drv_data->configured) {
 			LOG_ERR("Device is not configured");
 			return -EIO;
