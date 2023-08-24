@@ -51,6 +51,7 @@
 			pinmux = <DMIC0_DATA01_PIO5_8>, <DMIC0_CLK01_PIO5_4>;
 			slew-rate = "normal";
 			drive-strength = "high";			
+			bias-pull-down;
 			input-enable;
 		};
 	};

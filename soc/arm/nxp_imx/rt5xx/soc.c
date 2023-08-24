@@ -422,11 +422,18 @@ static void clock_init(void)
 	/* Using the Audio PLL as input clock leads to better clock dividers 
 	 * for typical PCM sample rates ({8,16,24,32,48,96} kHz.
 	 */
-	CLOCK_AttachClk(kAUDIO_PLL_to_DMIC);
+	//CLOCK_AttachClk(kAUDIO_PLL_to_DMIC);
 	/* with energy consumption in mind, an initial DMIC subsystem clock 
 	 * divider of 32 provides a DMIC clock of 3,072 kHz
 	 */
-	CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 8);
+	//CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 8);
+	
+	
+	
+	 /* DMIC uses 48MHz FRO clock */
+    CLOCK_AttachClk(kFRO_DIV4_to_DMIC);
+    /*48MHz divided by 60 = 800 KHz PDM clock --> gives 16kHz sample rate */
+    CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 60);
 #endif
 
 	/* Set SystemCoreClock variable. */

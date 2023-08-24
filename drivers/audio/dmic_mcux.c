@@ -175,8 +175,8 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		                  &pdm_channels[i]);
 		                  
 		DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
-		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size, 1, 1);
-		
+		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size-1, 1, 1);
+		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size-1, 1, 0);
 		
 ;
 	}
