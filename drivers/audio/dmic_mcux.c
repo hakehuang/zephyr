@@ -10,6 +10,7 @@
 #include <zephyr/drivers/dma.h>
 #include <zephyr/audio/dmic.h>
 #include <zephyr/drivers/pinctrl.h>
+#include <zephyr/drivers/timer/system_timer.h>
 #include <soc.h>
 
 #include <fsl_dmic.h>
@@ -22,6 +23,7 @@ LOG_MODULE_REGISTER(dmic_mcux, CONFIG_AUDIO_DMIC_LOG_LEVEL);
 
 // DEBUG DEBUG DEBUG
 uint32_t isr_counter = 0;
+uint32_t time = 0;
 
 struct mcux_dmic_pdm_chan {
      bool enabled;
@@ -136,13 +138,13 @@ static void free_buffer(struct mcux_dmic_drv_data *drv_data, void *buffer)
 //	return false;
 //}
 
-static uint8_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
+static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 
 	uint32_t use2fs_div = use2fs ? 2 : 1;
-	uint8_t osr;
+	uint32_t osr;
 	const uint32_t dmic_clk = 3072000;
-	/* the DMIC clock frequency is set to 24.576MHz/16 = 768kHz */
-        osr = (uint8_t)(dmic_clk/(pcm_rate * use2fs_div));
+	
+        osr = (uint32_t)(dmic_clk/(pcm_rate * use2fs_div));
 
 	LOG_INF("osr = %u\n", osr);
 
@@ -152,32 +154,50 @@ static uint8_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
+        dmic_channel_config_t dmic_channel_cfg;
+        
 	LOG_INF("_init_channels: in");
 	for(uint8_t i=0;i<num_chan;i++) {
 
 		LOG_INF("configure: chan %u", i);
-		pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
-		pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
-		pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;		    /* default */
-		pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
-		pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
-		pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
-		pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;		    /* default */
-		pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;		    /* default */
-		pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
+#if 0
+		dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
+		dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
+		dmic_channel_cfg.gainshft            = 6U;		    /* default */
+		dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
+		dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
+		dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
+		dmic_channel_cfg.post_dc_gain_reduce = 8U;		    /* default */
+		dmic_channel_cfg.saturate16bit       = 1U;		    /* default */
+		dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
+		dmic_channel_cfg.enableSignExtend = false;
 		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
-			pdm_channels[i].dmic_channel_cfg.enableSignExtend = true;
+					pdm_channels[i].dmic_channel_cfg.enableSignExtend = false;
 		#endif
-		
+#else	
+	
+               pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
+               pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
+               pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;                  /* default */
+               pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
+               pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
+               pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
+               pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;                   /* default */
+               pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;                  /* default */
+               pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
+		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
+					pdm_channels[i].dmic_channel_cfg.enableSignExtend = false;
+		#endif
+#endif		
 		DMIC_ConfigChannel(drv_data->base_address,
 		                  (dmic_channel_t)i, 
 		                  (stereo_side_t)(i%2), 
-		                  &pdm_channels[i]);
+		                  &dmic_channel_cfg);
 		                  
 		DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
-		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size-1, 1, 1);
-		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size-1, 1, 0);
-		
+		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
+		//DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size-1, 1, 0);
+		pdm_channels += 1
 ;
 	}
 
@@ -349,8 +369,9 @@ static void dmic_mcux_isr(const struct device *dev) {
 
         struct mcux_dmic_drv_data *drv_data = dev->data;
         
-	DMIC_FifoClearStatus(drv_data->base_address, (dmic_channel_t)0, 0x1);
+	DMIC_FifoClearStatus(drv_data->base_address, (dmic_channel_t)0, 0x3);
 	isr_counter++;
+	time = sys_clock_cycle_get_32();
 	return;
 }
 
@@ -377,6 +398,7 @@ static const struct _dmic_ops dmic_ops = {
 	static bool no_iocfg = false;
 #endif
  
+// 
 
 #define MCUX_DMIC_DEVICE(idx)	 									\
        	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
@@ -387,8 +409,9 @@ static const struct _dmic_ops dmic_ops = {
 		.active = false,									\
 		.fifo_size = 	DT_PROP(DMIC(idx), fifo_size),						\
 	};												\
+	PINCTRL_DT_DEFINE(DMIC(idx));									\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx = {						\
-		.pcfg = NULL,										\
+		.pcfg = PINCTRL_DT_DEV_CONFIG_GET(DMIC(idx)),						\
 	};												\
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
 	{												\
@@ -398,6 +421,8 @@ static const struct _dmic_ops dmic_ops = {
                             ARRAY_SIZE(rx_msgs##idx));							\
 		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   				\
 			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);					\
+		irq_enable(DT_IRQN(DMIC(idx)));								\
+	        pinctrl_apply_state(mcux_dmic_cfg##idx.pcfg, PINCTRL_STATE_DEFAULT);	    		\
 		DMIC_Init((mcux_dmic_data##idx).base_address);						\
 		COND_CODE_1(no_iocfg, 									\
 			    (DMIC_SetIOCFG((mcux_dmic_data##idx).base_address, kDMIC_PdmDual);), 	\
@@ -405,7 +430,7 @@ static const struct _dmic_ops dmic_ops = {
 													\
 		return 0;						     				\
 	}								     				\
-        PINCTRL_DT_DEFINE(DMIC(idx));									\
+        									\
 	DEVICE_DT_DEFINE(DMIC(idx), mcux_dmic_init##idx, NULL,		     				\
 			 &mcux_dmic_data##idx, &mcux_dmic_cfg##idx,  					\
 			 POST_KERNEL, CONFIG_AUDIO_DMIC_INIT_PRIORITY,	     				\
