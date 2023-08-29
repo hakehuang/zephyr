@@ -22,8 +22,19 @@ LOG_MODULE_REGISTER(dmic_mcux, CONFIG_AUDIO_DMIC_LOG_LEVEL);
 #define DT_DRV_COMPAT nxp_mcux_dmic
 
 // DEBUG DEBUG DEBUG
-uint32_t isr_counter = 0;
-uint32_t time = 0;
+static uint32_t isr_counter = 0;
+static uint32_t time = 0;
+
+static void *ping_buffer, *pong_buffer;
+
+typedef enum {
+     run_ping,
+     run_pong,
+     stop,
+     fail
+} dmic_state_t;
+
+static dmic_state_t dmic_state;
 
 struct mcux_dmic_pdm_chan {
      bool enabled;
@@ -53,6 +64,62 @@ struct mcux_dmic_cfg {
 	struct k_msgq rx_queue;
 	struct k_msgq rx_buffer;
 };
+
+static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t channel, int status){
+
+	struct mcux_dmic_drv_data *drv_data = drv->drv_date;
+	struct mcux_dmic_cfg dmic_cfg dev_cfg = dev->config;
+	int ret;
+	
+	if(status < 0) {
+
+	     stop_the_whole_thing();
+	     dmic_state = fail;
+	     free_buffer(drv_data, ping_buffer);
+	     free_buffer(drv_data, pong_buffer);
+	     return;
+	}
+	
+	// not sure what to do with the BLOCK status...
+	
+	if(dmic_state == run_ping) {
+		ret = k_msgq_put(&dev_cfg->rx_queue,
+		                 &ping_buffer,
+		                 K_NO_WAIT);
+		if(ret < 0) {
+			dmic_state = fail;
+			free_buffer(drv_data, ping_buffer);
+	     		free_buffer(drv_data, pong_buffer);
+	     		return;
+		}
+		// dma_start/reload?
+		ret = k_mem_slab_alloc(drv_data->mem_slab, &ping_block, K_NO_WAIT);
+		if(ret < 0) {
+			dmic_state = fail;
+			return;
+		}
+		dmic_state = run_pong;
+	} else if(dmic_state == run_pong) {
+		ret = k_msgq_put(&dev_cfg->rx_queue,
+		                 &pong_buffer,
+		                 K_NO_WAIT);
+		if(ret < 0) {
+			dmic_state = fail;
+			free_buffer(drv_data, ping_buffer);
+	     		free_buffer(drv_data, pong_buffer);
+	     		return;
+		}
+		// dma_start/reload?
+		ret = k_mem_slab_alloc(drv_data->mem_slab, &pong_block, K_NO_WAIT);
+		if(ret < 0) {
+			dmic_state = fail;
+			return;
+		}
+		dmic_state = ping;
+	} else {
+		//stop!
+	}		
+}
 
 static void free_buffer(struct mcux_dmic_drv_data *drv_data, void *buffer)
 {
@@ -160,21 +227,6 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 	for(uint8_t i=0;i<num_chan;i++) {
 
 		LOG_INF("configure: chan %u", i);
-#if 0
-		dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
-		dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
-		dmic_channel_cfg.gainshft            = 6U;		    /* default */
-		dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
-		dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
-		dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
-		dmic_channel_cfg.post_dc_gain_reduce = 8U;		    /* default */
-		dmic_channel_cfg.saturate16bit       = 1U;		    /* default */
-		dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
-		dmic_channel_cfg.enableSignExtend = false;
-		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
-					pdm_channels[i].dmic_channel_cfg.enableSignExtend = false;
-		#endif
-#else	
 	
                pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
                pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
@@ -188,16 +240,15 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
 					pdm_channels[i].dmic_channel_cfg.enableSignExtend = false;
 		#endif
-#endif		
+		
 		DMIC_ConfigChannel(drv_data->base_address,
 		                  (dmic_channel_t)i, 
 		                  (stereo_side_t)(i%2), 
 		                  &dmic_channel_cfg);
 		                  
-		DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
+		//DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
 		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
-		//DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size-1, 1, 0);
-		pdm_channels += 1
+		DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
 ;
 	}
 
@@ -270,6 +321,7 @@ static int dmic_mcux_configure(const struct device *dev,
 	}
 
 	drv_data->mem_slab   = stream->mem_slab;
+	drv_data->block_size   = stream->block_size;
 	
 	DMIC_Use2fs(drv_data->base_address, true);
 	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
@@ -305,9 +357,22 @@ static int dmic_mcux_start(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
         struct mcux_dmic_cfg *dmic_cfg = dev->config;
-
+	int ret;
+	
 	LOG_INF("dmic_mcux_start: in");
-        /* Enable Fifo */
+	
+        /* Enable Channel */
+        ret = k_mem_slab_alloc(drv_data->mem_slab, &ping_buffer, K_NO_WAIT);
+        if(ret < 0) {
+             LOG_ERR("start: failed to allocate buffer");
+             return -1;
+        }
+        ret = k_mem_slab_alloc(drv_data->mem_slab, &pong_buffer, K_NO_WAIT);
+        if(ret < 0) {
+             LOG_ERR("start: failed to allocate buffer");
+             return -1;
+        }
+        
         DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(1));
         
 	return 0;
