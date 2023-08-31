@@ -39,10 +39,15 @@ K_SEM_DEFINE(xfer_sem, 0, 1);
 
 static struct dma_config dma_cfg = {0};
 static struct dma_block_config dma_block_cfgs[XFERS];
+static uint32_t cb_counter = 0;
 
 static void dma_sg_callback(const struct device *dma_dev, void *user_data,
 			    uint32_t channel, int status)
 {
+        
+
+        TC_PRINT("cb counter: %u", cb_counter++);
+
 	if (status < 0) {
 		TC_PRINT("callback status %d\n", status);
 	} else {
