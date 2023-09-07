@@ -14,7 +14,6 @@ properties:
   interrupts:
     required: true
 
-# TODO
   pinctrl-0:
     required: true
 
@@ -29,3 +28,7 @@ properties:
     description: |
       Size of the queue of received audio data blocks to be used
       by the driver.
+
+  use2fs:
+    required: false
+    type: boolean

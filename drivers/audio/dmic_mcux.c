@@ -21,20 +21,20 @@ LOG_MODULE_REGISTER(dmic_mcux, CONFIG_AUDIO_DMIC_LOG_LEVEL);
 
 #define DT_DRV_COMPAT nxp_mcux_dmic
 
+#define MAX_NUM_DMA_BLOCKS 32
+
 // DEBUG DEBUG DEBUG
 static uint32_t isr_counter = 0;
 static uint32_t time = 0;
 
-static void *ping_buffer, *pong_buffer;
+static 
 
-typedef enum {
+enum e_dmic_state {
      run_ping,
      run_pong,
      stop,
      fail
-} dmic_state_t;
-
-static dmic_state_t dmic_state;
+} ;
 
 struct mcux_dmic_pdm_chan {
      bool enabled;
@@ -46,9 +46,9 @@ struct mcux_dmic_pdm_chan {
 };
 
 struct mcux_dmic_drv_data {
-	//struct onoff_manager *clk_mgr;
-	//struct onoff_client clk_cli;
 	struct k_mem_slab *mem_slab;
+	void *ping_block;
+	void *pong_block;
 	uint32_t block_size;
 	uint8_t fifo_size;
 	bool request_clock : 1;
@@ -57,153 +57,79 @@ struct mcux_dmic_drv_data {
 	volatile bool stopping;
 	DMIC_Type *base_address;
 	struct mcux_dmic_pdm_chan *pdm_channels;
+	enum e_dmic_state dmic_state;
 };
 
 struct mcux_dmic_cfg {
 	const struct pinctrl_dev_config *pcfg;
 	struct k_msgq rx_queue;
 	struct k_msgq rx_buffer;
+	struct dma_config dma_cfg;
+	struct dma_block_config dma_ping;
+	struct dma_block_config dma_pong;
+	bool use2fs;
 };
+
+static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
+{
+	k_mem_slab_free(drv_data->mem_slab, buffer);
+}
 
 static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t channel, int status){
 
-	struct mcux_dmic_drv_data *drv_data = drv->drv_date;
-	struct mcux_dmic_cfg dmic_cfg dev_cfg = dev->config;
+	struct mcux_dmic_drv_data *drv_data = dev->data;
+	struct mcux_dmic_cfg *dmic_cfg = dev->config;
 	int ret;
 	
 	if(status < 0) {
 
 	     stop_the_whole_thing();
-	     dmic_state = fail;
-	     free_buffer(drv_data, ping_buffer);
-	     free_buffer(drv_data, pong_buffer);
+	     drv_data->dmic_state = fail;
+	     free_block(drv_data, drv_data->ping_block);
+	     free_block(drv_data, drv_data->pong_block);
 	     return;
 	}
 	
-	// not sure what to do with the BLOCK status...
+	// we assume that the DMA driver honors calling us on transfer completion
 	
-	if(dmic_state == run_ping) {
-		ret = k_msgq_put(&dev_cfg->rx_queue,
-		                 &ping_buffer,
+	if(drv_data->dmic_state == run_ping) {
+		ret = k_msgq_put(&dmic_cfg->rx_queue,
+		                 &drv_data->ping_block,
 		                 K_NO_WAIT);
 		if(ret < 0) {
-			dmic_state = fail;
-			free_buffer(drv_data, ping_buffer);
-	     		free_buffer(drv_data, pong_buffer);
+			drv_data->dmic_state = fail;
+			free_block(drv_data, drv_data->ping_block);
+	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
 		}
 		// dma_start/reload?
-		ret = k_mem_slab_alloc(drv_data->mem_slab, &ping_block, K_NO_WAIT);
+		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->ping_block, K_NO_WAIT);
 		if(ret < 0) {
-			dmic_state = fail;
+			drv_data->dmic_state = fail;
 			return;
 		}
-		dmic_state = run_pong;
-	} else if(dmic_state == run_pong) {
-		ret = k_msgq_put(&dev_cfg->rx_queue,
-		                 &pong_buffer,
+		drv_data->dmic_state = run_pong;
+	} else if(drv_data->dmic_state == run_pong) {
+		ret = k_msgq_put(&dmic_cfg->rx_queue,
+		                 &drv_data->pong_block,
 		                 K_NO_WAIT);
 		if(ret < 0) {
-			dmic_state = fail;
-			free_buffer(drv_data, ping_buffer);
-	     		free_buffer(drv_data, pong_buffer);
+			drv_data->dmic_state = fail;
+			free_block(drv_data, drv_data->ping_block);
+	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
 		}
 		// dma_start/reload?
-		ret = k_mem_slab_alloc(drv_data->mem_slab, &pong_block, K_NO_WAIT);
+		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->pong_block, K_NO_WAIT);
 		if(ret < 0) {
-			dmic_state = fail;
+			drv_data->dmic_state = fail;
 			return;
 		}
-		dmic_state = ping;
+		drv_data->dmic_state = run_ping;
 	} else {
-		//stop!
+		// anything to clean up?
 	}		
 }
-
-static void free_buffer(struct mcux_dmic_drv_data *drv_data, void *buffer)
-{
-	k_mem_slab_free(drv_data->mem_slab, &buffer);
-	LOG_DBG("Freed buffer %p", buffer);
-}
-
-//static void event_handler(const struct device *dev, const mcux_dmic_evt_t *evt)
-//{
-//	struct mcux_dmic_drv_data *drv_data = dev->data;
-//	int ret;
-//	bool stop = false;
-//
-//	if (evt->buffer_requested) {
-//		void *buffer;
-//		nrfx_err_t err;
-//
-//		ret = k_mem_slab_alloc(drv_data->mem_slab, &buffer, K_NO_WAIT);
-//		if (ret < 0) {
-//			LOG_ERR("Failed to allocate buffer: %d", ret);
-//			stop = true;
-//		} else {
-//			/*err = nrfx_pdm_buffer_set(buffer,
-//						  drv_data->block_size / 2);
-//			if (err != NRFX_SUCCESS) {
-//				LOG_ERR("Failed to set buffer: 0x%08x", err);
-//				stop = true;
-//			}*/
-//		}
-//	}
-//
-//	if (drv_data->stopping) {
-//		if (evt->buffer_released) {
-//			free_buffer(drv_data, evt->buffer_released);
-//		}
-//
-//		if (drv_data->active) {
-//			drv_data->active = false;
-//			if (drv_data->request_clock) {
-//				(void)onoff_release(drv_data->clk_mgr);
-//			}
-//		}
-//	} else if (evt->buffer_released) {
-//		ret = k_msgq_put(&drv_data->rx_queue,
-//				 &evt->buffer_released,
-//				 K_NO_WAIT);
-//		if (ret < 0) {
-//			LOG_ERR("No room in RX queue");
-//			stop = true;
-//
-//			free_buffer(drv_data, evt->buffer_released);
-//		} else {
-//			LOG_DBG("Queued buffer %p", evt->buffer_released);
-//		}
-//	}
-//
-//	if (stop) {
-//		drv_data->stopping = true;
-//		//nrfx_pdm_stop();
-//	}
-//}
-
-//static bool is_better(uint32_t freq,
-//		      uint8_t ratio,
-//		      uint32_t req_rate,
-//		      uint32_t *best_diff,
-//		      uint32_t *best_rate,
-//		      uint32_t *best_freq)
-//{
-//	uint32_t act_rate = freq / ratio;
-//	uint32_t diff = act_rate >= req_rate ? (act_rate - req_rate)
-//					     : (req_rate - act_rate);
-//
-//	LOG_DBG("Freq %u, ratio %u, act_rate %u", freq, ratio, act_rate);
-//
-//	if (diff < *best_diff) {
-//		*best_diff = diff;
-//		*best_rate = act_rate;
-//		*best_freq = freq;
-//		return true;
-//	}
-//
-//	return false;
-//}
 
 static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 
@@ -249,7 +175,6 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		//DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
 		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
 		DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
-;
 	}
 
 	return;
@@ -323,25 +248,12 @@ static int dmic_mcux_configure(const struct device *dev,
 	drv_data->mem_slab   = stream->mem_slab;
 	drv_data->block_size   = stream->block_size;
 	
-	DMIC_Use2fs(drv_data->base_address, true);
+	DMIC_Use2fs(drv_data->base_address, dmic_cfg->use2fs);
 	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
 	
 	drv_data->configured=true;
 	return 0;
 }
-//static int start_transfer(struct dmic_nrfx_pdm_drv_data *drv_data)
-//{
-//	return 0;
-//}
-
-//static void clock_started_callback(struct onoff_manager *mgr,
-//				   struct onoff_client *cli,
-//				   uint32_t state,
-//				   int res)
-//{
-//	return;
-//}
-
 
 static int dmic_mcux_stop(const struct device *dev)
 {
@@ -351,8 +263,15 @@ static int dmic_mcux_stop(const struct device *dev)
 	/* disable FIFO */
    	DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(0));
    	
+   	
+   	
 	return 0;
 }
+
+static int dmic_mcux_setup_dma() {
+
+}
+
 static int dmic_mcux_start(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
@@ -362,18 +281,20 @@ static int dmic_mcux_start(const struct device *dev)
 	LOG_INF("dmic_mcux_start: in");
 	
         /* Enable Channel */
-        ret = k_mem_slab_alloc(drv_data->mem_slab, &ping_buffer, K_NO_WAIT);
+        ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->ping_block, K_NO_WAIT);
         if(ret < 0) {
              LOG_ERR("start: failed to allocate buffer");
              return -1;
         }
-        ret = k_mem_slab_alloc(drv_data->mem_slab, &pong_buffer, K_NO_WAIT);
+        ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->pong_block, K_NO_WAIT);
         if(ret < 0) {
              LOG_ERR("start: failed to allocate buffer");
              return -1;
         }
         
+        dmic_mcux_setup_dma();
         DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(1));
+        drv_data->dmic_state = run_ping;
         
 	return 0;
 }
@@ -451,8 +372,6 @@ static const struct _dmic_ops dmic_ops = {
 #define PDM_DMIC_CHAN_SET_STATUS(pdm_chan_node_id, idx) 						\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).enabled=true;				\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).active=false;				\
-	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).use2fs=				\
-		(bool)DT_PROP(pdm_chan_node_id, use2fs);						\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).hwvad_enabled=				\
 		(bool)DT_PROP(pdm_chan_node_id, hwvad);
 	//BUILD_ASSERT((DT_NODE_CHILD_IDX(pdm_chan_node_id) != 0) & !(bool)DT_PROP(pdm_chan_node_id, hwvad), "error: hwvad can only be enabled on channel 0");
@@ -473,10 +392,14 @@ static const struct _dmic_ops dmic_ops = {
 		.base_address = (DMIC_Type *) DT_REG_ADDR(DMIC(idx)),					\
 		.active = false,									\
 		.fifo_size = 	DT_PROP(DMIC(idx), fifo_size),						\
+		.dmic_state = stop,									\
 	};												\
 	PINCTRL_DT_DEFINE(DMIC(idx));									\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx = {						\
 		.pcfg = PINCTRL_DT_DEV_CONFIG_GET(DMIC(idx)),						\
+		.dma_cfg = {0};										\
+		.dma_ping = {0};									\
+		.dma_pong = {0};									\
 	};												\
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
 	{												\

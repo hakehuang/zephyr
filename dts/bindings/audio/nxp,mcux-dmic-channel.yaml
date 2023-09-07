@@ -14,10 +14,6 @@ properties:
   dmas:
     required: true
 
-  use2fs:
-    required: false
-    type: boolean
-
   paired:
     required: false
     type: boolean
