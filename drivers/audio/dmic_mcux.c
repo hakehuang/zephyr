@@ -23,11 +23,11 @@ LOG_MODULE_REGISTER(dmic_mcux, CONFIG_AUDIO_DMIC_LOG_LEVEL);
 
 #define MAX_NUM_DMA_BLOCKS 32
 
+#define CONFIG_DMIC_MCUX_QUEUE_SIZE 8		// Move to KCONFIG
+
 // DEBUG DEBUG DEBUG
 static uint32_t isr_counter = 0;
 static uint32_t time = 0;
-
-static 
 
 enum e_dmic_state {
      run_ping,
@@ -43,6 +43,11 @@ struct mcux_dmic_pdm_chan {
      bool use2fs;
      struct device *dev_dma;
      dmic_channel_config_t dmic_channel_cfg;
+     const struct device *dma;
+     const uint8_t dma_chan;
+     struct dma_config dma_cfg;
+     	struct dma_block_config dma_ping;
+        struct dma_block_config dma_pong; 
 };
 
 struct mcux_dmic_drv_data {
@@ -57,16 +62,16 @@ struct mcux_dmic_drv_data {
 	volatile bool stopping;
 	DMIC_Type *base_address;
 	struct mcux_dmic_pdm_chan *pdm_channels;
+	int8_t max_chan_num;
 	enum e_dmic_state dmic_state;
+	uint8_t 	pcm_width     ;  
 };
 
 struct mcux_dmic_cfg {
 	const struct pinctrl_dev_config *pcfg;
 	struct k_msgq rx_queue;
 	struct k_msgq rx_buffer;
-	struct dma_config dma_cfg;
-	struct dma_block_config dma_ping;
-	struct dma_block_config dma_pong;
+
 	bool use2fs;
 };
 
@@ -109,6 +114,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 			return;
 		}
 		drv_data->dmic_state = run_pong;
+		
 	} else if(drv_data->dmic_state == run_pong) {
 		ret = k_msgq_put(&dmic_cfg->rx_queue,
 		                 &drv_data->pong_block,
@@ -143,6 +149,18 @@ static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 
 	return osr;
 }
+
+static inline _find_max_chan_num(struct mcux_dmic_pdm_chan *pdm_channels, uint8_t *max_chan_num) {
+
+        *max_chan_num = -1;
+        
+	for(int8_t i = 0; i < FSL_FEATURE_DMIC_CHANNEL_NUM; i++) {
+	    if(pdm_channels[i].enabled && i > *max_chan_num) {
+	    	*max_chan_num = i;
+	    }
+	}
+}
+
 
 static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
@@ -244,7 +262,7 @@ static int dmic_mcux_configure(const struct device *dev,
 		LOG_ERR("Only 16-bit and 24-bit samples are supported");
 		return -EINVAL;
 	}
-
+        drv_data->pcm_width = stream->pcm_width;
 	drv_data->mem_slab   = stream->mem_slab;
 	drv_data->block_size   = stream->block_size;
 	
@@ -262,20 +280,62 @@ static int dmic_mcux_stop(const struct device *dev)
 
 	/* disable FIFO */
    	DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(0));
-   	
-   	
-   	
+ 	
 	return 0;
 }
 
-static int dmic_mcux_setup_dma() {
+static int dmic_mcux_setup_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel) {
 
+	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
+	uint8_t num_chan = channel->act_num_chan;
+	uint32_t dma_buf_size = drv_data->block_size / num_chan;
+	
+
+	
+	for(uint8_t i;i<num_chan;i++) {
+	    /* DMA configuration , block config follows */
+	    
+	    pdm_channels[i].dma_cfg.channel_direction = PERIPHERAL_TO_MEMORY;
+	    pdm_channels[i].dma_cfg.source_data_size = 4U;			// whatever the sample size, read is 32-bits
+	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->stream->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_cfg.source_burst_length = 4U;
+	    pdm_channels[i].dma_cfg.dest_burst_length = (drv_data->stream->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
+	    pdm_channels[i].dma_cfg.error_callback_en = 0;
+	    pdm_channels[i].dma_cfg.block_count = 1;
+	    pdm_channels[i].dma_cfg.head_block = &(pdm_channels[i].dma_ping);
+	    
+	    if(i == num_chan - 1) {
+	        pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
+	        pdm_channels[i].dma_cfg.complete_callback_en = 0;
+	        
+	    } else {
+	        pdm_channels[i].dma_cfg.dma_callback = NULL;
+	    }
+	    
+	    /* DMA block config */
+	    pdm_channels[i].dma_ping.source_gather_en = false;
+	    pdm_channels[i].dma_ping.block_size = drv_data->block_size / drv_data->num_chan;
+	    pdm_channels[i].dma_ping.source_address = DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
+	    pdm_channels[i].dma_ping.source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
+	    // samples will be "desposited" interleaved in the dest buffer. Address increment is 4 bytes for 16 bits, 
+	    // 8 for 24/32 bits. Same applies for dest_scatter_interval.
+	    pdm_channels[i].dma_ping.dest_address = 
+	       pdm_channels[i].dma_ping.dest_scatter_interval = 
+	          drv_data->ping_block+((drv_data->stream->pcm_width == 16) ?  4 : 8;)
+	    // we transfer only the number of bytes per PCM sample between "scatter_interval"
+	    pdm_channels[i].dma_ping.dest_scatter_count = (drv_data->stream->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_ping.dest_scatter_en = true;
+	    pdm_channels[i].dma_ping.next_block = NULL;
+	}
 }
 
 static int dmic_mcux_start(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
         struct mcux_dmic_cfg *dmic_cfg = dev->config;
+       	struct pdm_chan_cfg *channel = &config->channel;
+        struct pcm_stream_cfg *stream = &config->streams[0];
 	int ret;
 	
 	LOG_INF("dmic_mcux_start: in");
@@ -373,7 +433,15 @@ static const struct _dmic_ops dmic_ops = {
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).enabled=true;				\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).active=false;				\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).hwvad_enabled=				\
-		(bool)DT_PROP(pdm_chan_node_id, hwvad);
+		(bool)DT_PROP(pdm_chan_node_id, hwvad);							\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma=					\
+		DT_DMAS_CTLR(DMIC(idx))									\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_chan=				\
+		DT_DMAS_CELL_BY_IDX(DMIC(idx), 0, channel)						\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_cfg = {0};				\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_ping = {0};			\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_pong = {0};
+	
 	//BUILD_ASSERT((DT_NODE_CHILD_IDX(pdm_chan_node_id) != 0) & !(bool)DT_PROP(pdm_chan_node_id, hwvad), "error: hwvad can only be enabled on channel 0");
 
 #if !(defined(FSL_FEATURE_DMIC_HAS_NO_IOCFG) && FSL_FEATURE_DMIC_HAS_NO_IOCFG)
@@ -382,11 +450,12 @@ static const struct _dmic_ops dmic_ops = {
 	static bool no_iocfg = false;
 #endif
  
-// 
+// 		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   			
+//			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);				
 
 #define MCUX_DMIC_DEVICE(idx)	 									\
        	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
-	static uint32_t *rx_msgs##idx[DT_PROP(DMIC(idx), fifo_size)];            			\
+	static uint32_t *rx_msgs##idx[CONFIG_DMIC_MCUX_QUEUE_SIZE];            			\
 	static struct mcux_dmic_drv_data mcux_dmic_data##idx = { 					\
 		.pdm_channels = pdm_channels##idx,							\
 		.base_address = (DMIC_Type *) DT_REG_ADDR(DMIC(idx)),					\
@@ -397,9 +466,6 @@ static const struct _dmic_ops dmic_ops = {
 	PINCTRL_DT_DEFINE(DMIC(idx));									\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx = {						\
 		.pcfg = PINCTRL_DT_DEV_CONFIG_GET(DMIC(idx)),						\
-		.dma_cfg = {0};										\
-		.dma_ping = {0};									\
-		.dma_pong = {0};									\
 	};												\
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
 	{												\
@@ -407,8 +473,6 @@ static const struct _dmic_ops dmic_ops = {
 		k_msgq_init(&mcux_dmic_cfg##idx.rx_queue,               				\
                             (char *)rx_msgs##idx, sizeof(uint32_t *),            			\
                             ARRAY_SIZE(rx_msgs##idx));							\
-		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   				\
-			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);					\
 		irq_enable(DT_IRQN(DMIC(idx)));								\
 	        pinctrl_apply_state(mcux_dmic_cfg##idx.pcfg, PINCTRL_STATE_DEFAULT);	    		\
 		DMIC_Init((mcux_dmic_data##idx).base_address);						\
