@@ -43,11 +43,11 @@ struct mcux_dmic_pdm_chan {
      bool use2fs;
      struct device *dev_dma;
      dmic_channel_config_t dmic_channel_cfg;
-     const struct device *dma;
-     const uint8_t dma_chan;
+     struct device *dma;
+     uint8_t dma_chan;
      struct dma_config dma_cfg;
-     	struct dma_block_config dma_ping;
-        struct dma_block_config dma_pong; 
+     struct dma_block_config dma_ping;
+     struct dma_block_config dma_pong; 
 };
 
 struct mcux_dmic_drv_data {
@@ -88,7 +88,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	
 	if(status < 0) {
 
-	     stop_the_whole_thing();
+	     //stop_the_whole_thing();
 	     drv_data->dmic_state = fail;
 	     free_block(drv_data, drv_data->ping_block);
 	     free_block(drv_data, drv_data->pong_block);
@@ -150,7 +150,7 @@ static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 	return osr;
 }
 
-static inline _find_max_chan_num(struct mcux_dmic_pdm_chan *pdm_channels, uint8_t *max_chan_num) {
+static inline void _find_max_chan_num(struct mcux_dmic_pdm_chan *pdm_channels, uint8_t *max_chan_num) {
 
         *max_chan_num = -1;
         
@@ -207,7 +207,7 @@ static int dmic_mcux_configure(const struct device *dev,
 {
 
 	struct mcux_dmic_drv_data *drv_data = dev->data;
-	struct mcux_dmic_cfg *dmic_cfg = dev->config;
+	struct mcux_dmic_cfg *dmic_dev_cfg = dev->config;
 	struct pdm_chan_cfg *channel = &config->channel;
         struct pcm_stream_cfg *stream = &config->streams[0];
 
@@ -266,7 +266,7 @@ static int dmic_mcux_configure(const struct device *dev,
 	drv_data->mem_slab   = stream->mem_slab;
 	drv_data->block_size   = stream->block_size;
 	
-	DMIC_Use2fs(drv_data->base_address, dmic_cfg->use2fs);
+	DMIC_Use2fs(drv_data->base_address, dmic_dev_cfg->use2fs);
 	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
 	
 	drv_data->configured=true;
@@ -292,14 +292,14 @@ static int dmic_mcux_setup_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_c
 	
 
 	
-	for(uint8_t i;i<num_chan;i++) {
+	for(uint8_t i=0;i<num_chan;i++) {
 	    /* DMA configuration , block config follows */
 	    
 	    pdm_channels[i].dma_cfg.channel_direction = PERIPHERAL_TO_MEMORY;
 	    pdm_channels[i].dma_cfg.source_data_size = 4U;			// whatever the sample size, read is 32-bits
-	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->stream->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->pcm_width == 16) ?  2U :4U;
 	    pdm_channels[i].dma_cfg.source_burst_length = 4U;
-	    pdm_channels[i].dma_cfg.dest_burst_length = (drv_data->stream->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_cfg.dest_burst_length = (drv_data->pcm_width == 16) ?  2U :4U;
 	    pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
 	    pdm_channels[i].dma_cfg.error_callback_en = 0;
 	    pdm_channels[i].dma_cfg.block_count = 1;
@@ -315,27 +315,49 @@ static int dmic_mcux_setup_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_c
 	    
 	    /* DMA block config */
 	    pdm_channels[i].dma_ping.source_gather_en = false;
-	    pdm_channels[i].dma_ping.block_size = drv_data->block_size / drv_data->num_chan;
+	    pdm_channels[i].dma_ping.block_size = dma_buf_size;
 	    pdm_channels[i].dma_ping.source_address = DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
 	    pdm_channels[i].dma_ping.source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
+	   
 	    // samples will be "desposited" interleaved in the dest buffer. Address increment is 4 bytes for 16 bits, 
 	    // 8 for 24/32 bits. Same applies for dest_scatter_interval.
-	    pdm_channels[i].dma_ping.dest_address = 
-	       pdm_channels[i].dma_ping.dest_scatter_interval = 
-	          drv_data->ping_block+((drv_data->stream->pcm_width == 16) ?  4 : 8;)
+	    pdm_channels[i].dma_ping.dest_address = drv_data->ping_block;
+            pdm_channels[i].dma_ping.dest_scatter_interval = ((drv_data->pcm_width == 16) ?  4 : 8);
 	    // we transfer only the number of bytes per PCM sample between "scatter_interval"
-	    pdm_channels[i].dma_ping.dest_scatter_count = (drv_data->stream->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_ping.dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
 	    pdm_channels[i].dma_ping.dest_scatter_en = true;
 	    pdm_channels[i].dma_ping.next_block = NULL;
+	    
+	    dma_config(pdm_channels[i].dma, pdm_channels[i].dma_chan, &(pdm_channels[i].dma_cfg));
 	}
+}
+
+static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel) {
+	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
+	uint8_t num_chan = channel->act_num_chan;
+	int ret;
+	
+	for(uint8_t i=0;i<num_chan;i++) {
+	    ret = dma_start(pdm_channels[i].dma, pdm_channels[i].dma_chan);
+	    if(ret) {
+	        for(uint8_t j=0;j<i;j++) {
+	            if(dma_stop(pdm_channels[j].dma, pdm_channels[j].dma_chan)) {
+	                // !!!
+	                return -1;
+	            }
+	        }
+	        return ret;
+	    }
+	}
+
 }
 
 static int dmic_mcux_start(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
-        struct mcux_dmic_cfg *dmic_cfg = dev->config;
-       	struct pdm_chan_cfg *channel = &config->channel;
-        struct pcm_stream_cfg *stream = &config->streams[0];
+        struct dmic_cfg *dmic_dev_cfg = dev->config;
+       	struct pdm_chan_cfg *channel = &dmic_dev_cfg->channel;
+        //struct pcm_stream_cfg *stream = &dmic_dev_cfg->streams[0];
 	int ret;
 	
 	LOG_INF("dmic_mcux_start: in");
@@ -352,10 +374,11 @@ static int dmic_mcux_start(const struct device *dev)
              return -1;
         }
         
-        dmic_mcux_setup_dma();
+        //(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel)
+        dmic_mcux_setup_dma(drv_data, channel);
         DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(1));
         drv_data->dmic_state = run_ping;
-        
+        ret = dmic_mcux_start_dma(drv_data, channel);
 	return 0;
 }
 
@@ -401,7 +424,7 @@ static int dmic_mcux_read(const struct device *dev,
 	struct mcux_dmic_drv_data *drv_data = dev->data;
         int ret;
         	
-	ret = k_mem_slab_alloc(drv_data->mem_slab, &buffer, K_NO_WAIT);
+	ret = k_mem_slab_alloc(drv_data->mem_slab, buffer, K_NO_WAIT);
 	
 	return 0;
 }
@@ -428,19 +451,15 @@ static const struct _dmic_ops dmic_ops = {
 };
 
 #define DMIC(idx) DT_NODELABEL(dmic##idx)
+#define PDMC(idx) DT_NODELABEL(pdmc##idx)
 #define DMIC_CLK_SRC(idx) DT_STRING_TOKEN(DMIC(idx), clock_source)
 #define PDM_DMIC_CHAN_SET_STATUS(pdm_chan_node_id, idx) 						\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).enabled=true;				\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).active=false;				\
 	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).hwvad_enabled=				\
 		(bool)DT_PROP(pdm_chan_node_id, hwvad);							\
-	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma=					\
-		DT_DMAS_CTLR(DMIC(idx))									\
-	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_chan=				\
-		DT_DMAS_CELL_BY_IDX(DMIC(idx), 0, channel)						\
-	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_cfg = {0};				\
-	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_ping = {0};			\
-	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_pong = {0};
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma=				DEVICE_DT_GET(DT_DMAS_CTLR(pdm_chan_node_id));								\
+	(pdm_channels##idx[DT_NODE_CHILD_IDX(pdm_chan_node_id)]).dma_chan=				DT_DMAS_CELL_BY_IDX(pdm_chan_node_id, 0, channel);						
 	
 	//BUILD_ASSERT((DT_NODE_CHILD_IDX(pdm_chan_node_id) != 0) & !(bool)DT_PROP(pdm_chan_node_id, hwvad), "error: hwvad can only be enabled on channel 0");
 
@@ -482,7 +501,7 @@ static const struct _dmic_ops dmic_ops = {
 													\
 		return 0;						     				\
 	}								     				\
-        									\
+        												\
 	DEVICE_DT_DEFINE(DMIC(idx), mcux_dmic_init##idx, NULL,		     				\
 			 &mcux_dmic_data##idx, &mcux_dmic_cfg##idx,  					\
 			 POST_KERNEL, CONFIG_AUDIO_DMIC_INIT_PRIORITY,	     				\
