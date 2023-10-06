@@ -83,8 +83,8 @@ static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
 
 static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t channel, int status){
 
-	struct mcux_dmic_drv_data *drv_data = dev->data;
-	struct mcux_dmic_cfg *dmic_cfg = dev->config;
+	struct mcux_dmic_drv_data *drv_data = ((struct device*)user_data)->data;
+	struct mcux_dmic_cfg *dmic_cfg = ((struct device*)user_data)->config;
 	int ret;
 	
 	if(status < 0) {
@@ -286,8 +286,11 @@ static int dmic_mcux_stop(const struct device *dev)
 	return 0;
 }
 
-static int dmic_mcux_setup_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel) {
+static int dmic_mcux_setup_dma(struct device *dev) {
 
+        struct mcux_dmic_drv_data *drv_data = dev->data;
+        struct dmic_cfg *dmic_dev_cfg = dev->config;
+        //struct pdm_chan_cfg channel = dmic_dev_cfg->channel;
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
 	uint8_t num_chan = drv_data->act_num_chan;
 	uint32_t dma_buf_size = drv_data->block_size / num_chan;
@@ -297,6 +300,7 @@ static int dmic_mcux_setup_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_c
 	for(uint8_t i=0;i<num_chan;i++) {
 	    /* DMA configuration , block config follows */
 	    
+	    pdm_channels[i].dma_cfg.user_data = dev;
 	    pdm_channels[i].dma_cfg.channel_direction = PERIPHERAL_TO_MEMORY;
 	    pdm_channels[i].dma_cfg.source_data_size = 4U;			// whatever the sample size, read is 32-bits
 	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->pcm_width == 16) ?  2U :4U;
@@ -336,7 +340,7 @@ static int dmic_mcux_setup_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_c
 
 static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel) {
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
-	uint8_t num_chan = channel->act_num_chan;
+	uint8_t num_chan = drv_data->act_num_chan;
 	int ret;
 	
 	for(uint8_t i=0;i<num_chan;i++) {
@@ -377,7 +381,7 @@ static int dmic_mcux_start(const struct device *dev)
         }
         
         //(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel)
-        dmic_mcux_setup_dma(drv_data, channel);
+        dmic_mcux_setup_dma(dev);
         DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(1));
         drv_data->dmic_state = run_ping;
         ret = dmic_mcux_start_dma(drv_data, channel);
