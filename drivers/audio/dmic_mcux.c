@@ -63,6 +63,7 @@ struct mcux_dmic_drv_data {
 	DMIC_Type *base_address;
 	struct mcux_dmic_pdm_chan *pdm_channels;
 	int8_t max_chan_num;
+	uint8_t act_num_chan;
 	enum e_dmic_state dmic_state;
 	uint8_t 	pcm_width     ;  
 };
@@ -145,7 +146,7 @@ static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 	
         osr = (uint32_t)(dmic_clk/(pcm_rate * use2fs_div));
 
-	LOG_INF("osr = %u\n", osr);
+	//LOG_INF("osr = %u\n", osr);
 
 	return osr;
 }
@@ -265,6 +266,7 @@ static int dmic_mcux_configure(const struct device *dev,
         drv_data->pcm_width = stream->pcm_width;
 	drv_data->mem_slab   = stream->mem_slab;
 	drv_data->block_size   = stream->block_size;
+	drv_data->act_num_chan = channel->act_num_chan;
 	
 	DMIC_Use2fs(drv_data->base_address, dmic_dev_cfg->use2fs);
 	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
@@ -287,7 +289,7 @@ static int dmic_mcux_stop(const struct device *dev)
 static int dmic_mcux_setup_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel) {
 
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
-	uint8_t num_chan = channel->act_num_chan;
+	uint8_t num_chan = drv_data->act_num_chan;
 	uint32_t dma_buf_size = drv_data->block_size / num_chan;
 	
 
