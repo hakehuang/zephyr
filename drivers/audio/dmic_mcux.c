@@ -46,8 +46,7 @@ struct mcux_dmic_pdm_chan {
      struct device *dma;
      uint8_t dma_chan;
      struct dma_config dma_cfg;
-     struct dma_block_config dma_ping;
-     struct dma_block_config dma_pong; 
+     struct dma_block_config dma_block;
 };
 
 struct mcux_dmic_drv_data {
@@ -81,10 +80,18 @@ static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
 	k_mem_slab_free(drv_data->mem_slab, buffer);
 }
 
+static int _reload_dmas() {
+
+	return 0;
+}
+
 static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t channel, int status){
 
 	struct mcux_dmic_drv_data *drv_data = ((struct device*)user_data)->data;
+	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
 	struct mcux_dmic_cfg *dmic_cfg = ((struct device*)user_data)->config;
+	uint8_t num_chan = drv_data->act_num_chan;
+	uint32_t dma_buf_size = drv_data->block_size / num_chan;
 	int ret;
 	
 	if(status < 0) {
@@ -98,7 +105,8 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	
 	// we assume that the DMA driver honors calling us on transfer completion
 	
-	if(drv_data->dmic_state == run_ping) {
+	switch(drv_data->dmic_state) {
+	  case run_ping: 
 		ret = k_msgq_put(&dmic_cfg->rx_queue,
 		                 &drv_data->ping_block,
 		                 K_NO_WAIT);
@@ -114,9 +122,12 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 			drv_data->dmic_state = fail;
 			return;
 		}
+		// here change to all channels
+		dma_reload(pdm_channels[0].dma, pdm_channels[0].dma_chan, DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0), drv_data->pong_block, dma_buf_size);
 		drv_data->dmic_state = run_pong;
-		
-	} else if(drv_data->dmic_state == run_pong) {
+		break;
+
+	 case run_pong:
 		ret = k_msgq_put(&dmic_cfg->rx_queue,
 		                 &drv_data->pong_block,
 		                 K_NO_WAIT);
@@ -133,9 +144,14 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 			return;
 		}
 		drv_data->dmic_state = run_ping;
-	} else {
-		// anything to clean up?
+		dma_reload(pdm_channels[0].dma, pdm_channels[0].dma_chan, DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0), drv_data->ping_block, dma_buf_size);
+		break;
+
+	  default:
+		break;
 	}		
+
+	return;
 }
 
 static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
@@ -309,7 +325,7 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
 	    pdm_channels[i].dma_cfg.error_callback_en = 0;
 	    pdm_channels[i].dma_cfg.block_count = 1;
-	    pdm_channels[i].dma_cfg.head_block = &(pdm_channels[i].dma_ping);
+	    pdm_channels[i].dma_cfg.head_block = &(pdm_channels[i].dma_block);
 	    
 	    if(i == num_chan - 1) {
 	        pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
@@ -320,19 +336,19 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    }
 	    
 	    /* DMA block config */
-	    pdm_channels[i].dma_ping.source_gather_en = false;
-	    pdm_channels[i].dma_ping.block_size = dma_buf_size;
-	    pdm_channels[i].dma_ping.source_address = DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
-	    pdm_channels[i].dma_ping.source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
+	    pdm_channels[i].dma_block.source_gather_en = false;
+	    pdm_channels[i].dma_block.block_size = dma_buf_size;
+	    pdm_channels[i].dma_block.source_address = DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
+	    pdm_channels[i].dma_block.source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
 	   
 	    // samples will be "desposited" interleaved in the dest buffer. Address increment is 4 bytes for 16 bits, 
 	    // 8 for 24/32 bits. Same applies for dest_scatter_interval.
-	    pdm_channels[i].dma_ping.dest_address = drv_data->ping_block;
-            pdm_channels[i].dma_ping.dest_scatter_interval = ((drv_data->pcm_width == 16) ?  4 : 8);
+	    pdm_channels[i].dma_block.dest_address = drv_data->ping_block;
+            pdm_channels[i].dma_block.dest_scatter_interval = ((drv_data->pcm_width == 16) ?  4 : 8);
 	    // we transfer only the number of bytes per PCM sample between "scatter_interval"
-	    pdm_channels[i].dma_ping.dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
-	    pdm_channels[i].dma_ping.dest_scatter_en = true;
-	    pdm_channels[i].dma_ping.next_block = NULL;
+	    pdm_channels[i].dma_block.dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_block.dest_scatter_en = true;
+	    pdm_channels[i].dma_block.next_block = NULL;
 	    
 	    dma_config(pdm_channels[i].dma, pdm_channels[i].dma_chan, &(pdm_channels[i].dma_cfg));
 	}
@@ -356,6 +372,7 @@ static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_c
 	    }
 	}
 
+	return 0;
 }
 
 static int dmic_mcux_start(const struct device *dev)
