@@ -666,6 +666,10 @@ static int dma_mcux_lpc_reload(const struct device *dev, uint32_t channel,
 	struct channel_data *data = DEV_CHANNEL_DATA(dev, virtual_channel);
 	uint32_t xfer_config = 0U;
 
+	/* DMA controller requires that the address be aligned to transfer size */
+	assert(src == ROUND_UP(src, data->width));
+	assert(dst == ROUND_UP(dst, data->width));
+
 	if (!data->descriptors_queued) {
 		dma_handle_t *p_handle;
 
