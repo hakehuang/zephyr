@@ -40,6 +40,8 @@ struct channel_data {
 	void *user_data;
 	dma_callback_t dma_callback;
 	enum dma_channel_direction dir;
+	uint8_t src_inc;
+	uint8_t dst_inc;
 	dma_descriptor_t *curr_descriptor;
 	uint8_t num_of_descriptors;
 	bool descriptors_queued;
@@ -427,6 +429,9 @@ static int dma_mcux_lpc_configure(const struct device *dev, uint32_t channel,
 	}
 
 	data->dir = config->channel_direction;
+	/* Save the increment values for the reload function */
+	data->src_inc = src_inc;
+	data->dst_inc = dst_inc;
 
 	if (data->busy) {
 		DMA_AbortTransfer(p_handle);
@@ -659,26 +664,7 @@ static int dma_mcux_lpc_reload(const struct device *dev, uint32_t channel,
 	struct dma_mcux_lpc_dma_data *dev_data = dev->data;
 	int8_t virtual_channel = dev_data->channel_index[channel];
 	struct channel_data *data = DEV_CHANNEL_DATA(dev, virtual_channel);
-	uint8_t src_inc, dst_inc;
 	uint32_t xfer_config = 0U;
-
-	switch (data->dir) {
-	case MEMORY_TO_MEMORY:
-		src_inc = 1;
-		dst_inc = 1;
-		break;
-	case MEMORY_TO_PERIPHERAL:
-		src_inc = 1;
-		dst_inc = 0;
-		break;
-	case PERIPHERAL_TO_MEMORY:
-		src_inc = 0;
-		dst_inc = 1;
-		break;
-	default:
-		LOG_ERR("not support transfer direction");
-		return -EINVAL;
-	}
 
 	if (!data->descriptors_queued) {
 		dma_handle_t *p_handle;
@@ -688,8 +674,8 @@ static int dma_mcux_lpc_reload(const struct device *dev, uint32_t channel,
 		/* Only one buffer, enable interrupt */
 		xfer_config = DMA_CHANNEL_XFER(0UL, 0UL, 1UL, 0UL,
 					data->width,
-					src_inc,
-					dst_inc,
+					data->src_inc,
+					data->dst_inc,
 					size);
 		DMA_SubmitChannelTransferParameter(p_handle,
 						xfer_config,
@@ -703,7 +689,8 @@ static int dma_mcux_lpc_reload(const struct device *dev, uint32_t channel,
 		local_block.dest_address = dst;
 		local_block.block_size = size;
 		local_block.source_reload_en = 1;
-		dma_mcux_lpc_queue_descriptors(data, &local_block, src_inc, dst_inc);
+		dma_mcux_lpc_queue_descriptors(data, &local_block,
+					       data->src_inc, data->dst_inc);
 	}
 
 	return 0;
