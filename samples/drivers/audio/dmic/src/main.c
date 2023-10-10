@@ -49,10 +49,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 		return ret;
 	}
 
-	LOG_INF("spinning");
-	k_sleep(K_FOREVER);
-	//while (1) {} ;
-/*	for (int i = 0; i < block_count; ++i) {
+	for (int i = 0; i < block_count; ++i) {
 		void *buffer;
 		uint32_t size;
 
@@ -71,7 +68,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 	if (ret < 0) {
 		LOG_ERR("STOP trigger failed: %d", ret);
 		return ret;
-	}*/
+	}
 
 	return ret;
 }
@@ -121,6 +118,7 @@ int main(void)
 		return 0;
 	}
 
+	/*
 	cfg.channel.req_num_chan = 2;
 	cfg.channel.req_chan_map_lo =
 		dmic_build_channel_map(0, 0, PDM_CHAN_LEFT) |
@@ -133,7 +131,7 @@ int main(void)
 	if (ret < 0) {
 		return 0;
 	}
-
+*/
 	LOG_INF("Exiting");
 	return 0;
 }

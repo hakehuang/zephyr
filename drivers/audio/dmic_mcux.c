@@ -348,6 +348,7 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    // we transfer only the number of bytes per PCM sample between "scatter_interval"
 	    pdm_channels[i].dma_block.dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
 	    pdm_channels[i].dma_block.dest_scatter_en = true;
+	    pdm_channels[i].dma_block.dest_reload_en = 1;
 	    pdm_channels[i].dma_block.next_block = NULL;
 	    
 	    dma_config(pdm_channels[i].dma, pdm_channels[i].dma_chan, &(pdm_channels[i].dma_cfg));
@@ -414,7 +415,7 @@ static int dmic_mcux_trigger(const struct device *dev,
 	switch (cmd) {
 	case DMIC_TRIGGER_PAUSE:
 	case DMIC_TRIGGER_STOP:
-		LOG_INF("trigger: start");
+		LOG_INF("trigger: stop");
 		if (drv_data->active) {
 			drv_data->stopping = true;
 			dmic_mcux_stop(dev);
@@ -448,6 +449,11 @@ static int dmic_mcux_read(const struct device *dev,
         int ret;
         	
 	ret = k_mem_slab_alloc(drv_data->mem_slab, buffer, K_NO_WAIT);
+	if(ret < 0) {
+	    return ret;
+	} else {
+            *size = drv_data->block_size;
+	}
 	
 	return 0;
 }
