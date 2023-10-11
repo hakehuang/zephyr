@@ -152,7 +152,7 @@ static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, boo
 
 	uint32_t mask = 0x0;
         
-	for(uint8_t i=0;i<drv_data->num_chan;i++) {
+	for(uint8_t i=0;i<drv_data->act_num_chan;i++) {
 	    mask |= (enable << i);   
 	}
 
@@ -328,7 +328,7 @@ static int dmic_mcux_stop_dma(struct mcux_dmic_drv_data *drv_data) {
 
 	for(uint8_t i=0;i<num_chan;i++) {
  	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, false);
-	    if(dma_stop(pdm_channels[j].dma, pdm_channels[j].dma_chan) < 0) {
+	    if(dma_stop(pdm_channels[i].dma, pdm_channels[i].dma_chan) < 0) {
 		ret = 1;
 	    }
 	}
