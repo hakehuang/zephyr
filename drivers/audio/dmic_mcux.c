@@ -78,9 +78,49 @@ struct mcux_dmic_cfg {
 	bool use2fs;
 };
 
-static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
-{
-	k_mem_slab_free(drv_data->mem_slab, buffer);
+static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
+
+	uint32_t use2fs_div = use2fs ? 2 : 1;
+	uint32_t osr;
+	const uint32_t dmic_clk = 3072000;
+	
+        osr = (uint32_t)(dmic_clk/(pcm_rate * use2fs_div));
+
+	return osr;
+}
+
+static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
+			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
+
+        dmic_channel_config_t dmic_channel_cfg;
+        
+	LOG_INF("_init_channels: in");
+	for(uint8_t i=0;i<num_chan;i++) {
+
+		LOG_INF("configure: chan %u", i);
+	
+               pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
+               pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
+               pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;                  /* default */
+               pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
+               pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
+               pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
+               pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;                   /* default */
+               pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;                  /* default */
+               pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
+		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
+					pdm_channels[i].dmic_channel_cfg.enableSignExtend = false;
+		#endif
+		
+		DMIC_ConfigChannel(drv_data->base_address,
+		                  (dmic_channel_t)i, 
+		                  (stereo_side_t)(i%2), 
+		                  &dmic_channel_cfg);
+		                  
+		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
+	}
+
+	return;
 }
 
 static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer) {
@@ -101,6 +141,11 @@ static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer
 	}
 
 	return 0;
+}
+
+static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
+{
+	k_mem_slab_free(drv_data->mem_slab, buffer);
 }
 
 static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, bool enable) {
@@ -193,138 +238,6 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	}		
 
 	return;
-}
-
-static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
-
-	uint32_t use2fs_div = use2fs ? 2 : 1;
-	uint32_t osr;
-	const uint32_t dmic_clk = 3072000;
-	
-        osr = (uint32_t)(dmic_clk/(pcm_rate * use2fs_div));
-
-	return osr;
-}
-
-static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
-			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
-
-        dmic_channel_config_t dmic_channel_cfg;
-        
-	LOG_INF("_init_channels: in");
-	for(uint8_t i=0;i<num_chan;i++) {
-
-		LOG_INF("configure: chan %u", i);
-	
-               pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
-               pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
-               pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;                  /* default */
-               pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
-               pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
-               pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
-               pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;                   /* default */
-               pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;                  /* default */
-               pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
-		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
-					pdm_channels[i].dmic_channel_cfg.enableSignExtend = false;
-		#endif
-		
-		DMIC_ConfigChannel(drv_data->base_address,
-		                  (dmic_channel_t)i, 
-		                  (stereo_side_t)(i%2), 
-		                  &dmic_channel_cfg);
-		                  
-		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
-	}
-
-	return;
-}
-
-/*
- * For now, we will support only one stream, max two channels. Other use cases
- * are unclear at this point
- * */
-static int dmic_mcux_configure(const struct device *dev,
-				   struct dmic_cfg *config)
-{
-
-	struct mcux_dmic_drv_data *drv_data = dev->data;
-	struct mcux_dmic_cfg *dmic_dev_cfg = dev->config;
-	struct pdm_chan_cfg *channel = &config->channel;
-        struct pcm_stream_cfg *stream = &config->streams[0];
-
-	uint32_t map;
-
-	LOG_INF("configure: in");
-	if (drv_data->active) {
-                LOG_ERR("Cannot configure device while it is active");
-                return -EBUSY;
-        }
-
-	/* for now we support only channels #0 and #1 */
-	switch(channel->req_num_chan) {
-		case 1:
-			LOG_INF("configure: one channel");
-			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT);
-			channel->act_num_chan = 1;
-			break;
-/* More than one channel is not supported yet
-		case 2:
-			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT)
-				| dmic_build_channel_map(1, 0, PDM_CHAN_RIGHT);
-			channel->act_num_chan = 2;
-			break;
-*/
-		default:
-			LOG_ERR("Requested number of channels is invalid");
-			return -EINVAL;
-	}
-
-	channel->act_num_streams = 1;
-	channel->act_chan_map_hi = 0;
-	channel->act_chan_map_lo = map;
-
-	if (channel->req_num_streams != 1 ||
-	    channel->req_chan_map_lo != map) {
-		LOG_ERR("Requested number of channels is invalid");
-		return -EINVAL;
-	}
-	
-	if (stream->pcm_rate == 0 || stream->pcm_width == 0) {
-		if (drv_data->configured) {
-			DMIC_DeInit(drv_data->base_address);
-			drv_data->configured = false;
-		}
-
-		return 0;
-	}
-
-	LOG_INF("configure: one channelPCM width = %u", stream->pcm_width);
-	if (stream->pcm_width != 16 && stream->pcm_width != 24) {
-		LOG_ERR("Only 16-bit and 24-bit samples are supported");
-		return -EINVAL;
-	}
-        drv_data->pcm_width = stream->pcm_width;
-	drv_data->mem_slab   = stream->mem_slab;
-	drv_data->block_size   = stream->block_size;
-	drv_data->act_num_chan = channel->act_num_chan;
-	
-	DMIC_Use2fs(drv_data->base_address, dmic_dev_cfg->use2fs);
-	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
-	
-	drv_data->configured=true;
-	return 0;
-}
-
-static int dmic_mcux_stop(const struct device *dev)
-{
-        struct mcux_dmic_drv_data *drv_data = dev->data;
-        struct mcux_dmic_cfg *dmic_cfg = dev->config;
-
-	/* disable FIFO */
-	dmic_mcux_stop_dma(drv_data);
- 	dmic_mcux_activate_channels(drv_data, false);
-	return 0;
 }
 
 static int dmic_mcux_setup_dma(struct device *dev) {
@@ -421,6 +334,93 @@ static int dmic_mcux_stop_dma(struct mcux_dmic_drv_data *drv_data) {
 	}
 
 	return ret;
+}
+
+/*
+ * For now, we will support only one stream, max two channels. Other use cases
+ * are unclear at this point
+ * */
+static int dmic_mcux_configure(const struct device *dev,
+				   struct dmic_cfg *config)
+{
+
+	struct mcux_dmic_drv_data *drv_data = dev->data;
+	struct mcux_dmic_cfg *dmic_dev_cfg = dev->config;
+	struct pdm_chan_cfg *channel = &config->channel;
+        struct pcm_stream_cfg *stream = &config->streams[0];
+
+	uint32_t map;
+
+	LOG_INF("configure: in");
+	if (drv_data->active) {
+                LOG_ERR("Cannot configure device while it is active");
+                return -EBUSY;
+        }
+
+	/* for now we support only channels #0 and #1 */
+	switch(channel->req_num_chan) {
+		case 1:
+			LOG_INF("configure: one channel");
+			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT);
+			channel->act_num_chan = 1;
+			break;
+/* More than one channel is not supported yet
+		case 2:
+			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT)
+				| dmic_build_channel_map(1, 0, PDM_CHAN_RIGHT);
+			channel->act_num_chan = 2;
+			break;
+*/
+		default:
+			LOG_ERR("Requested number of channels is invalid");
+			return -EINVAL;
+	}
+
+	channel->act_num_streams = 1;
+	channel->act_chan_map_hi = 0;
+	channel->act_chan_map_lo = map;
+
+	if (channel->req_num_streams != 1 ||
+	    channel->req_chan_map_lo != map) {
+		LOG_ERR("Requested number of channels is invalid");
+		return -EINVAL;
+	}
+	
+	if (stream->pcm_rate == 0 || stream->pcm_width == 0) {
+		if (drv_data->configured) {
+			DMIC_DeInit(drv_data->base_address);
+			drv_data->configured = false;
+		}
+
+		return 0;
+	}
+
+	LOG_INF("configure: one channelPCM width = %u", stream->pcm_width);
+	if (stream->pcm_width != 16 && stream->pcm_width != 24) {
+		LOG_ERR("Only 16-bit and 24-bit samples are supported");
+		return -EINVAL;
+	}
+        drv_data->pcm_width = stream->pcm_width;
+	drv_data->mem_slab   = stream->mem_slab;
+	drv_data->block_size   = stream->block_size;
+	drv_data->act_num_chan = channel->act_num_chan;
+	
+	DMIC_Use2fs(drv_data->base_address, dmic_dev_cfg->use2fs);
+	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
+	
+	drv_data->configured=true;
+	return 0;
+}
+
+static int dmic_mcux_stop(const struct device *dev)
+{
+        struct mcux_dmic_drv_data *drv_data = dev->data;
+        struct mcux_dmic_cfg *dmic_cfg = dev->config;
+
+	/* disable FIFO */
+	dmic_mcux_stop_dma(drv_data);
+ 	dmic_mcux_activate_channels(drv_data, false);
+	return 0;
 }
 
 static int dmic_mcux_start(const struct device *dev)
