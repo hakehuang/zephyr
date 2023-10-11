@@ -7,6 +7,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/*
+ * Assumptions
+ *   - the Zephyr API provides a "map" that currently limits a stream to 2 channels, right and left
+ *   - the notion of "map" assumes the LEFT and RIGHT channels of EACH PDM controller needs 
+ *     to be adjacent to each other
+ *   - The current implementation of DMIC for MCUX is limited to two channels and one stream
+ *   - Some of the code assumes sequential channel numbers from 0, this will be improved over time
+ */
+
 #include <zephyr/drivers/dma.h>
 #include <zephyr/audio/dmic.h>
 #include <zephyr/drivers/pinctrl.h>
@@ -21,13 +30,7 @@ LOG_MODULE_REGISTER(dmic_mcux, CONFIG_AUDIO_DMIC_LOG_LEVEL);
 
 #define DT_DRV_COMPAT nxp_mcux_dmic
 
-#define MAX_NUM_DMA_BLOCKS 32
-
 #define CONFIG_DMIC_MCUX_QUEUE_SIZE 8		// Move to KCONFIG
-
-// DEBUG DEBUG DEBUG
-static uint32_t isr_counter = 0;
-static uint32_t time = 0;
 
 enum e_dmic_state {
      run_ping,
@@ -209,7 +212,6 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		                  
 		//DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
 		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
-		DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
 	}
 
 	return;
@@ -310,7 +312,7 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
 	uint8_t num_chan = drv_data->act_num_chan;
 	uint32_t dma_buf_size = drv_data->block_size / num_chan;
-	
+	int ret = 0;
 
 	
 	for(uint8_t i=0;i<num_chan;i++) {
@@ -351,8 +353,14 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    pdm_channels[i].dma_block.dest_reload_en = 1;
 	    pdm_channels[i].dma_block.next_block = NULL;
 	    
-	    dma_config(pdm_channels[i].dma, pdm_channels[i].dma_chan, &(pdm_channels[i].dma_cfg));
+	    ret = dma_config(pdm_channels[i].dma, pdm_channels[i].dma_chan, &(pdm_channels[i].dma_cfg));
+	    if(ret < 0) {
+		return ret;
+	    }
+ 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
 	}
+
+	return 0;
 }
 
 static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel) {
@@ -399,10 +407,14 @@ static int dmic_mcux_start(const struct device *dev)
         }
         
         //(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel)
-        dmic_mcux_setup_dma(dev);
+        ret = dmic_mcux_setup_dma(dev);
+	if(ret < 0) { 
+	    return ret;
+	}
         DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(1));
         drv_data->dmic_state = run_ping;
         ret = dmic_mcux_start_dma(drv_data, channel);
+
 	return 0;
 }
 
@@ -458,21 +470,6 @@ static int dmic_mcux_read(const struct device *dev,
 	return 0;
 }
 
-static void init_clock_manager(const struct device *dev)
-{
-	return;
-}
-
-static void dmic_mcux_isr(const struct device *dev) {
-
-        struct mcux_dmic_drv_data *drv_data = dev->data;
-        
-	DMIC_FifoClearStatus(drv_data->base_address, (dmic_channel_t)0, 0x3);
-	isr_counter++;
-	time = sys_clock_cycle_get_32();
-	return;
-}
-
 static const struct _dmic_ops dmic_ops = {
 	.configure = dmic_mcux_configure,
 	.trigger = dmic_mcux_trigger,
@@ -497,9 +494,6 @@ static const struct _dmic_ops dmic_ops = {
 #else
 	static bool no_iocfg = false;
 #endif
- 
-// 		IRQ_CONNECT(DT_IRQN(DMIC(idx)), DT_IRQ(DMIC(idx), priority),   			
-//			    dmic_mcux_isr, DEVICE_DT_INST_GET(idx), 0);				
 
 #define MCUX_DMIC_DEVICE(idx)	 									\
        	struct mcux_dmic_pdm_chan pdm_channels##idx[FSL_FEATURE_DMIC_CHANNEL_NUM] ; 			\
