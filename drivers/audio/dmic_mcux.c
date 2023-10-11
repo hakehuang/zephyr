@@ -103,6 +103,17 @@ static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer
 	return 0;
 }
 
+static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, bool enable) {
+
+	uint32_t mask = 0x0;
+        
+	for(uint8_t i=0;i<drv_data->num_chan;i++) {
+	    mask |= (enable << i);   
+	}
+
+	DMIC_EnableChannnel(drv_data->base_address, mask);
+}
+
 static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t channel, int status){
 
 	struct mcux_dmic_drv_data *drv_data = ((struct device*)user_data)->data;
@@ -114,14 +125,11 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	
 	if(status < 0) {
 
-	     //stop_the_whole_thing();
 	     drv_data->dmic_state = fail;
 	     free_block(drv_data, drv_data->ping_block);
 	     free_block(drv_data, drv_data->pong_block);
 	     return;
 	}
-	
-	// we assume that the DMA driver honors calling us on transfer completion
 	
 	switch(drv_data->dmic_state) {
 	  case run_ping: 
@@ -134,7 +142,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
 		}
-		// dma_start/reload?
+
 		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->ping_block, K_NO_WAIT);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
@@ -162,7 +170,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
 		}
-		// dma_start/reload?
+
 		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->pong_block, K_NO_WAIT);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
@@ -194,8 +202,6 @@ static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 	const uint32_t dmic_clk = 3072000;
 	
         osr = (uint32_t)(dmic_clk/(pcm_rate * use2fs_div));
-
-	//LOG_INF("osr = %u\n", osr);
 
 	return osr;
 }
@@ -316,8 +322,8 @@ static int dmic_mcux_stop(const struct device *dev)
         struct mcux_dmic_cfg *dmic_cfg = dev->config;
 
 	/* disable FIFO */
-   	DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(0));
- 	
+	dmic_mcux_stop_dma(drv_data);
+ 	dmic_mcux_activate_channels(drv_data, false);
 	return 0;
 }
 
@@ -325,7 +331,6 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 
         struct mcux_dmic_drv_data *drv_data = dev->data;
         struct dmic_cfg *dmic_dev_cfg = dev->config;
-        //struct pdm_chan_cfg channel = dmic_dev_cfg->channel;
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
 	uint8_t num_chan = drv_data->act_num_chan;
 	uint32_t dma_buf_size = drv_data->block_size / num_chan;
@@ -374,13 +379,13 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    if(ret < 0) {
 		return ret;
 	    }
- 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
 	}
 
 	return 0;
 }
 
-static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_chan_cfg *channel) {
+static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data) {
+
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
 	uint8_t num_chan = drv_data->act_num_chan;
 	int ret;
@@ -396,9 +401,26 @@ static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data, struct pdm_c
 	        }
 	        return ret;
 	    }
+ 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
 	}
 
 	return 0;
+}
+
+static int dmic_mcux_stop_dma(struct mcux_dmic_drv_data *drv_data) {
+
+	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
+	uint8_t num_chan = drv_data->act_num_chan;
+	int ret = 0;
+
+	for(uint8_t i=0;i<num_chan;i++) {
+ 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, false);
+	    if(dma_stop(pdm_channels[j].dma, pdm_channels[j].dma_chan) < 0) {
+		ret = 1;
+	    }
+	}
+
+	return ret;
 }
 
 static int dmic_mcux_start(const struct device *dev)
@@ -428,9 +450,12 @@ static int dmic_mcux_start(const struct device *dev)
 	if(ret < 0) { 
 	    return ret;
 	}
-        DMIC_EnableChannnel(drv_data->base_address, DMIC_CHANEN_EN_CH0(1));
         drv_data->dmic_state = run_ping;
-        ret = dmic_mcux_start_dma(drv_data, channel);
+        ret = dmic_mcux_start_dma(drv_data);
+	if(ret < 0) {
+	    return ret;
+	}
+	dmic_mcux_activate_channels(drv_data, true);
 
 	return 0;
 }
