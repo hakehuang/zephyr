@@ -83,7 +83,22 @@ static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
 	k_mem_slab_free(drv_data->mem_slab, buffer);
 }
 
-static int _reload_dmas() {
+static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer) {
+
+	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
+	uint8_t num_chan = drv_data->act_num_chan;
+	uint32_t dma_buf_size = drv_data->block_size / num_chan; 
+	int ret = 0;
+
+	for(uint8_t i=0;i<num_chan;i++) {
+
+		ret = dma_reload(pdm_channels[0].dma, pdm_channels[0].dma_chan,
+			         DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0),
+			         sample_buffer, dma_buf_size);
+		if(ret < 0) {
+			return ret;
+		}
+	}
 
 	return 0;
 }
@@ -125,9 +140,16 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 			drv_data->dmic_state = fail;
 			return;
 		}
-		// here change to all channels
-		dma_reload(pdm_channels[0].dma, pdm_channels[0].dma_chan, DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0), drv_data->pong_block, dma_buf_size);
+
+		ret = _reload_dmas(drv_data, drv_data->pong_block);
+		if(ret < 0) {
+			drv_data->dmic_state = fail;
+			free_block(drv_data, drv_data->ping_block);
+	     		free_block(drv_data, drv_data->pong_block);
+	     		return;
+		}
 		drv_data->dmic_state = run_pong;
+
 		break;
 
 	 case run_pong:
@@ -146,8 +168,16 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 			drv_data->dmic_state = fail;
 			return;
 		}
+
+		ret = _reload_dmas(drv_data, drv_data->ping_block);
+		if(ret < 0) {
+			drv_data->dmic_state = fail;
+			free_block(drv_data, drv_data->ping_block);
+	     		free_block(drv_data, drv_data->pong_block);
+	     		return;
+		}
 		drv_data->dmic_state = run_ping;
-		dma_reload(pdm_channels[0].dma, pdm_channels[0].dma_chan, DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0), drv_data->ping_block, dma_buf_size);
+
 		break;
 
 	  default:
@@ -169,18 +199,6 @@ static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 
 	return osr;
 }
-
-static inline void _find_max_chan_num(struct mcux_dmic_pdm_chan *pdm_channels, uint8_t *max_chan_num) {
-
-        *max_chan_num = -1;
-        
-	for(int8_t i = 0; i < FSL_FEATURE_DMIC_CHANNEL_NUM; i++) {
-	    if(pdm_channels[i].enabled && i > *max_chan_num) {
-	    	*max_chan_num = i;
-	    }
-	}
-}
-
 
 static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
@@ -210,7 +228,6 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		                  (stereo_side_t)(i%2), 
 		                  &dmic_channel_cfg);
 		                  
-		//DMIC_EnableChannelInterrupt(drv_data->base_address, (dmic_channel_t)i, true);
 		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
 	}
 
@@ -320,7 +337,7 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    
 	    pdm_channels[i].dma_cfg.user_data = dev;
 	    pdm_channels[i].dma_cfg.channel_direction = PERIPHERAL_TO_MEMORY;
-	    pdm_channels[i].dma_cfg.source_data_size = 4U;			// whatever the sample size, read is 32-bits
+	    pdm_channels[i].dma_cfg.source_data_size = 4U; // whatever the sample size, read is 32-bits
 	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->pcm_width == 16) ?  2U :4U;
 	    pdm_channels[i].dma_cfg.source_burst_length = 4U;
 	    pdm_channels[i].dma_cfg.dest_burst_length = (drv_data->pcm_width == 16) ?  2U :4U;
