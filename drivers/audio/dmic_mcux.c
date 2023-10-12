@@ -100,13 +100,14 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		LOG_INF("configure: chan %u", i);
 	
                pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
-               pdm_channels[i].dmic_channel_cfg.osr                 = _get_dmic_OSR_divider(pcm_rate, pdm_channels[i].use2fs);
-               pdm_channels[i].dmic_channel_cfg.gainshft            = 2U;                  /* default */
+               pdm_channels[i].dmic_channel_cfg.osr                 = 16U ; //_get_dmic_OSR_divider(pcm_rate, true);
+               pdm_channels[i].dmic_channel_cfg.gainshft            = 6U;                  /* default */
                pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero; /* default */
                pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero; /* default */
                pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;      /* default */
                pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1;                   /* default */
                pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;                  /* default */
+               pdm_channels[i].dmic_channel_cfg.enableSignExtend    = false;               /* default */
                pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;  /* default */
 		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
 					pdm_channels[i].dmic_channel_cfg.enableSignExtend = false;
@@ -115,7 +116,7 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		DMIC_ConfigChannel(drv_data->base_address,
 		                  (dmic_channel_t)i, 
 		                  (stereo_side_t)(i%2), 
-		                  &dmic_channel_cfg);
+		                  &(pdm_channels[i].dmic_channel_cfg));
 		                  
 		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
 	}
@@ -255,10 +256,10 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    
 	    pdm_channels[i].dma_cfg.user_data = dev;
 	    pdm_channels[i].dma_cfg.channel_direction = PERIPHERAL_TO_MEMORY;
-	    pdm_channels[i].dma_cfg.source_data_size = 4U; // whatever the sample size, read is 32-bits
-	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->pcm_width == 16) ?  2U :4U;
-	    pdm_channels[i].dma_cfg.source_burst_length = 4U;
-	    pdm_channels[i].dma_cfg.dest_burst_length = (drv_data->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_cfg.source_data_size = (drv_data->pcm_width == 16) ?  2U : 4U;
+	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->pcm_width == 16) ?  2U : 4U;
+	    //pdm_channels[i].dma_cfg.source_burst_length = 4U;
+	    //pdm_channels[i].dma_cfg.dest_burst_length = (drv_data->pcm_width == 16) ?  2U :4U;
 	    pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
 	    pdm_channels[i].dma_cfg.error_callback_en = 0;
 	    pdm_channels[i].dma_cfg.block_count = 1;
