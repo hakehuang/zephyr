@@ -490,5 +490,5 @@ zephyr_udc0: &usbhs {
 };
 
 &pdmc1 {
-	status = "okay";
+	status = "disabled";
 };
