@@ -364,13 +364,13 @@ static int dmic_mcux_configure(const struct device *dev,
 			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT);
 			channel->act_num_chan = 1;
 			break;
-/* More than one channel is not supported yet
+
 		case 2:
 			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT)
 				| dmic_build_channel_map(1, 0, PDM_CHAN_RIGHT);
 			channel->act_num_chan = 2;
 			break;
-*/
+
 		default:
 			LOG_ERR("Requested number of channels is invalid");
 			return -EINVAL;
