@@ -67,12 +67,12 @@ struct mcux_dmic_drv_data {
 	int8_t max_chan_num;
 	uint8_t act_num_chan;
 	enum e_dmic_state dmic_state;
-	uint8_t 	pcm_width     ;  
+	uint8_t 	pcm_width     ; 
+	struct k_msgq rx_queue; 
 };
 
 struct mcux_dmic_cfg {
 	const struct pinctrl_dev_config *pcfg;
-	struct k_msgq rx_queue;
 	struct k_msgq rx_buffer;
 
 	bool use2fs;
@@ -179,7 +179,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	
 	switch(drv_data->dmic_state) {
 	  case run_ping: 
-		ret = k_msgq_put(&dmic_cfg->rx_queue,
+		ret = k_msgq_put(&drv_data->rx_queue,
 		                 &drv_data->ping_block,
 		                 K_NO_WAIT);
 		if(ret < 0) {
@@ -207,7 +207,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		break;
 
 	 case run_pong:
-		ret = k_msgq_put(&dmic_cfg->rx_queue,
+		ret = k_msgq_put(&drv_data->rx_queue,
 		                 &drv_data->pong_block,
 		                 K_NO_WAIT);
 		if(ret < 0) {
@@ -505,7 +505,14 @@ static int dmic_mcux_read(const struct device *dev,
 	struct mcux_dmic_drv_data *drv_data = dev->data;
         int ret;
         	
-	ret = k_mem_slab_alloc(drv_data->mem_slab, buffer, K_NO_WAIT);
+        ARG_UNUSED(stream);
+
+	if (!drv_data->configured) {
+		LOG_ERR("Device is not configured");
+		return -EIO;
+	}
+        	
+	ret = k_msgq_get(&drv_data->rx_queue, buffer, SYS_TIMEOUT_MS(timeout));
 	if(ret < 0) {
 	    return ret;
 	} else {
@@ -535,9 +542,9 @@ static const struct _dmic_ops dmic_ops = {
 	//BUILD_ASSERT((DT_NODE_CHILD_IDX(pdm_chan_node_id) != 0) & !(bool)DT_PROP(pdm_chan_node_id, hwvad), "error: hwvad can only be enabled on channel 0");
 
 #if !(defined(FSL_FEATURE_DMIC_HAS_NO_IOCFG) && FSL_FEATURE_DMIC_HAS_NO_IOCFG)
-	static bool no_iocfg = true;
+	#define SET_IO DMIC_SetIOCFG((mcux_dmic_data##idx).base_address, kDMIC_PdmDual)
 #else
-	static bool no_iocfg = false;
+	#define SET_IO while(0){}
 #endif
 
 #define MCUX_DMIC_DEVICE(idx)	 									\
@@ -557,15 +564,13 @@ static const struct _dmic_ops dmic_ops = {
 	static int mcux_dmic_init##idx(const struct device *dev)	     				\
 	{												\
 		DT_FOREACH_CHILD_STATUS_OKAY_VARGS(DT_DRV_INST(idx), PDM_DMIC_CHAN_SET_STATUS, idx)     \
-		k_msgq_init(&mcux_dmic_cfg##idx.rx_queue,               				\
+		k_msgq_init(&mcux_dmic_data##idx.rx_queue,               				\
                             (char *)rx_msgs##idx, sizeof(uint32_t *),            			\
                             ARRAY_SIZE(rx_msgs##idx));							\
 		irq_enable(DT_IRQN(DMIC(idx)));								\
 	        pinctrl_apply_state(mcux_dmic_cfg##idx.pcfg, PINCTRL_STATE_DEFAULT);	    		\
 		DMIC_Init((mcux_dmic_data##idx).base_address);						\
-		COND_CODE_1(no_iocfg, 									\
-			    (DMIC_SetIOCFG((mcux_dmic_data##idx).base_address, kDMIC_PdmDual);), 	\
-			    (while(0) {};))								\
+		SET_IO;  										\
 													\
 		return 0;						     				\
 	}								     				\
