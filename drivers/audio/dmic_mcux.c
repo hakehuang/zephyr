@@ -276,14 +276,16 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	    /* DMA block config */
 	    pdm_channels[i].dma_block.source_gather_en = false;
 	    pdm_channels[i].dma_block.block_size = dma_buf_size;
-	    pdm_channels[i].dma_block.source_address = DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
+	    pdm_channels[i].dma_block.source_address = 
+		     DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
 	    pdm_channels[i].dma_block.source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
 	   
 	    // samples will be "desposited" interleaved in the dest buffer. Address increment is 4 bytes for 16 bits, 
 	    // 8 for 24/32 bits. Same applies for dest_scatter_interval.
 	    pdm_channels[i].dma_block.dest_address = drv_data->ping_block;
-            pdm_channels[i].dma_block.dest_scatter_interval = ((drv_data->pcm_width == 16) ?  4 : 8);
-	    // we transfer only the number of bytes per PCM sample between "scatter_interval"
+            pdm_channels[i].dma_block.dest_scatter_interval = 
+		     ((drv_data->pcm_width == 16) ?  (num_chan*2) : (num_chan*4));
+	    // we transfer only the number of bytes per PCM sample 
 	    pdm_channels[i].dma_block.dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
 	    pdm_channels[i].dma_block.dest_scatter_en = true;
 	    pdm_channels[i].dma_block.dest_reload_en = 1;
