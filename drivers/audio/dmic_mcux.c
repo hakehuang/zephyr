@@ -43,10 +43,10 @@ struct mcux_dmic_pdm_chan {
      bool enabled;
      bool active;
      bool hwvad_enabled;
-     bool use2fs;
+     bool n;
      struct device *dev_dma;
      dmic_channel_config_t dmic_channel_cfg;
-     struct device *dma;
+     const struct device *dma;
      uint8_t dma_chan;
      struct dma_config dma_cfg;
      struct dma_block_config dma_block;
@@ -69,13 +69,12 @@ struct mcux_dmic_drv_data {
 	enum e_dmic_state dmic_state;
 	uint8_t 	pcm_width     ; 
 	struct k_msgq rx_queue; 
+	bool use2fs;
 };
 
 struct mcux_dmic_cfg {
 	const struct pinctrl_dev_config *pcfg;
 	struct k_msgq rx_buffer;
-
-	bool use2fs;
 };
 
 static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
@@ -92,7 +91,7 @@ static uint32_t _get_dmic_OSR_divider(uint32_t pcm_rate, bool use2fs) {
 static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
-        dmic_channel_config_t dmic_channel_cfg;
+        
         
 	LOG_INF("_init_channels: in");
 	for(uint8_t i=0;i<num_chan;i++) {
@@ -134,8 +133,8 @@ static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer
 	for(uint8_t i=0;i<num_chan;i++) {
 
 		ret = dma_reload(pdm_channels[0].dma, pdm_channels[0].dma_chan,
-			         DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0),
-			         sample_buffer, dma_buf_size);
+			         (uint32_t)DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0),
+			         (uint32_t)sample_buffer, dma_buf_size);
 		if(ret < 0) {
 			return ret;
 		}
@@ -162,11 +161,7 @@ static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, boo
 
 static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t channel, int status){
 
-	struct mcux_dmic_drv_data *drv_data = ((struct device*)user_data)->data;
-	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
-	struct mcux_dmic_cfg *dmic_cfg = ((struct device*)user_data)->config;
-	uint8_t num_chan = drv_data->act_num_chan;
-	uint32_t dma_buf_size = drv_data->block_size / num_chan;
+	struct mcux_dmic_drv_data *drv_data = (struct mcux_dmic_drv_data *)user_data;
 	int ret;
 	
 	if(status < 0) {
@@ -241,10 +236,9 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	return;
 }
 
-static int dmic_mcux_setup_dma(struct device *dev) {
+static int dmic_mcux_setup_dma(const struct device *dev) {
 
         struct mcux_dmic_drv_data *drv_data = dev->data;
-        struct dmic_cfg *dmic_dev_cfg = dev->config;
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
 	uint8_t num_chan = drv_data->act_num_chan;
 	uint32_t dma_buf_size = drv_data->block_size / num_chan;
@@ -254,7 +248,7 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	for(uint8_t i=0;i<num_chan;i++) {
 	    /* DMA configuration , block config follows */
 	    
-	    pdm_channels[i].dma_cfg.user_data = dev;
+	    pdm_channels[i].dma_cfg.user_data = (void *)drv_data;
 	    pdm_channels[i].dma_cfg.channel_direction = PERIPHERAL_TO_MEMORY;
 	    pdm_channels[i].dma_cfg.source_data_size = (drv_data->pcm_width == 16) ?  2U : 4U;
 	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->pcm_width == 16) ?  2U : 4U;
@@ -282,7 +276,7 @@ static int dmic_mcux_setup_dma(struct device *dev) {
 	   
 	    // samples will be "desposited" interleaved in the dest buffer. Address increment is 4 bytes for 16 bits, 
 	    // 8 for 24/32 bits. Same applies for dest_scatter_interval.
-	    pdm_channels[i].dma_block.dest_address = drv_data->ping_block;
+	    pdm_channels[i].dma_block.dest_address = (uint32_t)drv_data->ping_block;
             pdm_channels[i].dma_block.dest_scatter_interval = 
 		     ((drv_data->pcm_width == 16) ?  (num_chan*2) : (num_chan*4));
 	    // we transfer only the number of bytes per PCM sample 
@@ -348,7 +342,6 @@ static int dmic_mcux_configure(const struct device *dev,
 {
 
 	struct mcux_dmic_drv_data *drv_data = dev->data;
-	struct mcux_dmic_cfg *dmic_dev_cfg = dev->config;
 	struct pdm_chan_cfg *channel = &config->channel;
         struct pcm_stream_cfg *stream = &config->streams[0];
 
@@ -408,7 +401,7 @@ static int dmic_mcux_configure(const struct device *dev,
 	drv_data->block_size   = stream->block_size;
 	drv_data->act_num_chan = channel->act_num_chan;
 	
-	DMIC_Use2fs(drv_data->base_address, dmic_dev_cfg->use2fs);
+	DMIC_Use2fs(drv_data->base_address, drv_data->use2fs);
 	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
 	
 	drv_data->configured=true;
@@ -418,7 +411,6 @@ static int dmic_mcux_configure(const struct device *dev,
 static int dmic_mcux_stop(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
-        struct mcux_dmic_cfg *dmic_cfg = dev->config;
 
 	/* disable FIFO */
 	dmic_mcux_stop_dma(drv_data);
@@ -429,9 +421,6 @@ static int dmic_mcux_stop(const struct device *dev)
 static int dmic_mcux_start(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
-        struct dmic_cfg *dmic_dev_cfg = dev->config;
-       	struct pdm_chan_cfg *channel = &dmic_dev_cfg->channel;
-        //struct pcm_stream_cfg *stream = &dmic_dev_cfg->streams[0];
 	int ret;
 	
 	LOG_INF("dmic_mcux_start: in");
@@ -556,6 +545,7 @@ static const struct _dmic_ops dmic_ops = {
 		.active = false,									\
 		.fifo_size = 	DT_PROP(DMIC(idx), fifo_size),						\
 		.dmic_state = stop,									\
+		.use2fs = DT_PROP(DMIC(idx), use2fs),							\
 	};												\
 	PINCTRL_DT_DEFINE(DMIC(idx));									\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx = {						\
