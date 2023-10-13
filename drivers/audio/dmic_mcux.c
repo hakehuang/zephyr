@@ -93,7 +93,6 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 
         
         
-	LOG_INF("_init_channels: in");
 	for(uint8_t i=0;i<num_chan;i++) {
 
 		LOG_INF("configure: chan %u", i);
@@ -132,10 +131,12 @@ static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer
 
 	for(uint8_t i=0;i<num_chan;i++) {
 
-		ret = dma_reload(pdm_channels[0].dma, pdm_channels[0].dma_chan,
-			         (uint32_t)DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)0),
+		LOG_INF("RLDMAS: channel %u", (uint32_t)i);
+		ret = dma_reload(pdm_channels[i].dma, pdm_channels[i].dma_chan,
+			         (uint32_t)DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i),
 			         (uint32_t)sample_buffer, dma_buf_size);
 		if(ret < 0) {
+			LOG_INF("RLDMAS: channel %u: failed", (uint32_t)i);
 			return ret;
 		}
 	}
@@ -164,6 +165,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	struct mcux_dmic_drv_data *drv_data = (struct mcux_dmic_drv_data *)user_data;
 	int ret;
 	
+	LOG_INF("CB: in");
 	if(status < 0) {
 
 	     drv_data->dmic_state = fail;
@@ -202,6 +204,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		break;
 
 	 case run_pong:
+		LOG_INF("CB: pong");
 		ret = k_msgq_put(&drv_data->rx_queue,
 		                 &drv_data->pong_block,
 		                 K_NO_WAIT);
@@ -212,12 +215,15 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	     		return;
 		}
 
+		LOG_INF("CB: pong: buffer on queue");
+		
 		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->pong_block, K_NO_WAIT);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
 			return;
 		}
 
+		LOG_INF("CB: pong: new buffer alloc'ed");
 		ret = _reload_dmas(drv_data, drv_data->ping_block);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
@@ -225,8 +231,10 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
 		}
+		LOG_INF("CB: pong: dmas reloaded");
 		drv_data->dmic_state = run_ping;
 
+		LOG_INF("CB: pong: going ping");
 		break;
 
 	  default:
@@ -347,7 +355,6 @@ static int dmic_mcux_configure(const struct device *dev,
 
 	uint32_t map;
 
-	LOG_INF("configure: in");
 	if (drv_data->active) {
                 LOG_ERR("Cannot configure device while it is active");
                 return -EBUSY;
@@ -423,8 +430,6 @@ static int dmic_mcux_start(const struct device *dev)
         struct mcux_dmic_drv_data *drv_data = dev->data;
 	int ret;
 	
-	LOG_INF("dmic_mcux_start: in");
-	
         /* Enable Channel */
         ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->ping_block, K_NO_WAIT);
         if(ret < 0) {
@@ -457,7 +462,6 @@ static int dmic_mcux_trigger(const struct device *dev,
 {
 	struct mcux_dmic_drv_data *drv_data = dev->data;
 
-	LOG_INF("trigger: in");
 	switch (cmd) {
 	case DMIC_TRIGGER_PAUSE:
 	case DMIC_TRIGGER_STOP:
