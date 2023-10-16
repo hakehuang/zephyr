@@ -241,6 +241,9 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		break;
 	}		
 
+	if (dmic_mcux_start_dma(drv_data) < 0) {
+		drv_data->dmic_state = fail;
+	}
 	return;
 }
 
