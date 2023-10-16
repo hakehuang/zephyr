@@ -160,6 +160,45 @@ static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, boo
 	DMIC_EnableChannnel(drv_data->base_address, mask);
 }
 
+static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data) {
+
+	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
+	uint8_t num_chan = drv_data->act_num_chan;
+	int ret;
+	
+	for(uint8_t i=0;i<num_chan;i++) {
+	    ret = dma_start(pdm_channels[i].dma, pdm_channels[i].dma_chan);
+	    if(ret) {
+	        for(uint8_t j=0;j<i;j++) {
+	            if(dma_stop(pdm_channels[j].dma, pdm_channels[j].dma_chan)) {
+	                // !!!
+	                return -1;
+	            }
+	        }
+	        return ret;
+	    }
+ 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
+	}
+
+	return 0;
+}
+
+static int dmic_mcux_stop_dma(struct mcux_dmic_drv_data *drv_data) {
+
+	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
+	uint8_t num_chan = drv_data->act_num_chan;
+	int ret = 0;
+
+	for(uint8_t i=0;i<num_chan;i++) {
+ 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, false);
+	    if(dma_stop(pdm_channels[i].dma, pdm_channels[i].dma_chan) < 0) {
+		ret = 1;
+	    }
+	}
+
+	return ret;
+}
+
 static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t channel, int status){
 
 	struct mcux_dmic_drv_data *drv_data = (struct mcux_dmic_drv_data *)user_data;
@@ -305,44 +344,7 @@ static int dmic_mcux_setup_dma(const struct device *dev) {
 	return 0;
 }
 
-static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data) {
 
-	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
-	uint8_t num_chan = drv_data->act_num_chan;
-	int ret;
-	
-	for(uint8_t i=0;i<num_chan;i++) {
-	    ret = dma_start(pdm_channels[i].dma, pdm_channels[i].dma_chan);
-	    if(ret) {
-	        for(uint8_t j=0;j<i;j++) {
-	            if(dma_stop(pdm_channels[j].dma, pdm_channels[j].dma_chan)) {
-	                // !!!
-	                return -1;
-	            }
-	        }
-	        return ret;
-	    }
- 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, true);
-	}
-
-	return 0;
-}
-
-static int dmic_mcux_stop_dma(struct mcux_dmic_drv_data *drv_data) {
-
-	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
-	uint8_t num_chan = drv_data->act_num_chan;
-	int ret = 0;
-
-	for(uint8_t i=0;i<num_chan;i++) {
- 	    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, false);
-	    if(dma_stop(pdm_channels[i].dma, pdm_channels[i].dma_chan) < 0) {
-		ret = 1;
-	    }
-	}
-
-	return ret;
-}
 
 /*
  * For now, we will support only one stream, max two channels. Other use cases
