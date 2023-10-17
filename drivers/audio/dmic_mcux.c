@@ -49,7 +49,7 @@ struct mcux_dmic_pdm_chan {
      const struct device *dma;
      uint8_t dma_chan;
      struct dma_config dma_cfg;
-     struct dma_block_config dma_block;
+     struct dma_block_config dma_blocks[2];
 };
 
 struct mcux_dmic_drv_data {
@@ -61,7 +61,6 @@ struct mcux_dmic_drv_data {
 	bool request_clock : 1;
 	bool configured    : 1;
 	volatile bool active;
-	volatile bool stopping;
 	DMIC_Type *base_address;
 	struct mcux_dmic_pdm_chan *pdm_channels;
 	int8_t max_chan_num;
@@ -95,8 +94,6 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
         
 	for(uint8_t i=0;i<num_chan;i++) {
 
-		LOG_INF("configure: chan %u", i);
-	
                pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
                pdm_channels[i].dmic_channel_cfg.osr                 = 16U ; //_get_dmic_OSR_divider(pcm_rate, true);
                pdm_channels[i].dmic_channel_cfg.gainshft            = 6U;                  /* default */
@@ -131,12 +128,11 @@ static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer
 
 	for(uint8_t i=0;i<num_chan;i++) {
 
-		LOG_INF("RLDMAS: channel %u", (uint32_t)i);
 		ret = dma_reload(pdm_channels[i].dma, pdm_channels[i].dma_chan,
 			         (uint32_t)DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i),
 			         (uint32_t)sample_buffer, dma_buf_size);
 		if(ret < 0) {
-			LOG_INF("RLDMAS: channel %u: failed", (uint32_t)i);
+			LOG_ERR("RLDMAS: channel %u: failed", (uint32_t)i);
 			return ret;
 		}
 	}
@@ -146,7 +142,7 @@ static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer
 
 static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
 {
-	k_mem_slab_free(drv_data->mem_slab, buffer);
+	//k_mem_slab_free(drv_data->mem_slab, buffer);
 }
 
 static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, bool enable) {
@@ -154,7 +150,11 @@ static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, boo
 	uint32_t mask = 0x0;
         
 	for(uint8_t i=0;i<drv_data->act_num_chan;i++) {
-	    mask |= (enable << i);   
+	    if(enable) {
+	         mask |= (1 << i);   
+	    } else {
+		 mask &= ~(1<<i);
+	    }
 	}
 
 	DMIC_EnableChannnel(drv_data->base_address, mask);
@@ -170,6 +170,7 @@ static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data) {
 	    ret = dma_start(pdm_channels[i].dma, pdm_channels[i].dma_chan);
 	    if(ret) {
 	        for(uint8_t j=0;j<i;j++) {
+		    DMIC_EnableChannelDma(drv_data->base_address, (dmic_channel_t)i, false);
 	            if(dma_stop(pdm_channels[j].dma, pdm_channels[j].dma_chan)) {
 	                // !!!
 	                return -1;
@@ -204,7 +205,6 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	struct mcux_dmic_drv_data *drv_data = (struct mcux_dmic_drv_data *)user_data;
 	int ret;
 	
-	LOG_INF("CB: in");
 	if(status < 0) {
 
 	     drv_data->dmic_state = fail;
@@ -230,6 +230,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 			drv_data->dmic_state = fail;
 			return;
 		}
+		LOG_INF("CB: next buffer is %p", drv_data->ping_block);
 
 		ret = _reload_dmas(drv_data, drv_data->pong_block);
 		if(ret < 0) {
@@ -243,7 +244,6 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		break;
 
 	 case run_pong:
-		LOG_INF("CB: pong");
 		ret = k_msgq_put(&drv_data->rx_queue,
 		                 &drv_data->pong_block,
 		                 K_NO_WAIT);
@@ -254,15 +254,13 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	     		return;
 		}
 
-		LOG_INF("CB: pong: buffer on queue");
-		
 		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->pong_block, K_NO_WAIT);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
 			return;
 		}
+		LOG_INF("CB: next buffer is %p", drv_data->ping_block);
 
-		LOG_INF("CB: pong: new buffer alloc'ed");
 		ret = _reload_dmas(drv_data, drv_data->ping_block);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
@@ -270,10 +268,8 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
 		}
-		LOG_INF("CB: pong: dmas reloaded");
 		drv_data->dmic_state = run_ping;
 
-		LOG_INF("CB: pong: going ping");
 		break;
 
 	  default:
@@ -307,7 +303,7 @@ static int dmic_mcux_setup_dma(const struct device *dev) {
 	    pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
 	    pdm_channels[i].dma_cfg.error_callback_en = 0;
 	    pdm_channels[i].dma_cfg.block_count = 1;
-	    pdm_channels[i].dma_cfg.head_block = &(pdm_channels[i].dma_block);
+	    pdm_channels[i].dma_cfg.head_block = &(pdm_channels[i].dma_blocks[0]);
 	    
 	    if(i == num_chan - 1) {
 	        pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
@@ -318,22 +314,29 @@ static int dmic_mcux_setup_dma(const struct device *dev) {
 	    }
 	    
 	    /* DMA block config */
-	    pdm_channels[i].dma_block.source_gather_en = false;
-	    pdm_channels[i].dma_block.block_size = dma_buf_size;
-	    pdm_channels[i].dma_block.source_address = 
+	    pdm_channels[i].dma_blocks[0].source_gather_en = false;
+	    pdm_channels[i].dma_blocks[0].block_size = dma_buf_size;
+	    pdm_channels[i].dma_blocks[0].source_address = 
 		     DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
-	    pdm_channels[i].dma_block.source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
+	    pdm_channels[i].dma_blocks[0].source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
 	   
 	    // samples will be "desposited" interleaved in the dest buffer. Address increment is 4 bytes for 16 bits, 
 	    // 8 for 24/32 bits. Same applies for dest_scatter_interval.
-	    pdm_channels[i].dma_block.dest_address = (uint32_t)drv_data->ping_block;
-            pdm_channels[i].dma_block.dest_scatter_interval = 
+            pdm_channels[i].dma_blocks[0].dest_scatter_interval = 
 		     ((drv_data->pcm_width == 16) ?  (num_chan*2) : (num_chan*4));
 	    // we transfer only the number of bytes per PCM sample 
-	    pdm_channels[i].dma_block.dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
-	    pdm_channels[i].dma_block.dest_scatter_en = true;
-	    pdm_channels[i].dma_block.dest_reload_en = 1;
-	    pdm_channels[i].dma_block.next_block = NULL;
+	    pdm_channels[i].dma_blocks[0].dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_blocks[0].dest_scatter_en = true;
+	    pdm_channels[i].dma_blocks[0].dest_reload_en = 1;
+
+	    memcpy(&pdm_channels[i].dma_blocks[1],
+                   &pdm_channels[i].dma_blocks[0],
+		   sizeof(struct dma_block_config));
+
+	    pdm_channels[i].dma_blocks[0].dest_address = (uint32_t)drv_data->ping_block;
+	    pdm_channels[i].dma_blocks[1].dest_address = (uint32_t)drv_data->pong_block;
+	    pdm_channels[i].dma_blocks[0].next_block = &pdm_channels[i].dma_blocks[1];
+	    pdm_channels[i].dma_blocks[1].next_block = NULL;
 	    
 	    ret = dma_config(pdm_channels[i].dma, pdm_channels[i].dma_chan, &(pdm_channels[i].dma_cfg));
 	    if(ret < 0) {
@@ -368,7 +371,6 @@ static int dmic_mcux_configure(const struct device *dev,
 	/* for now we support only channels #0 and #1 */
 	switch(channel->req_num_chan) {
 		case 1:
-			LOG_INF("configure: one channel");
 			map = dmic_build_channel_map(0, 0, PDM_CHAN_LEFT);
 			channel->act_num_chan = 1;
 			break;
@@ -403,7 +405,6 @@ static int dmic_mcux_configure(const struct device *dev,
 		return 0;
 	}
 
-	LOG_INF("configure: one channelPCM width = %u", stream->pcm_width);
 	if (stream->pcm_width != 16 && stream->pcm_width != 24) {
 		LOG_ERR("Only 16-bit and 24-bit samples are supported");
 		return -EINVAL;
@@ -470,22 +471,20 @@ static int dmic_mcux_trigger(const struct device *dev,
 	switch (cmd) {
 	case DMIC_TRIGGER_PAUSE:
 	case DMIC_TRIGGER_STOP:
-		LOG_INF("trigger: stop");
 		if (drv_data->active) {
-			drv_data->stopping = true;
 			dmic_mcux_stop(dev);
 		}
+		drv_data->active = false;
 		break;
 
 	case DMIC_TRIGGER_RELEASE:
 	case DMIC_TRIGGER_START:
-		LOG_INF("trigger: start");
 		if (!drv_data->configured) {
 			LOG_ERR("Device is not configured");
 			return -EIO;
 		} else if (!drv_data->active) {
-			drv_data->stopping = false;
 			return dmic_mcux_start(dev);
+			drv_data->active = true;
 		}
 		break;
 
@@ -510,13 +509,19 @@ static int dmic_mcux_read(const struct device *dev,
 		return -EIO;
 	}
         	
+	if(drv_data->dmic_state == fail) {
+		LOG_ERR("Device driver status is fail");
+		return -EIO;
+	}
+
 	ret = k_msgq_get(&drv_data->rx_queue, buffer, SYS_TIMEOUT_MS(timeout));
-	if(ret < 0) {
+	if(ret < 0 || drv_data->dmic_state == fail) {
 	    return ret;
 	} else {
             *size = drv_data->block_size;
 	}
 	
+	LOG_INF("_read: buffer = %p", *buffer);
 	return 0;
 }
 
@@ -555,6 +560,7 @@ static const struct _dmic_ops dmic_ops = {
 		.fifo_size = 	DT_PROP(DMIC(idx), fifo_size),						\
 		.dmic_state = stop,									\
 		.use2fs = DT_PROP(DMIC(idx), use2fs),							\
+		.active = false,									\
 	};												\
 	PINCTRL_DT_DEFINE(DMIC(idx));									\
 	static struct mcux_dmic_cfg mcux_dmic_cfg##idx = {						\
