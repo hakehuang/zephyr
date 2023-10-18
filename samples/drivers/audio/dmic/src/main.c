@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(dmic_sample);
  */
 #define MAX_BLOCK_SIZE   BLOCK_SIZE(MAX_SAMPLE_RATE, 1)
 #define BLOCK_COUNT      4
-K_MEM_SLAB_DEFINE_STATIC(mem_slab, MAX_BLOCK_SIZE, BLOCK_COUNT, 4);
+K_MEM_SLAB_DEFINE_STATIC(blob, MAX_BLOCK_SIZE, BLOCK_COUNT, 4);
 
 static int do_pdm_transfer(const struct device *dmic_dev,
 			   struct dmic_cfg *cfg,
@@ -61,7 +61,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 
 		LOG_INF("%d - got buffer %p of %u bytes", i, buffer, size);
 
-		k_mem_slab_free(&mem_slab, &buffer);
+		k_mem_slab_free(&blob, buffer);
 	}
 
 	ret = dmic_trigger(dmic_dev, DMIC_TRIGGER_STOP);
@@ -87,7 +87,7 @@ int main(void)
 
 	struct pcm_stream_cfg stream = {
 		.pcm_width = SAMPLE_BIT_WIDTH,
-		.mem_slab  = &mem_slab,
+		.mem_slab  = &blob,
 	};
 	struct dmic_cfg cfg = {
 		.io = {
@@ -113,23 +113,23 @@ int main(void)
 	cfg.streams[0].block_size =
 		BLOCK_SIZE(cfg.streams[0].pcm_rate, cfg.channel.req_num_chan);
 
-	ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
+	/*ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
 	if (ret < 0) {
 		return 0;
-	}
+	}*/
 
-	/*cfg.channel.req_num_chan = 2;
+	cfg.channel.req_num_chan = 2;
 	cfg.channel.req_chan_map_lo =
 		dmic_build_channel_map(0, 0, PDM_CHAN_LEFT) |
 		dmic_build_channel_map(1, 0, PDM_CHAN_RIGHT);
 	cfg.streams[0].pcm_rate = MAX_SAMPLE_RATE;
 	cfg.streams[0].block_size =
-		BLOCK_SIZE(cfg.streams[0].pcm_rate, cfg.channel.req_num_chan);
+		BLOCK_SIZE(cfg.streams[0].pcm_rate, 1);
 
 	ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
 	if (ret < 0) {
 		return 0;
-	}*/
+	}
 
 	LOG_INF("Exiting");
 	return 0;

@@ -32,6 +32,8 @@ LOG_MODULE_REGISTER(dmic_mcux, CONFIG_AUDIO_DMIC_LOG_LEVEL);
 
 #define CONFIG_DMIC_MCUX_QUEUE_SIZE 8		// Move to KCONFIG
 
+uint32_t blob = 0;
+
 enum e_dmic_state {
      run_ping,
      run_pong,
@@ -145,19 +147,18 @@ static void free_block(struct mcux_dmic_drv_data *drv_data, void **buffer)
 	//k_mem_slab_free(drv_data->mem_slab, buffer);
 }
 
-static void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, bool enable) {
+static __attribute__ ((noinline)) void dmic_mcux_activate_channels(struct mcux_dmic_drv_data *drv_data, bool enable) {
 
 	uint32_t mask = 0x0;
         
-	for(uint8_t i=0;i<drv_data->act_num_chan;i++) {
-	    if(enable) {
-	         mask |= (1 << i);   
-	    } else {
-		 mask &= ~(1<<i);
+	if(enable) {
+	    for(uint8_t i=0;i<drv_data->act_num_chan;i++) {
+	             mask |= (1 << i);   
 	    }
+	    DMIC_EnableChannnel(drv_data->base_address, mask);
+	} else {
+	    DMIC_DisableChannel(drv_data->base_address, mask);
 	}
-
-	DMIC_EnableChannnel(drv_data->base_address, mask);
 }
 
 static int dmic_mcux_start_dma(struct mcux_dmic_drv_data *drv_data) {
@@ -208,6 +209,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	if(status < 0) {
 
 	     drv_data->dmic_state = fail;
+	     blob = 0x00000001;
 	     free_block(drv_data, drv_data->ping_block);
 	     free_block(drv_data, drv_data->pong_block);
 	     return;
@@ -220,6 +222,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		                 K_NO_WAIT);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
+			blob = 0x00000012;
 			free_block(drv_data, drv_data->ping_block);
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
@@ -227,6 +230,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 
 		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->ping_block, K_NO_WAIT);
 		if(ret < 0) {
+			blob = 0x00000013;
 			drv_data->dmic_state = fail;
 			return;
 		}
@@ -235,6 +239,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		ret = _reload_dmas(drv_data, drv_data->pong_block);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
+			blob = 0x00000014;
 			free_block(drv_data, drv_data->ping_block);
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
@@ -249,6 +254,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		                 K_NO_WAIT);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
+			blob = 0x00000022;
 			free_block(drv_data, drv_data->ping_block);
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
@@ -256,14 +262,16 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 
 		ret = k_mem_slab_alloc(drv_data->mem_slab, &drv_data->pong_block, K_NO_WAIT);
 		if(ret < 0) {
+			blob = 0x00000023;
 			drv_data->dmic_state = fail;
 			return;
 		}
-		LOG_INF("CB: next buffer is %p", drv_data->ping_block);
+		//LOG_INF("CB: next buffer is %p", drv_data->ping_block);
 
 		ret = _reload_dmas(drv_data, drv_data->ping_block);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
+			blob = 0x00000024;
 			free_block(drv_data, drv_data->ping_block);
 	     		free_block(drv_data, drv_data->pong_block);
 	     		return;
@@ -282,7 +290,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	return;
 }
 
-static int dmic_mcux_setup_dma(const struct device *dev) {
+static __attribute__ ((noinline)) int dmic_mcux_setup_dma(const struct device *dev) {
 
         struct mcux_dmic_drv_data *drv_data = dev->data;
 	struct mcux_dmic_pdm_chan *pdm_channels = drv_data->pdm_channels;
@@ -314,6 +322,7 @@ static int dmic_mcux_setup_dma(const struct device *dev) {
 	    }
 	    
 	    /* DMA block config */
+	    memset(&(pdm_channels[i].dma_blocks[0]), 0, 2*sizeof(struct dma_block_config));
 	    pdm_channels[i].dma_blocks[0].source_gather_en = false;
 	    pdm_channels[i].dma_blocks[0].block_size = dma_buf_size;
 	    pdm_channels[i].dma_blocks[0].source_address = 
@@ -333,8 +342,8 @@ static int dmic_mcux_setup_dma(const struct device *dev) {
                    &pdm_channels[i].dma_blocks[0],
 		   sizeof(struct dma_block_config));
 
-	    pdm_channels[i].dma_blocks[0].dest_address = (uint32_t)drv_data->ping_block;
-	    pdm_channels[i].dma_blocks[1].dest_address = (uint32_t)drv_data->pong_block;
+	    pdm_channels[i].dma_blocks[0].dest_address = (uint32_t)(drv_data->ping_block+((drv_data->pcm_width == 16) ?  2U : 4U)*i);
+	    pdm_channels[i].dma_blocks[1].dest_address = (uint32_t)(drv_data->pong_block+((drv_data->pcm_width == 16) ?  2U : 4U)*i);
 	    pdm_channels[i].dma_blocks[0].next_block = &pdm_channels[i].dma_blocks[1];
 	    pdm_channels[i].dma_blocks[1].next_block = NULL;
 	    
@@ -421,7 +430,7 @@ static int dmic_mcux_configure(const struct device *dev,
 	return 0;
 }
 
-static int dmic_mcux_stop(const struct device *dev)
+static __attribute__ ((noinline)) int dmic_mcux_stop(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
 
@@ -431,7 +440,7 @@ static int dmic_mcux_stop(const struct device *dev)
 	return 0;
 }
 
-static int dmic_mcux_start(const struct device *dev)
+static __attribute__ ((noinline)) int dmic_mcux_start(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
 	int ret;
@@ -483,7 +492,9 @@ static int dmic_mcux_trigger(const struct device *dev,
 			LOG_ERR("Device is not configured");
 			return -EIO;
 		} else if (!drv_data->active) {
-			return dmic_mcux_start(dev);
+			if(dmic_mcux_start(dev) < 0) {
+				return -EIO;
+			}
 			drv_data->active = true;
 		}
 		break;
@@ -510,7 +521,7 @@ static int dmic_mcux_read(const struct device *dev,
 	}
         	
 	if(drv_data->dmic_state == fail) {
-		LOG_ERR("Device driver status is fail");
+		LOG_ERR("Device driver status is fail, blob is %x", blob);
 		return -EIO;
 	}
 
@@ -521,7 +532,7 @@ static int dmic_mcux_read(const struct device *dev,
             *size = drv_data->block_size;
 	}
 	
-	LOG_INF("_read: buffer = %p", *buffer);
+	//LOG_INF("_read: buffer = %p", *buffer);
 	return 0;
 }
 
@@ -572,7 +583,6 @@ static const struct _dmic_ops dmic_ops = {
 		k_msgq_init(&mcux_dmic_data##idx.rx_queue,               				\
                             (char *)rx_msgs##idx, sizeof(uint32_t *),            			\
                             ARRAY_SIZE(rx_msgs##idx));							\
-		irq_enable(DT_IRQN(DMIC(idx)));								\
 	        pinctrl_apply_state(mcux_dmic_cfg##idx.pcfg, PINCTRL_STATE_DEFAULT);	    		\
 		DMIC_Init((mcux_dmic_data##idx).base_address);						\
 		SET_IO;  										\
