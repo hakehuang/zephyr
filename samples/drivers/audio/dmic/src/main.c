@@ -62,6 +62,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 		LOG_INF("%d - got buffer %p of %u bytes", i, buffer, size);
 
 		k_mem_slab_free(&blob, buffer);
+		
 	}
 
 	ret = dmic_trigger(dmic_dev, DMIC_TRIGGER_STOP);
@@ -113,10 +114,10 @@ int main(void)
 	cfg.streams[0].block_size =
 		BLOCK_SIZE(cfg.streams[0].pcm_rate, cfg.channel.req_num_chan);
 
-	/*ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
+	ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
 	if (ret < 0) {
 		return 0;
-	}*/
+	}
 
 	cfg.channel.req_num_chan = 2;
 	cfg.channel.req_chan_map_lo =
@@ -126,7 +127,7 @@ int main(void)
 	cfg.streams[0].block_size =
 		BLOCK_SIZE(cfg.streams[0].pcm_rate, 1);
 
-	ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
+	ret = do_pdm_transfer(dmic_dev, &cfg, 6);
 	if (ret < 0) {
 		return 0;
 	}

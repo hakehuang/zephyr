@@ -206,6 +206,8 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	struct mcux_dmic_drv_data *drv_data = (struct mcux_dmic_drv_data *)user_data;
 	int ret;
 	
+	LOG_INF("CB: channel is %u", channel);
+	
 	if(status < 0) {
 
 	     drv_data->dmic_state = fail;
@@ -215,8 +217,13 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 	     return;
 	}
 	
+	if(status == 1) {
+	    LOG_INF("CB: arg, DMA block incomplete?");
+	}
+	
 	switch(drv_data->dmic_state) {
 	  case run_ping: 
+	        LOG_INF("CB: putting buffer %p", drv_data->ping_block);
 		ret = k_msgq_put(&drv_data->rx_queue,
 		                 &drv_data->ping_block,
 		                 K_NO_WAIT);
@@ -236,7 +243,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		}
 		LOG_INF("CB: next buffer is %p", drv_data->ping_block);
 
-		ret = _reload_dmas(drv_data, drv_data->pong_block);
+		ret = _reload_dmas(drv_data, drv_data->ping_block);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
 			blob = 0x00000014;
@@ -249,6 +256,7 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 		break;
 
 	 case run_pong:
+		 LOG_INF("CB: putting buffer %p", drv_data->pong_block);
 		ret = k_msgq_put(&drv_data->rx_queue,
 		                 &drv_data->pong_block,
 		                 K_NO_WAIT);
@@ -266,9 +274,9 @@ static void dmic_mcux_dma_cb(const struct device *dev, void *user_data, uint32_t
 			drv_data->dmic_state = fail;
 			return;
 		}
-		//LOG_INF("CB: next buffer is %p", drv_data->ping_block);
+		LOG_INF("CB: next buffer is %p", drv_data->pong_block);
 
-		ret = _reload_dmas(drv_data, drv_data->ping_block);
+		ret = _reload_dmas(drv_data, drv_data->pong_block);
 		if(ret < 0) {
 			drv_data->dmic_state = fail;
 			blob = 0x00000024;
@@ -308,7 +316,6 @@ static __attribute__ ((noinline)) int dmic_mcux_setup_dma(const struct device *d
 	    pdm_channels[i].dma_cfg.dest_data_size = (drv_data->pcm_width == 16) ?  2U : 4U;
 	    //pdm_channels[i].dma_cfg.source_burst_length = 4U;
 	    //pdm_channels[i].dma_cfg.dest_burst_length = (drv_data->pcm_width == 16) ?  2U :4U;
-	    pdm_channels[i].dma_cfg.dma_callback = dmic_mcux_dma_cb;
 	    pdm_channels[i].dma_cfg.error_callback_en = 0;
 	    pdm_channels[i].dma_cfg.block_count = 1;
 	    pdm_channels[i].dma_cfg.head_block = &(pdm_channels[i].dma_blocks[0]);
@@ -323,27 +330,23 @@ static __attribute__ ((noinline)) int dmic_mcux_setup_dma(const struct device *d
 	    
 	    /* DMA block config */
 	    memset(&(pdm_channels[i].dma_blocks[0]), 0, 2*sizeof(struct dma_block_config));
-	    pdm_channels[i].dma_blocks[0].source_gather_en = false;
-	    pdm_channels[i].dma_blocks[0].block_size = dma_buf_size;
-	    pdm_channels[i].dma_blocks[0].source_address = 
+	    pdm_channels[i].dma_blocks[0].source_gather_en = pdm_channels[i].dma_blocks[1].source_gather_en = false;
+	    pdm_channels[i].dma_blocks[0].block_size = pdm_channels[i].dma_blocks[1].block_size = dma_buf_size;
+	    pdm_channels[i].dma_blocks[0].source_address = pdm_channels[i].dma_blocks[1].source_address =
 		     DMIC_FifoGetAddress(drv_data->base_address, (uint32_t)i);
-	    pdm_channels[i].dma_blocks[0].source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
+	    pdm_channels[i].dma_blocks[0].source_addr_adj = pdm_channels[i].dma_blocks[1].source_addr_adj = DMA_ADDR_ADJ_NO_CHANGE;
 	   
 	    // samples will be "desposited" interleaved in the dest buffer. Address increment is 4 bytes for 16 bits, 
 	    // 8 for 24/32 bits. Same applies for dest_scatter_interval.
-            pdm_channels[i].dma_blocks[0].dest_scatter_interval = 
+            pdm_channels[i].dma_blocks[0].dest_scatter_interval = pdm_channels[i].dma_blocks[1].dest_scatter_interval =
 		     ((drv_data->pcm_width == 16) ?  (num_chan*2) : (num_chan*4));
 	    // we transfer only the number of bytes per PCM sample 
-	    pdm_channels[i].dma_blocks[0].dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
-	    pdm_channels[i].dma_blocks[0].dest_scatter_en = true;
-	    pdm_channels[i].dma_blocks[0].dest_reload_en = 1;
+	    pdm_channels[i].dma_blocks[0].dest_scatter_count = pdm_channels[i].dma_blocks[1].dest_scatter_count = (drv_data->pcm_width == 16) ?  2U :4U;
+	    pdm_channels[i].dma_blocks[0].dest_scatter_en = pdm_channels[i].dma_blocks[1].dest_scatter_en = true;
+	    pdm_channels[i].dma_blocks[0].dest_reload_en = pdm_channels[i].dma_blocks[1].dest_reload_en = 1;
 
-	    memcpy(&pdm_channels[i].dma_blocks[1],
-                   &pdm_channels[i].dma_blocks[0],
-		   sizeof(struct dma_block_config));
-
-	    pdm_channels[i].dma_blocks[0].dest_address = (uint32_t)(drv_data->ping_block+((drv_data->pcm_width == 16) ?  2U : 4U)*i);
-	    pdm_channels[i].dma_blocks[1].dest_address = (uint32_t)(drv_data->pong_block+((drv_data->pcm_width == 16) ?  2U : 4U)*i);
+	    pdm_channels[i].dma_blocks[0].dest_address = (uint32_t)(((char *)drv_data->ping_block)+((drv_data->pcm_width == 16) ?  2U : 4U)*i);
+	    pdm_channels[i].dma_blocks[1].dest_address = (uint32_t)(((char *)drv_data->pong_block)+((drv_data->pcm_width == 16) ?  2U : 4U)*i);
 	    pdm_channels[i].dma_blocks[0].next_block = &pdm_channels[i].dma_blocks[1];
 	    pdm_channels[i].dma_blocks[1].next_block = NULL;
 	    
@@ -433,10 +436,19 @@ static int dmic_mcux_configure(const struct device *dev,
 static __attribute__ ((noinline)) int dmic_mcux_stop(const struct device *dev)
 {
         struct mcux_dmic_drv_data *drv_data = dev->data;
-
+        uint32_t should_be_zero;
+        
 	/* disable FIFO */
 	dmic_mcux_stop_dma(drv_data);
  	dmic_mcux_activate_channels(drv_data, false);
+ 	
+ 	/* */
+ 	should_be_zero = k_mem_slab_num_used_get(drv_data->mem_slab);
+ 	k_mem_slab_free(drv_data->mem_slab, drv_data->ping_block);
+ 	k_mem_slab_free(drv_data->mem_slab, drv_data->pong_block);
+ 	
+ 	LOG_INF("stop: slab stat = %u", should_be_zero);
+	
 	return 0;
 }
 
