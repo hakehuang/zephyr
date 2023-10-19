@@ -430,7 +430,7 @@ static int dma_mcux_lpc_configure(const struct device *dev, uint32_t channel,
 		data = DEV_CHANNEL_DATA(dev, virtual_channel);
 	}
 
-	memset(data, 0, sizeof(struct channel_data));
+	//memset(data, 0, sizeof(struct channel_data));
 
 	data->dir = config->channel_direction;
 	/* Save the increment values for the reload function */

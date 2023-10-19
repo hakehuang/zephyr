@@ -79,7 +79,7 @@ int main(void)
 	const struct device *const dmic_dev = DEVICE_DT_GET(DT_NODELABEL(dmic_dev));
 	int ret;
 
-	LOG_INF("DMIC sample");
+	printf("DMIC sample");
 
 	if (!device_is_ready(dmic_dev)) {
 		LOG_ERR("%s is not ready", dmic_dev->name);
@@ -127,7 +127,7 @@ int main(void)
 	cfg.streams[0].block_size =
 		BLOCK_SIZE(cfg.streams[0].pcm_rate, 1);
 
-	ret = do_pdm_transfer(dmic_dev, &cfg, 6);
+	ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
 	if (ret < 0) {
 		return 0;
 	}
