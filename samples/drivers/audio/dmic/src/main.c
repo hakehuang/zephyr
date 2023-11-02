@@ -49,6 +49,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 		return ret;
 	}
 
+        //uint8_t test_buffer[MAX_BLOCK_SIZE];
 	for (int i = 0; i < block_count; ++i) {
 		void *buffer;
 		uint32_t size;
@@ -60,7 +61,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 		}
 
 		LOG_INF("%d - got buffer %p of %u bytes", i, buffer, size);
-
+		//memcpy(buffer, test_buffer, size);
 		k_mem_slab_free(&blob, buffer);
 		
 	}
@@ -70,6 +71,11 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 		LOG_ERR("STOP trigger failed: %d", ret);
 		return ret;
 	}
+
+	//printk("\r\n");
+	//for (int j = 0; j < MAX_BLOCK_SIZE; ++j) {
+	//	printk("%u ", test_buffer[j]);
+	//}
 
 	return ret;
 }
@@ -127,9 +133,14 @@ int main(void)
 	cfg.streams[0].block_size =
 		BLOCK_SIZE(cfg.streams[0].pcm_rate, 1);
 
-	ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
-	if (ret < 0) {
-		return 0;
+	printk("========start loop============");
+	while(1) {
+	        ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
+		if (ret < 0) {
+			return 0;
+		}
+		k_msleep(1000);
+		printk("=============loopping============");
 	}
 
 	LOG_INF("Exiting");

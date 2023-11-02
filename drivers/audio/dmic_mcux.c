@@ -93,7 +93,7 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
         
-        
+        printk("_init_channels"); 
 	for(uint8_t i=0;i<num_chan;i++) {
 
                pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
@@ -115,7 +115,7 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 		                  (stereo_side_t)(i%2), 
 		                  &(pdm_channels[i].dmic_channel_cfg));
 		                  
-		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, 15, 1, 1);
+		DMIC_FifoChannel(drv_data->base_address, (dmic_channel_t)i, drv_data->fifo_size - 1, 1, 1);
 	}
 
 	return;
@@ -128,6 +128,7 @@ static int _reload_dmas(struct mcux_dmic_drv_data *drv_data, void* sample_buffer
 	uint32_t dma_buf_size = drv_data->block_size / num_chan; 
 	int ret = 0;
 
+        printk("_reload_dmas"); 
 	for(uint8_t i=0;i<num_chan;i++) {
 
 		ret = dma_reload(pdm_channels[i].dma, pdm_channels[i].dma_chan,
@@ -157,7 +158,7 @@ static __attribute__ ((noinline)) void dmic_mcux_activate_channels(struct mcux_d
 	    }
 	    DMIC_EnableChannnel(drv_data->base_address, mask);
 	} else {
-	    DMIC_DisableChannel(drv_data->base_address, mask);
+	    DMIC_DisableChannelGlobalSync(drv_data->base_address, mask);
 	}
 }
 
