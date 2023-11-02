@@ -6,11 +6,12 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/audio/dmic.h>
+#include <zephyr/audio/codec.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(dmic_sample);
 
-#define MAX_SAMPLE_RATE  16000
+#define MAX_SAMPLE_RATE  48000
 #define SAMPLE_BIT_WIDTH 16
 #define BYTES_PER_SAMPLE sizeof(int16_t)
 /* Milliseconds to wait for a block to be read. */
@@ -34,7 +35,7 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 {
 	int ret;
 
-	LOG_INF("PCM output rate: %u, channels: %u",
+	LOG_INF("PCM output rate: %u, channels: %u\n",
 		cfg->streams[0].pcm_rate, cfg->channel.req_num_chan);
 
 	ret = dmic_configure(dmic_dev, cfg);
@@ -53,7 +54,6 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 	for (int i = 0; i < block_count; ++i) {
 		void *buffer;
 		uint32_t size;
-
 		ret = dmic_read(dmic_dev, 0, &buffer, &size, READ_TIMEOUT);
 		if (ret < 0) {
 			LOG_ERR("%d - read failed: %d", i, ret);
@@ -63,7 +63,6 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 		LOG_INF("%d - got buffer %p of %u bytes", i, buffer, size);
 		//memcpy(buffer, test_buffer, size);
 		k_mem_slab_free(&blob, buffer);
-		
 	}
 
 	ret = dmic_trigger(dmic_dev, DMIC_TRIGGER_STOP);
@@ -83,15 +82,48 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 int main(void)
 {
 	const struct device *const dmic_dev = DEVICE_DT_GET(DT_NODELABEL(dmic_dev));
-	int ret;
+	const struct device *const codec_dev = DEVICE_DT_GET(DT_NODELABEL(audio_codec));
+	const struct device *const i2s_dev = DEVICE_DT_GET(DT_NODELABEL(i2s_pdm));
+	struct audio_codec_cfg audio_cfg;
+	struct dmic_cfg dmic_cfg;
 
-	printf("DMIC sample");
+	audio_cfg.dai_type = AUDIO_DAI_TYPE_I2S;
+	audio_cfg.dai_cfg.i2s.word_size = 16;
+	audio_cfg.dai_cfg.i2s.channels =  2;
+	audio_cfg.dai_cfg.i2s.format = I2S_FMT_DATA_FORMAT_I2S;
+	audio_cfg.dai_cfg.i2s.options = I2S_OPT_FRAME_CLK_MASTER;
+	audio_cfg.dai_cfg.i2s.frame_clk_freq = 48000;
+	audio_cfg.dai_cfg.i2s.mem_slab = &blob;
+	audio_cfg.dai_cfg.i2s.block_size = MAX_BLOCK_SIZE;
+
+	printf("DMIC sample\n");
+
+	if (!device_is_ready(codec_dev)) {
+		LOG_ERR("%s is not ready", codec_dev->name);
+		return 0;
+	}
+	printf("audio codec ready\n");
+	/* set to master mode  */
+	audio_codec_configure(codec_dev, &audio_cfg);
+
 
 	if (!device_is_ready(dmic_dev)) {
 		LOG_ERR("%s is not ready", dmic_dev->name);
 		return 0;
 	}
+	dmic_configure(dmic_dev, &dmic_cfg);
 
+	if (!device_is_ready(i2s_dev)) {
+		LOG_ERR("%s is not ready", i2s_dev->name);
+		return 0;
+	}
+	printf("i2s ready\n");
+	/* set to slave mode  */
+	audio_cfg.dai_cfg.i2s.options = I2S_OPT_BIT_CLK_SLAVE | I2S_OPT_FRAME_CLK_SLAVE;
+	i2s_configure(i2s_dev, I2S_DIR_TX, &audio_cfg.dai_cfg.i2s);
+
+#if 0
+	int ret;
 	struct pcm_stream_cfg stream = {
 		.pcm_width = SAMPLE_BIT_WIDTH,
 		.mem_slab  = &blob,
@@ -124,7 +156,6 @@ int main(void)
 	if (ret < 0) {
 		return 0;
 	}
-
 	cfg.channel.req_num_chan = 2;
 	cfg.channel.req_chan_map_lo =
 		dmic_build_channel_map(0, 0, PDM_CHAN_LEFT) |
@@ -132,15 +163,10 @@ int main(void)
 	cfg.streams[0].pcm_rate = MAX_SAMPLE_RATE;
 	cfg.streams[0].block_size =
 		BLOCK_SIZE(cfg.streams[0].pcm_rate, 1);
-
-	printk("========start loop============");
+#endif
+	printk("========start loop============\n");
 	while(1) {
-	        ret = do_pdm_transfer(dmic_dev, &cfg, 2 * BLOCK_COUNT);
-		if (ret < 0) {
-			return 0;
-		}
 		k_msleep(1000);
-		printk("=============loopping============");
 	}
 
 	LOG_INF("Exiting");

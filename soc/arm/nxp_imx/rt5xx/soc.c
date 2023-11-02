@@ -78,12 +78,17 @@ const clock_frg_clk_config_t g_frg12Config_clock_init = {
 	.mult = 167
 };
 
+#if CONFIG_IMXRT5XX_SHARE_I2S_ENABLED
+	void imxrt_audio_i2s_shared_config(void);
+#endif
+
 #if CONFIG_USB_DC_NXP_LPCIP3511
 /* USB PHY condfiguration */
 #define BOARD_USB_PHY_D_CAL     (0x0CU)
 #define BOARD_USB_PHY_TXCAL45DP (0x06U)
 #define BOARD_USB_PHY_TXCAL45DM (0x06U)
 #endif
+
 
 /* System clock frequency. */
 extern uint32_t SystemCoreClock;
@@ -288,6 +293,11 @@ void __weak rt5xx_clock_init(void)
 	usb_device_clock_init();
 #endif
 
+#if (DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(flexcomm0), nxp_lpc_i2s, okay) && CONFIG_I2S)
+	/* attach AUDIO PLL clock to FLEXCOMM1 (I2S_PDM) */
+	CLOCK_AttachClk(kAUDIO_PLL_to_FLEXCOMM0);
+#endif
+
 #if (DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(flexcomm1), nxp_lpc_i2s, okay) && CONFIG_I2S)
 	/* attach AUDIO PLL clock to FLEXCOMM1 (I2S1) */
 	CLOCK_AttachClk(kAUDIO_PLL_to_FLEXCOMM1);
@@ -442,6 +452,20 @@ void __weak rt5xx_clock_init(void)
 
 	/* Set main clock to FRO as deep sleep clock by default. */
 	POWER_SetDeepSleepClock(kDeepSleepClk_Fro);
+
+#if CONFIG_IMXRT5XX_SHARE_I2S_ENABLED
+	imxrt_audio_i2s_shared_config();
+#endif
+
+#if CONFIG_AUDIO_CODEC_WM8904
+    /* attach AUDIO PLL clock to MCLK */
+    CLOCK_AttachClk(kAUDIO_PLL_to_MCLK_CLK);
+    CLOCK_SetClkDiv(kCLOCK_DivMclkClk, 1);
+    SYSCTL1->MCLKPINDIR = SYSCTL1_MCLKPINDIR_MCLKPINDIR_MASK;
+    /* DMIC source from audio pll, divider 8, 24.576M/8=3.072MHZ */
+    CLOCK_AttachClk(kAUDIO_PLL_to_DMIC);
+    CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 8);
+#endif
 }
 
 #if CONFIG_MIPI_DSI
@@ -486,6 +510,20 @@ void __weak imxrt_post_init_display_interface(void)
 {
 	/* Deassert MIPI DPHY reset. */
 	RESET_ClearPeripheralReset(kMIPI_DSI_PHY_RST_SHIFT_RSTn);
+}
+#endif
+
+
+#if CONFIG_IMXRT5XX_SHARE_I2S_ENABLED
+void imxrt_audio_i2s_shared_config(void)
+{
+	/* Set shared signal set 0: SCK, WS from Flexcomm1 */
+   SYSCTL1->SHAREDCTRLSET[0] = SYSCTL1_SHAREDCTRLSET_SHAREDSCKSEL(1) | SYSCTL1_SHAREDCTRLSET_SHAREDWSSEL(1) |
+                              SYSCTL1_SHAREDCTRLSET_FC0DATAOUTEN(1) | SYSCTL1_SHAREDCTRLSET_FC3DATAOUTEN(1);
+   /* Set flexcomm0 SCK, WS from shared signal set 0 */
+   SYSCTL1->FCCTRLSEL[0] = SYSCTL1_FCCTRLSEL_SCKINSEL(1) | SYSCTL1_FCCTRLSEL_WSINSEL(1);
+   /* Set flexcomm3 data out from shared signal set 0 */
+   SYSCTL1->FCCTRLSEL[3] = SYSCTL1_FCCTRLSEL_DATAOUTSEL(1);
 }
 #endif
 

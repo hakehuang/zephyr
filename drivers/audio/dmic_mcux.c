@@ -93,7 +93,6 @@ static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
         
-        printk("_init_channels"); 
 	for(uint8_t i=0;i<num_chan;i++) {
 
                pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
@@ -372,8 +371,8 @@ static int dmic_mcux_configure(const struct device *dev,
 
 	struct mcux_dmic_drv_data *drv_data = dev->data;
 	struct pdm_chan_cfg *channel = &config->channel;
+#if 0 
         struct pcm_stream_cfg *stream = &config->streams[0];
-
 	uint32_t map;
 
 	if (drv_data->active) {
@@ -431,6 +430,38 @@ static int dmic_mcux_configure(const struct device *dev,
 	_init_channels(drv_data, channel->act_num_chan, drv_data->pdm_channels, stream->pcm_rate);
 	
 	drv_data->configured=true;
+#else
+	drv_data->pdm_channels[0].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
+	drv_data->pdm_channels[0].dmic_channel_cfg.osr                 = 32U;
+	drv_data->pdm_channels[0].dmic_channel_cfg.gainshft            = 3U;
+	drv_data->pdm_channels[0].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero;
+	drv_data->pdm_channels[0].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero;
+	drv_data->pdm_channels[0].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;
+	drv_data->pdm_channels[0].dmic_channel_cfg.post_dc_gain_reduce = 1U;
+	drv_data->pdm_channels[0].dmic_channel_cfg.saturate16bit       = 1U;
+	drv_data->pdm_channels[0].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;
+
+	drv_data->pdm_channels[1].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
+	drv_data->pdm_channels[1].dmic_channel_cfg.osr                 = 32U;
+	drv_data->pdm_channels[1].dmic_channel_cfg.gainshft            = 3U;
+	drv_data->pdm_channels[1].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero;
+	drv_data->pdm_channels[1].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero;
+	drv_data->pdm_channels[1].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;
+	drv_data->pdm_channels[1].dmic_channel_cfg.post_dc_gain_reduce = 1U;
+	drv_data->pdm_channels[1].dmic_channel_cfg.saturate16bit       = 1U;
+	drv_data->pdm_channels[1].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;
+
+	DMIC_Use2fs(drv_data->base_address, true);
+	DMIC_ConfigChannel(drv_data->base_address, kDMIC_Channel0, kDMIC_Left, &drv_data->pdm_channels[0].dmic_channel_cfg);
+ 	DMIC_ConfigChannel(drv_data->base_address, kDMIC_Channel1, kDMIC_Right, &drv_data->pdm_channels[1].dmic_channel_cfg);
+
+ 	/* FIFO disabled */
+ 	DMIC_FifoChannel(drv_data->base_address, kDMIC_Channel0, 0, false, true);
+ 	DMIC_FifoChannel(drv_data->base_address, kDMIC_Channel1, 0, false, true);
+ 	DMIC_EnableChannnel(drv_data->base_address, (DMIC_CHANEN_EN_CH0(1) | DMIC_CHANEN_EN_CH1(1)));
+	DMIC_DisableIntCallback(drv_data->base_address, NULL);
+	printk("DMIC config OK\n");
+#endif
 	return 0;
 }
 

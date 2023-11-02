@@ -164,6 +164,11 @@ static int i2s_mcux_flexcomm_cfg_convert(uint32_t base_frequency,
 		return -EINVAL;
 	}
 
+#if CONFIG_IMXRT5XX_SHARE_I2S_ENABLED
+	fsl_cfg->pdmData = true;
+	fsl_cfg->divider = 16;
+#endif
+
 	return 0;
 }
 
@@ -258,7 +263,9 @@ static int i2s_mcux_configure(const struct device *dev, enum i2s_dir dir,
 	if (dir == I2S_DIR_RX) {
 		I2S_RxInit(cfg->base, &fsl_cfg);
 	} else {
+		printk("TX enabled\n");
 		I2S_TxInit(cfg->base, &fsl_cfg);
+		I2S_Enable(cfg->base);
 	}
 
 	/* Data length in bits */

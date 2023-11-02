@@ -24,6 +24,22 @@
 		};
 	};
 
+	/* RX/TX 
+	 * reuse flexcomm0 for PDM input
+	 * need config CONFIG_IMXRT5XX_SHARE_I2S_ENABLED
+	*/
+	pinmux_flexcomm0_i2s: pinmux_flexcomm0_i2s {
+		group0 {
+			pinmux = <FC1_RXD_SDA_MOSI_DATA_PIO0_9>,
+				<FC1_TXD_SCL_MISO_WS_PIO0_8>,
+				<FC3_RXD_SDA_MOSI_DATA_PIO0_23>,
+				<FC1_SCK_PIO0_7>;
+			slew-rate = "normal";
+			input-enable;
+			drive-strength = "high";
+		};
+	};
+
 	/* RX */
 	pinmux_flexcomm1_i2s: pinmux_flexcomm1_i2s {
 		group0 {
@@ -50,7 +66,7 @@
 		group0 {
 			pinmux = <DMIC0_DATA01_PIO5_8>, <DMIC0_CLK01_PIO5_4>;
 			slew-rate = "normal";
-			drive-strength = "high";			
+			drive-strength = "high";
 			bias-pull-down;
 			input-enable;
 		};
@@ -236,8 +252,9 @@
 			pinmux = <I3C0_SCL_PIO2_29>,
 				<I3C0_SDA_PIO2_30>;
 			input-enable;
+			bias-pull-up;
 			slew-rate = "slow";
-			drive-strength = "high";
+			drive-strength = "normal";
 		};
 
 		group1 {
@@ -246,5 +263,13 @@
 			drive-strength = "normal";
 		};
 	};
+
+       pinmux_codec: pinmux_codec {
+               group0 {
+                       pinmux = <MCLK_PIO1_10>;
+                       slew-rate = "normal";
+                       drive-strength = "high";
+               };
+       };
 
 };

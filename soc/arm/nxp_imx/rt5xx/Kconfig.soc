@@ -31,6 +31,8 @@ config SOC_MIMXRT595S_CM33
 	select HAS_MCUX_USDHC2
 	select HAS_MCUX_USB_LPCIP3511
 	select HAS_MCUX_CTIMER
+	select HAS_NXP_MCUX_I2S
+	select HAS_NXP_MCUX_I3C
 endchoice
 
 if SOC_SERIES_IMX_RT5XX
@@ -130,3 +132,9 @@ config IMXRT5XX_CODE_CACHE
 	  cleared, the CACHE64 controller will be disabled during SOC init
 
 endif # SOC_SERIES_IMX_RT5XX
+
+config IMXRT5XX_SHARE_I2S_ENABLED
+	bool "Enable share I2S"
+	default y
+	help
+	  Enable share I2S for DMIC forward

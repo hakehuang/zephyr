@@ -2,3 +2,26 @@ dmic_dev: &dmic0 {
         status = "okay";
 };
 
+&i2s_pdm {
+    status = "okay";
+};
+
+&i3c0 {
+    status = "okay";
+};
+
+&hs_spi1 {
+   status = "disabled";
+};
+
+&usdhc0 {
+   status = "disabled";
+};
+
+&flexspi2 {
+   status = "disabled";
+};
+
+&lpadc0 {
+   status = "disabled";
+};
