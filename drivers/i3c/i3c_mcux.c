@@ -879,7 +879,9 @@ static int mcux_i3c_recover_bus(const struct device *dev)
  */
 static int mcux_i3c_do_one_xfer_read(I3C_Type *base, uint8_t *buf, uint8_t buf_sz)
 {
+	int rx_count;
 	bool completed = false;
+	bool overflow = false;
 	int ret = 0;
 	int offset = 0;
 
@@ -906,19 +908,28 @@ static int mcux_i3c_do_one_xfer_read(I3C_Type *base, uint8_t *buf, uint8_t buf_s
 		}
 
 		/*
-		 * Transfer data from FIFO into buffer. Read
-		 * in a tight loop to reduce chance of losing
-		 * FIFO data when the i3c speed is high.
+		 * Transfer data from FIFO into buffer.
 		 */
-		while (offset < buf_sz) {
-			if (mcux_i3c_fifo_rx_count_get(base) == 0) {
-				break;
+		rx_count = mcux_i3c_fifo_rx_count_get(base);
+		while (rx_count > 0) {
+			uint8_t data = (uint8_t)base->MRDATAB;
+
+			if (offset < buf_sz) {
+				buf[offset] = data;
+				offset += 1;
+			} else {
+				overflow = true;
 			}
-			buf[offset++] = (uint8_t)base->MRDATAB;
+
+			rx_count -= 1;
 		}
 	}
 
-	ret = offset;
+	if (overflow) {
+		ret = -EINVAL;
+	} else {
+		ret = offset;
+	}
 
 one_xfer_read_out:
 	return ret;
