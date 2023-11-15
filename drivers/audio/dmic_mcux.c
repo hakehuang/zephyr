@@ -446,7 +446,7 @@ static __attribute__ ((noinline)) int dmic_mcux_stop(const struct device *dev)
         uint32_t should_be_zero;
         
 	/* disable FIFO */
-	dmic_mcux_stop_dma(drv_data);
+	//dmic_mcux_stop_dma(drv_data);
  	dmic_mcux_activate_channels(drv_data, false);
  	
  	/* */
