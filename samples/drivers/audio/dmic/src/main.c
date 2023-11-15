@@ -81,11 +81,41 @@ static int do_pdm_transfer(const struct device *dmic_dev,
 
 int main(void)
 {
+
+	int ret;
+	struct pcm_stream_cfg stream = {
+		.pcm_width = SAMPLE_BIT_WIDTH,
+		.mem_slab  = &blob,
+	};
+	
+	struct dmic_cfg dmic_cfg = {
+		.io = {
+			/* These fields are not currently in use. */
+			.min_pdm_clk_freq = 1000000,
+			.max_pdm_clk_freq = 3500000,
+			.min_pdm_clk_dc   = 40,
+			.max_pdm_clk_dc   = 60,
+		},
+		.streams = &stream,
+		.channel = {
+			.req_num_streams = 1,
+		},
+	};
+	
+	
 	const struct device *const dmic_dev = DEVICE_DT_GET(DT_NODELABEL(dmic_dev));
 	const struct device *const codec_dev = DEVICE_DT_GET(DT_NODELABEL(audio_codec));
 	const struct device *const i2s_dev = DEVICE_DT_GET(DT_NODELABEL(i2s_pdm));
 	struct audio_codec_cfg audio_cfg;
-	struct dmic_cfg dmic_cfg;
+
+
+	dmic_cfg.channel.req_num_chan = 2;
+	dmic_cfg.channel.req_chan_map_lo =
+		dmic_build_channel_map(0, 0, PDM_CHAN_LEFT) |
+		dmic_build_channel_map(1, 0, PDM_CHAN_RIGHT);
+	dmic_cfg.streams[0].pcm_rate = MAX_SAMPLE_RATE;
+	dmic_cfg.streams[0].block_size =
+		BLOCK_SIZE(dmic_cfg.streams[0].pcm_rate, 1);
 
 	audio_cfg.dai_type = AUDIO_DAI_TYPE_I2S;
 	audio_cfg.dai_cfg.i2s.word_size = 16;
@@ -121,6 +151,12 @@ int main(void)
 	/* set to slave mode  */
 	audio_cfg.dai_cfg.i2s.options = I2S_OPT_BIT_CLK_SLAVE | I2S_OPT_FRAME_CLK_SLAVE;
 	i2s_configure(i2s_dev, I2S_DIR_TX, &audio_cfg.dai_cfg.i2s);
+	
+	ret = dmic_trigger(dmic_dev, DMIC_TRIGGER_START);
+	if (ret < 0) {
+		LOG_ERR("START trigger failed: %d", ret);
+		return ret;
+	}
 
 #if 0
 	int ret;
