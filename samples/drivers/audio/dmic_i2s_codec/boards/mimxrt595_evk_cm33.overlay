@@ -1,0 +1,22 @@
+dmic_dev: &dmic0 {
+        status = "okay";
+};
+
+&i2s_pdm {
+    status = "okay";
+};
+
+&i3c0 {
+    status = "okay";
+};
+
+/{
+    aliases {
+        usart-0 = &arduino_serial;
+    };
+
+    chosen {
+        zephyr,console = &arduino_serial;
+        zephyr,shell-uart = &arduino_serial;
+    };
+ };

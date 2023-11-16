@@ -1,0 +1,8 @@
+sample:
+  name: DMIC sample
+tests:
+  sample.drivers.audio.dmic:
+    tags: dmic
+    filter: dt_nodelabel_enabled("dmic_dev")
+    integration_platforms:
+      - mimxrt595_evk_cm33
