@@ -59,12 +59,8 @@ static void codec_read_reg(const struct device *dev, uint8_t reg,
 static void codec_update_reg(const struct device *dev, uint8_t reg,
 			     uint16_t mask, uint16_t val);
 static void codec_soft_reset(const struct device *dev);
-static int codec_configure_dai(const struct device *dev, audio_dai_cfg_t *cfg);
 
 static void codec_configure_output(const struct device *dev);
-static int codec_set_output_volume(const struct device *dev,
-				   enum _wm8904_module module,
-				   int volume);
 
 static int codec_initialize(const struct device *dev)
 {
@@ -439,18 +435,9 @@ static void codec_start_output(const struct device *dev)
 {
 }
 
-static void codec_loopback_enable(const struct device *dev, bool val)
-{
-}
-
 static void codec_stop_output(const struct device *dev)
 {
 }
-
-static void codec_mute_output(const struct device *dev)
-{
-}
-
 
 static int codec_set_property(const struct device *dev,
 			      audio_property_t property,
@@ -519,12 +506,6 @@ static void codec_soft_reset(const struct device *dev)
 	codec_write_reg(dev, WM8904_RESET, 0x00);
 }
 
-static int codec_configure_dai(const struct device *dev, audio_dai_cfg_t *cfg)
-{
-	return 0;
-}
-
-
 static void codec_configure_output(const struct device *dev)
 {
 	uint16_t regValue = 0U;
@@ -540,13 +521,6 @@ static void codec_configure_output(const struct device *dev)
 	codec_update_reg(dev, WM8904_ANALOG_OUT1_RIGHT, 0x100U, 0x80U);
 	codec_update_reg(dev, WM8904_ANALOG_OUT2_LEFT, 0x100U, 0X80U);
 	codec_update_reg(dev, WM8904_ANALOG_OUT2_RIGHT, 0x100U, 0x80U);
-}
-
-static int codec_set_output_volume(const struct device *dev,
-				   enum _wm8904_module module,
-				   int volume)
-{
-	return 0;
 }
 
 static const struct audio_codec_api codec_driver_api = {
