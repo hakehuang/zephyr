@@ -11,9 +11,20 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(dmic_sample);
 
-#define MAX_SAMPLE_RATE  48000
+/*
+  MCLK for rt595 is 12288000
+  DMIC CLK default is 3.072MHZ
+  24 bit:
+     sample rate 32K
+     bit width 24
+  16 bit:
+     sample rate 48K
+     bit width 16
+*/
+
+#define MAX_SAMPLE_RATE  32000
 #define SAMPLE_BIT_WIDTH 16
-#define BYTES_PER_SAMPLE sizeof(int16_t)
+#define BYTES_PER_SAMPLE 2
 /* Milliseconds to wait for a block to be read. */
 #define READ_TIMEOUT     1000
 
@@ -68,11 +79,11 @@ int main(void)
 		BLOCK_SIZE(dmic_cfg.streams[0].pcm_rate, 1);
 
 	audio_cfg.dai_type = AUDIO_DAI_TYPE_I2S;
-	audio_cfg.dai_cfg.i2s.word_size = 16;
+	audio_cfg.dai_cfg.i2s.word_size = SAMPLE_BIT_WIDTH;
 	audio_cfg.dai_cfg.i2s.channels =  2;
 	audio_cfg.dai_cfg.i2s.format = I2S_FMT_DATA_FORMAT_I2S;
 	audio_cfg.dai_cfg.i2s.options = I2S_OPT_FRAME_CLK_MASTER;
-	audio_cfg.dai_cfg.i2s.frame_clk_freq = 48000;
+	audio_cfg.dai_cfg.i2s.frame_clk_freq = MAX_SAMPLE_RATE;
 	audio_cfg.dai_cfg.i2s.mem_slab = &blob;
 	audio_cfg.dai_cfg.i2s.block_size = MAX_BLOCK_SIZE;
 
