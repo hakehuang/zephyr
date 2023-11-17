@@ -205,10 +205,33 @@ static int codec_audio_fmt_config(const struct device *dev,
 	/* Set Clock ratio and sample rate */
 	codec_write_reg(dev, WM8904_CLK_RATES_1,
 	        ((wmfs_ratio) << 10U) | (uint16_t)(wm_sample_rate));
-	
+
+	switch(cfg->i2s.word_size) {
+	case 16:
+		word_size = 0;
+		break;
+	case 20:
+		word_size = 1;
+		break;
+	case 24:
+		word_size = 2;
+		break;
+	case 32:
+		word_size = 3;
+		break;
+	default:
+		LOG_ERR("word-size not support %d force to 16 bit", cfg->i2s.word_size);
+		word_size = 0;
+		break;
+	}
 	/* Set bit resolution */
 	codec_update_reg(dev, WM8904_AUDIO_IF_1,
 		(0x000CU), ((uint16_t)(word_size) << 2U));
+	{
+		uint16_t reg_val = 0;
+		codec_read_reg(dev, WM8904_AUDIO_IF_1, &reg_val);
+		LOG_INF("WM8904_AUDIO_IF_1 = 0x%x", reg_val);
+	}
 
 	/* Enable SYSCLK */
 	codec_write_reg(dev, WM8904_CLK_RATES_2, 0x1007);
@@ -227,6 +250,7 @@ static void wm8904_set_master_clock(const struct device *dev,
 
     codec_read_reg(dev, WM8904_CLK_RATES_0, &sysclkDiv);
     sysclk = sysclk >> (sysclkDiv & 0x1U);
+    LOG_INF("codec system clk %d", sysclk);
 
     if ((sysclk / bclk > 48U) || (bclk / sampleRate > 2047U) || (bclk / sampleRate < 8U))
     {
@@ -238,6 +262,7 @@ static void wm8904_set_master_clock(const struct device *dev,
 
     audioInterface &= ~(uint16_t)0x1FU;
     bclkDiv = (sysclk * 10U) / bclk;
+    LOG_INF("blk %d", bclk);
 
     switch (bclkDiv)
     {
@@ -305,7 +330,7 @@ static void wm8904_set_master_clock(const struct device *dev,
             audioInterface |= 20U;
             break;
         default:
-		LOG_ERR("invalid autio interface for wm8904");
+		LOG_ERR("invalid autio interface for wm8904 %d", bclkDiv);
 		return;
     }
 
@@ -407,8 +432,7 @@ static int codec_configure(const struct device *dev,
 	 */
 
 	codec_protol_config(dev, cfg->dai_type);
-
-    codec_update_reg(dev, WM8904_CLK_RATES_2,
+	codec_update_reg(dev, WM8904_CLK_RATES_2,
        	(uint16_t)(1UL << 14U), (uint16_t)(dev_cfg->clock_source));
 
 	sysclk = CLOCK_GetMclkClkFreq();
@@ -495,8 +519,17 @@ static void codec_update_reg(const struct device *dev, uint8_t reg,
 	uint16_t reg_val = 0;
 	uint16_t new_value = 0;
 
+	if (reg == 0x19) {
+		LOG_INF("try write mask 0x%x val 0x%x", mask, val);
+	}
 	codec_read_reg(dev, reg, &reg_val);
+	if (reg == 0x19) {
+		LOG_INF("read 0x%x = %x", reg, reg_val);
+	}
 	new_value = (reg_val & ~mask) | (val & mask);
+	if (reg == 0x19) {
+		LOG_INF("write 0x%x = %x", reg, new_value);
+	}
 	codec_write_reg(dev, reg, new_value);
 }
 

@@ -333,17 +333,26 @@ static __attribute__ ((noinline)) int dmic_mcux_setup_dma(const struct device *d
 static void _init_channels(struct mcux_dmic_drv_data *drv_data, uint8_t num_chan, 
 			   struct mcux_dmic_pdm_chan *pdm_channels, uint32_t pcm_rate) {
 
-        
+       	uint32_t target_osr = _get_dmic_OSR_divider(pcm_rate, drv_data->use2fs);
+ 
+	LOG_INF("DMIC OSR is %d", target_osr);
 	for(uint8_t i=0;i<num_chan;i++) {
 
 		drv_data->pdm_channels[i].dmic_channel_cfg.divhfclk            = kDMIC_PdmDiv1;
-		drv_data->pdm_channels[i].dmic_channel_cfg.osr                 = 32U;
+		drv_data->pdm_channels[i].dmic_channel_cfg.osr                 = target_osr;
 		drv_data->pdm_channels[i].dmic_channel_cfg.gainshft            = 3U;
 		drv_data->pdm_channels[i].dmic_channel_cfg.preac2coef          = kDMIC_CompValueZero;
 		drv_data->pdm_channels[i].dmic_channel_cfg.preac4coef          = kDMIC_CompValueZero;
 		drv_data->pdm_channels[i].dmic_channel_cfg.dc_cut_level        = kDMIC_DcCut155;
 		drv_data->pdm_channels[i].dmic_channel_cfg.post_dc_gain_reduce = 1U;
-		drv_data->pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;
+		if (drv_data->pcm_width > 16) {
+			drv_data->pdm_channels[i].dmic_channel_cfg.saturate16bit       = 0U;
+#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
+			drv_data->pdm_channels[i].dmic_channel_cfg.enableSignExtend    = 1U;
+#endif
+		} else {
+			drv_data->pdm_channels[i].dmic_channel_cfg.saturate16bit       = 1U;
+		}
 		drv_data->pdm_channels[i].dmic_channel_cfg.sample_rate         = kDMIC_PhyFullSpeed;
 	
 		#if defined(FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND) && (FSL_FEATURE_DMIC_CHANNEL_HAS_SIGNEXTEND)
