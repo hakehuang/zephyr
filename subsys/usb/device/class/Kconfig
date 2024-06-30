@@ -16,3 +16,5 @@ source "subsys/usb/device/class/hid/Kconfig"
 source "subsys/usb/device/class/audio/Kconfig"
 
 source "subsys/usb/device/class/dfu/Kconfig"
+
+source "subsys/usb/device/class/gs_usb/Kconfig"

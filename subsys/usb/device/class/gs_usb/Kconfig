@@ -1,0 +1,52 @@
+# Copyright (c) 2024 Alexander Kozhinov
+# SPDX-License-Identifier: Apache-2.0
+
+module = GS_USB
+module-str = gs_usb
+
+menuconfig USB_GS_USB_CLASS
+	bool "CAN driver for Geschwister Schneider USB/CAN devices"
+	depends on CAN
+	select EXPERIMENTAL
+	help
+	  CAN driver for Geschwister Schneider USB/CAN devices
+
+if USB_GS_USB_CLASS
+
+config GS_USB_NUM_CAN_CHANNEL
+	int
+	default 1
+	help
+	  Number of CAN channels
+
+config GS_USB_SW_VERSION
+	int
+	default 2
+	help
+	  Software version
+
+config GS_USB_HW_VERSION
+	int
+	default 1
+	help
+	  Hardware version
+
+config GS_USB_TERM_PIN
+	bool "CAN bus termination pin control"
+	default n
+
+config GS_USB_DEVICE_LOG_LEVEL
+	int
+	default 0
+
+config GS_USB_CAN_TX_MSG_QUEUE_SIZE
+	int "CAN to USB inernal TX data buffer size"
+	default 16
+
+config GS_USB_CAN_RX_MSG_QUEUE_SIZE
+	int "CAN to USB inernal RX data buffer size"
+	default 16
+
+source "subsys/logging/Kconfig.template.log_config"
+
+endif  # USB_GS_USB_CLASS
