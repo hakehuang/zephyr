@@ -1,0 +1,8 @@
+# Private config options for can sample app
+
+# Copyright (c) 2018 Alexander Kozhinov
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "gs_usb sample application"
+
+source "Kconfig.zephyr"
