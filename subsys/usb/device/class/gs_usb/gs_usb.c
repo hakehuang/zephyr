@@ -17,15 +17,13 @@
 LOG_MODULE_REGISTER(gs_usb, CONFIG_GS_USB_LOG_LEVEL);
 
 
-#define GS_USB_IN_EP_ADDR				0x81
-#define GS_USB_OUT_DUMMY_EP_ADDR		0x01  /* ToDo: replace by DFU or etc.*/
-#define GS_USB_OUT_EP_ADDR				0x02
+#define GS_USB_DEFAULT_IN_EP_ADDR	0x81
+#define GS_USB_DEFAULT_OUT_EP_ADDR	0x01
 
-#define GS_USB_IN_EP_IDX			0
-#define GS_USB_OUT_EP_IDX			1
-#define GS_USB_OUT_DUMMY_EP_IDX		2
+#define GS_USB_IN_EP_IDX		0
+#define GS_USB_OUT_EP_IDX		1
 
-#define GS_USB_NUM_USB_ENDPOINTS	3
+#define GS_USB_NUM_USB_ENDPOINTS	2
 
 /**
  * Host format sent by the driver:
@@ -37,13 +35,13 @@ LOG_MODULE_REGISTER(gs_usb, CONFIG_GS_USB_LOG_LEVEL);
 /* ToDo: Features must be selectable over KConfig */
 #define GS_CAN_FEATURE_LISTEN_ONLY				BIT(0)
 #define GS_CAN_FEATURE_LOOP_BACK				BIT(1)
-#define GS_CAN_FEATURE_TRIPLE_SAMPLE			BIT(2)
+#define GS_CAN_FEATURE_TRIPLE_SAMPLE				BIT(2)
 #define GS_CAN_FEATURE_ONE_SHOT					BIT(3)
 #define GS_CAN_FEATURE_HW_TIMESTAMP				BIT(4)
 #define GS_CAN_FEATURE_IDENTIFY					BIT(5)
 #define GS_CAN_FEATURE_USER_ID					BIT(6)
 #define GS_CAN_FEATURE_PAD_PKTS_TO_MAX_PKT_SIZE	BIT(7)
-#define GS_CAN_FEATURE_FD						BIT(8)
+#define GS_CAN_FEATURE_FD					BIT(8)
 #define GS_CAN_FEATURE_REQ_USB_QUIRK_LPC546XX	BIT(9)
 #define GS_CAN_FEATURE_BT_CONST_EXT				BIT(10)
 #define GS_CAN_FEATURE_TERMINATION				BIT(11)
@@ -55,21 +53,20 @@ LOG_MODULE_REGISTER(gs_usb, CONFIG_GS_USB_LOG_LEVEL);
 #define GS_CAN_MODE_TRIPLE_SAMPLE				BIT(2)
 #define GS_CAN_MODE_ONE_SHOT					BIT(3)
 #define GS_CAN_MODE_HW_TIMESTAMP				BIT(4)
-/* GS_CAN_FEATURE_IDENTIFY						BIT(5) */
-/* GS_CAN_FEATURE_USER_ID						BIT(6) */
-#define GS_CAN_MODE_PAD_PKTS_TO_MAX_PKT_SIZE	BIT(7)
-#define GS_CAN_MODE_FD							BIT(8)
-/* GS_CAN_FEATURE_REQ_USB_QUIRK_LPC546XX		BIT(9) */
+/* GS_CAN_FEATURE_IDENTIFY					BIT(5) */
+/* GS_CAN_FEATURE_USER_ID					BIT(6) */
+#define GS_CAN_MODE_PAD_PKTS_TO_MAX_PKT_SIZE			BIT(7)
+#define GS_CAN_MODE_FD						BIT(8)
+/* GS_CAN_FEATURE_REQ_USB_QUIRK_LPC546XX			BIT(9) */
 /* GS_CAN_FEATURE_BT_CONST_EXT					BIT(10) */
 /* GS_CAN_FEATURE_TERMINATION BIT(11) */
 #define GS_CAN_MODE_BERR_REPORTING				BIT(12)
-/* GS_CAN_FEATURE_GET_STATE						BIT(13) */
+/* GS_CAN_FEATURE_GET_STATE					BIT(13) */
 
 
 USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 	struct usb_if_descriptor if0;
 	struct usb_ep_descriptor if0_in_ep;
-	struct usb_ep_descriptor if0_out_dummy_ep;
 	struct usb_ep_descriptor if0_out_ep;
 } __packed gs_usb_desc = {
 	/* Interface descriptor 0 */
@@ -89,19 +86,7 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 	.if0_in_ep = {
 		.bLength = sizeof(struct usb_ep_descriptor),
 		.bDescriptorType = USB_DESC_ENDPOINT,
-		.bEndpointAddress = GS_USB_IN_EP_ADDR,
-		.bmAttributes = USB_DC_EP_BULK,
-		.wMaxPacketSize = sys_cpu_to_le16(USB_MAX_FS_BULK_MPS),
-		.bInterval = 0x01,
-	},
-
-	/* Data Endpoint OUT *Dummy. It is needed to overcome USB EP address
-		overwriting by Zephyr's USB stack.
-	*/
-	.if0_out_dummy_ep = {
-		.bLength = sizeof(struct usb_ep_descriptor),
-		.bDescriptorType = USB_DESC_ENDPOINT,
-		.bEndpointAddress = GS_USB_OUT_DUMMY_EP_ADDR,
+		.bEndpointAddress = GS_USB_DEFAULT_IN_EP_ADDR,
 		.bmAttributes = USB_DC_EP_BULK,
 		.wMaxPacketSize = sys_cpu_to_le16(USB_MAX_FS_BULK_MPS),
 		.bInterval = 0x01,
@@ -111,7 +96,7 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 	.if0_out_ep = {
 		.bLength = sizeof(struct usb_ep_descriptor),
 		.bDescriptorType = USB_DESC_ENDPOINT,
-		.bEndpointAddress = GS_USB_OUT_EP_ADDR,
+		.bEndpointAddress = GS_USB_DEFAULT_OUT_EP_ADDR,
 		.bmAttributes = USB_DC_EP_BULK,
 		.wMaxPacketSize = sys_cpu_to_le16(USB_MAX_FS_BULK_MPS),
 		.bInterval = 0x01,
@@ -124,15 +109,11 @@ static void gs_usb_ep_in_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status)
 static struct usb_ep_cfg_data ep_data[] = {
 	{
 		.ep_cb = gs_usb_ep_in_cb,
-		.ep_addr = GS_USB_IN_EP_ADDR,
+		.ep_addr = GS_USB_DEFAULT_IN_EP_ADDR,
 	},
 	{
 		.ep_cb = gs_usb_ep_out_cb,
-		.ep_addr = GS_USB_OUT_EP_ADDR,
-	},
-	{
-		.ep_cb = NULL,
-		.ep_addr = GS_USB_OUT_DUMMY_EP_ADDR,
+		.ep_addr = GS_USB_DEFAULT_OUT_EP_ADDR,
 	}
 };
 
@@ -490,9 +471,11 @@ static void gs_usb_can_tx_thread()
 		}
 
 		// Echo sends frame back to host:
-		ret = usb_write(GS_USB_IN_EP_ADDR, (const uint8_t*)&hf, sizeof(hf), NULL);
+		ret = usb_write(ep_data[GS_USB_IN_EP_IDX].ep_addr, (const uint8_t*)&hf,
+						sizeof(hf), NULL);
 		if(ret < 0) {
-			LOG_ERR("usb_write failed on ep: %d", GS_USB_IN_EP_ADDR);
+			LOG_ERR("usb_write failed on ep: 0x%x ret: %d",
+					ep_data[GS_USB_IN_EP_IDX].ep_addr, ret);
 			continue;
 		}
 
@@ -504,7 +487,9 @@ static void gs_usb_can_tx_thread()
 
 static void gs_usb_ep_out_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status)
 {
-	if(ep != GS_USB_OUT_EP_ADDR) {
+	if(ep != ep_data[GS_USB_OUT_EP_IDX].ep_addr) {
+		LOG_DBG("ep != ep_data[GS_USB_OUT_EP_IDX].ep_addr --> 0x%x != 0x%x",
+				ep, ep_data[GS_USB_OUT_EP_IDX].ep_addr);
 		return;
 	}
 
@@ -550,9 +535,11 @@ static void gs_usb_can_rx_thread()
 			continue;
 		}
 
-		ret = usb_write(GS_USB_IN_EP_ADDR, (const uint8_t*)&hf, sizeof(hf), NULL);
+		ret = usb_write(ep_data[GS_USB_IN_EP_IDX].ep_addr, (const uint8_t*)&hf,
+						sizeof(hf), NULL);
 		if(ret < 0) {
-			LOG_ERR("usb_write failed on ep: %d", GS_USB_IN_EP_ADDR);
+			LOG_ERR("usb_write failed on ep: 0x%x ret: %d",
+					ep_data[GS_USB_IN_EP_IDX].ep_addr, ret);
 			continue;
 		}
 
@@ -874,7 +861,6 @@ static void gs_interface_config(struct usb_desc_header *head,
 									uint8_t bInterfaceNumber)
 {
 	ARG_UNUSED(head);
-
 	gs_usb_desc.if0.bInterfaceNumber = bInterfaceNumber;
 }
 
@@ -1003,6 +989,12 @@ int gs_usb_start(const uint32_t ch)
 		LOG_ERR("Failed to enable USB");
 		return ret;
 	}
+
+	LOG_DBG("ep_data[GS_USB_IN_EP_IDX].ep_addr: 0x%x", ep_data[GS_USB_IN_EP_IDX].ep_addr);
+	LOG_DBG("ep_data[GS_USB_OUT_EP_IDX].ep_addr: 0x%x", ep_data[GS_USB_OUT_EP_IDX].ep_addr);
+
+	LOG_DBG("gs_usb_desc.if0_in_ep.bEndpointAddress: 0x%x", gs_usb_desc.if0_in_ep.bEndpointAddress);
+	LOG_DBG("gs_usb_desc.if0_out_ep.bEndpointAddress: 0x%x", gs_usb_desc.if0_out_ep.bEndpointAddress);
 
 	return ret;
 }

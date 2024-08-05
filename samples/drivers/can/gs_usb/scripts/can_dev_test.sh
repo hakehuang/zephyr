@@ -35,9 +35,9 @@ echo "Enabling termination"
 ip link set dev $cand_dev_name type can termination 120  # use 0 or 120
 # [ $? -ne 0 ] && exit $?;
 
-echo "Blinking NIC LED's for 3 sec."
-ethtool -p $cand_dev_name 3
-[ $? -ne 0 ] && exit $?;
+# echo "Blinking NIC LED's for 3 sec."
+# ethtool -p $cand_dev_name 3
+# [ $? -ne 0 ] && exit $?;
 
 ip link set $cand_dev_name up
 [ $? -ne 0 ] && exit $?;
@@ -49,7 +49,7 @@ for ((i=0; i < $num_msgs; i++)); do
 	echo $cmd
 	$cmd
 	[ $? -ne 0 ] && exit $?;
-	sleep 3;
+	sleep 0.1;
 done
 
 exit 0;
