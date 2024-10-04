@@ -18,3 +18,4 @@ cbor>=1.0.0
 psutil
 setuptools>=70.0.0 # not directly required, pinned by Snyk to avoid a vulnerability
 zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
+capstone>=6.0.0a1 # not directly required, pinned by Snyk to avoid a vulnerability
