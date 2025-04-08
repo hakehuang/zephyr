@@ -63,6 +63,7 @@ LOG_MODULE_REGISTER(gs_usb, CONFIG_GS_USB_LOG_LEVEL);
 #define GS_CAN_MODE_BERR_REPORTING				BIT(12)
 /* GS_CAN_FEATURE_GET_STATE					BIT(13) */
 
+#define GS_CAN_MAX_PACKET_SIZE					(512U)
 
 USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 	struct usb_if_descriptor if0;
@@ -88,7 +89,7 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 		.bDescriptorType = USB_DESC_ENDPOINT,
 		.bEndpointAddress = GS_USB_DEFAULT_IN_EP_ADDR,
 		.bmAttributes = USB_DC_EP_BULK,
-		.wMaxPacketSize = sys_cpu_to_le16(USB_MAX_FS_BULK_MPS),
+		.wMaxPacketSize = sys_cpu_to_le16(GS_CAN_MAX_PACKET_SIZE),
 		.bInterval = 0x01,
 	},
 
@@ -98,7 +99,7 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 		.bDescriptorType = USB_DESC_ENDPOINT,
 		.bEndpointAddress = GS_USB_DEFAULT_OUT_EP_ADDR,
 		.bmAttributes = USB_DC_EP_BULK,
-		.wMaxPacketSize = sys_cpu_to_le16(USB_MAX_FS_BULK_MPS),
+		.wMaxPacketSize = sys_cpu_to_le16(GS_CAN_MAX_PACKET_SIZE),
 		.bInterval = 0x01,
 	},
 };
@@ -728,6 +729,8 @@ static int gs_usb_host2dev_hnd(struct gs_usb_can_channel_hnd* can_ch_hnd,
 								int32_t *len, uint8_t **data)
 {
 	int ret = 0;
+	struct can_timing can_timing;
+
 	switch (setup->bRequest) {
 		case GS_USB_BREQ_HOST_FORMAT:
 			LOG_DBG("GS_USB_BREQ_HOST_FORMAT");
@@ -739,14 +742,12 @@ static int gs_usb_host2dev_hnd(struct gs_usb_can_channel_hnd* can_ch_hnd,
 			break;
 		case GS_USB_BREQ_BITTIMING:
 			LOG_DBG("GS_USB_BREQ_BITTIMING");
-			struct can_timing can_timing;
 			gs_usb_bytes_to_can_timing(data, len, &can_timing);
 			ret = can_set_timing(can_ch_hnd->can_handle.dev, &can_timing);
 			break;
 		case GS_USB_BREQ_DATA_BITTIMING:
 			LOG_DBG("GS_USB_BREQ_DATA_BITTIMING");
 #ifdef CONFIG_CAN_FD_MODE
-			struct can_timing can_timing;
 			gs_usb_bytes_to_can_timing(data, len, &can_timing);
 			ret = can_set_timing_data(can_ch_hnd->can_handle.dev, &can_timing);
 #endif  /* CONFIG_CAN_FD_MODE */
