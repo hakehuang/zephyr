@@ -25,3 +25,17 @@
 	};
 };
 
+&peripheral {
+	/delete-node/ flexcan0;
+	flexcan_fd0: can@d4000 {
+		compatible = "nxp,flexcan-fd", "nxp,flexcan";
+		reg = <0xd4000 0x4000>;
+		interrupts = <62 0>;
+		interrupt-names = "common";
+		clocks = <&syscon MCUX_FLEXCAN0_CLK>;
+		clk-source = <0>;
+		pinctrl-0 = <&pinmux_flexcan0>;
+		pinctrl-names = "default";
+		status = "okay";
+	};
+};
