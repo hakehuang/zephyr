@@ -21,9 +21,9 @@ LOG_MODULE_REGISTER(gs_usb, CONFIG_GS_USB_LOG_LEVEL);
 #define GS_USB_DEFAULT_OUT_EP_ADDR	0x01
 
 #define GS_USB_IN_EP_IDX		0
-#define GS_USB_OUT_EP_IDX		1
+#define GS_USB_OUT_EP_IDX		2
 
-#define GS_USB_NUM_USB_ENDPOINTS	2
+#define GS_USB_NUM_USB_ENDPOINTS	3
 
 /**
  * Host format sent by the driver:
@@ -69,6 +69,7 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 	struct usb_if_descriptor if0;
 	struct usb_ep_descriptor if0_in_ep;
 	struct usb_ep_descriptor if0_out_ep;
+	struct usb_ep_descriptor if0_out_ep_plus;
 } __packed gs_usb_desc = {
 	/* Interface descriptor 0 */
 	.if0 = {
@@ -90,7 +91,7 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 		.bEndpointAddress = GS_USB_DEFAULT_IN_EP_ADDR,
 		.bmAttributes = USB_DC_EP_BULK,
 		.wMaxPacketSize = sys_cpu_to_le16(GS_CAN_MAX_PACKET_SIZE),
-		.bInterval = 0x01,
+		.bInterval = 0x05,
 	},
 
 	/* Data Endpoint OUT */
@@ -100,7 +101,16 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 		.bEndpointAddress = GS_USB_DEFAULT_OUT_EP_ADDR,
 		.bmAttributes = USB_DC_EP_BULK,
 		.wMaxPacketSize = sys_cpu_to_le16(GS_CAN_MAX_PACKET_SIZE),
-		.bInterval = 0x01,
+		.bInterval = 0x05,
+	},
+	/* ubuntu gs_usb use endpointAddress 2 so  */
+	.if0_out_ep_plus = {
+		.bLength = sizeof(struct usb_ep_descriptor),
+		.bDescriptorType = USB_DESC_ENDPOINT,
+		.bEndpointAddress = GS_USB_DEFAULT_OUT_EP_ADDR + 1,
+		.bmAttributes = USB_DC_EP_BULK,
+		.wMaxPacketSize = sys_cpu_to_le16(GS_CAN_MAX_PACKET_SIZE),
+		.bInterval = 0x05,
 	},
 };
 
@@ -115,6 +125,10 @@ static struct usb_ep_cfg_data ep_data[] = {
 	{
 		.ep_cb = gs_usb_ep_out_cb,
 		.ep_addr = GS_USB_DEFAULT_OUT_EP_ADDR,
+	},
+	{
+		.ep_cb = gs_usb_ep_out_cb,
+		.ep_addr = GS_USB_DEFAULT_OUT_EP_ADDR + 1,
 	}
 };
 
@@ -498,6 +512,7 @@ static void gs_usb_ep_out_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status
 	struct gs_host_frame hf = { 0 };
 	uint32_t bytes_to_read = 0;
 
+	LOG_DBG("ep out");
 	ret = usb_read(ep, NULL, 0, &bytes_to_read);
 	if(ret != 0) {
 		LOG_DBG("Can not read number of bytes [%d]", ret);
@@ -509,7 +524,6 @@ static void gs_usb_ep_out_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status
 		LOG_DBG("Can not read host frame [%d]", ret);
 		return;
 	}
-
 	LOG_HEXDUMP_DBG(&hf, sizeof(struct gs_host_frame), "got gs_host_frame:");
 
 	ret = k_msgq_put(&gs_usb_tx_can_msg_q, &hf, K_FOREVER);
@@ -946,7 +960,7 @@ int gs_usb_init(const struct device *can_dev,
 			LOG_ERR("Unable to add can rx filter [%d]", ret);
 			return ret;
 		}
-		LOG_ERR("Initialized can rx filter [%d]", ret);
+		LOG_DBG("Initialized can rx filter [%d]", ret);
 	}
 	/* Reset it. In this loop context it is used as returned filter_id of
 	* can_add_rx_filter function above.
@@ -984,6 +998,11 @@ int gs_usb_start(const uint32_t ch)
 
 	// ToDo: configure can channel device mode and flags on start
 	// can_ch_hnd_arr[ch].can_handle.dm.mode =
+	LOG_DBG("ep_data[GS_USB_IN_EP_IDX].ep_addr: 0x%x", ep_data[GS_USB_IN_EP_IDX].ep_addr);
+	LOG_DBG("ep_data[GS_USB_OUT_EP_IDX].ep_addr: 0x%x", ep_data[GS_USB_OUT_EP_IDX].ep_addr);
+
+	LOG_DBG("gs_usb_desc.if0_in_ep.bEndpointAddress: 0x%x", gs_usb_desc.if0_in_ep.bEndpointAddress);
+	LOG_DBG("gs_usb_desc.if0_out_ep.bEndpointAddress: 0x%x", gs_usb_desc.if0_out_ep.bEndpointAddress);
 
 	ret = usb_enable(NULL);
 	if (ret != 0) {
@@ -991,9 +1010,9 @@ int gs_usb_start(const uint32_t ch)
 		return ret;
 	}
 
+
 	LOG_DBG("ep_data[GS_USB_IN_EP_IDX].ep_addr: 0x%x", ep_data[GS_USB_IN_EP_IDX].ep_addr);
 	LOG_DBG("ep_data[GS_USB_OUT_EP_IDX].ep_addr: 0x%x", ep_data[GS_USB_OUT_EP_IDX].ep_addr);
-
 	LOG_DBG("gs_usb_desc.if0_in_ep.bEndpointAddress: 0x%x", gs_usb_desc.if0_in_ep.bEndpointAddress);
 	LOG_DBG("gs_usb_desc.if0_out_ep.bEndpointAddress: 0x%x", gs_usb_desc.if0_out_ep.bEndpointAddress);
 
