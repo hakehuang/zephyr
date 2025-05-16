@@ -99,7 +99,7 @@ USBD_CLASS_DESCR_DEFINE(primary, 0) struct gs_usb_config {
 		.bLength = sizeof(struct usb_ep_descriptor),
 		.bDescriptorType = USB_DESC_ENDPOINT,
 		.bEndpointAddress = GS_USB_DEFAULT_OUT_EP_ADDR,
-		.bmAttributes = USB_DC_EP_BULK,
+		.bmAttributes = USB_DC_EP_INTERRUPT,
 		.wMaxPacketSize = sys_cpu_to_le16(GS_CAN_MAX_PACKET_SIZE),
 		.bInterval = 0x05,
 	},
@@ -678,8 +678,8 @@ static void gs_usb_bytes_to_can_timing(uint8_t **data, int32_t *len,
 	memcpy(&gs_timing, *data, *len);
 
 	can_timing->sjw = gs_timing.sjw;
-	can_timing->prop_seg =  0;  /* gs_timing.prop_seg - used in can_timing.phase_seg1 */
-	can_timing->phase_seg1 = gs_timing.prop_seg + gs_timing.phase_seg1;
+	can_timing->prop_seg =  gs_timing.prop_seg;
+	can_timing->phase_seg1 = gs_timing.phase_seg1;
 	can_timing->phase_seg2 = gs_timing.phase_seg2;
 	can_timing->prescaler = gs_timing.brp;
 }
@@ -738,6 +738,15 @@ static int gs_usb_dev2host_hnd(struct gs_usb_can_channel_hnd* can_ch_hnd,
 	return ret;
 }
 
+static void dump_can_timing(struct can_timing * can_timing)
+{
+	LOG_DBG("can_timing->sjw = 0x%u", can_timing->sjw);
+	LOG_DBG("can_timing->prop_seg = 0x%u", can_timing->prop_seg);
+	LOG_DBG("can_timing->phase_seg1 = 0x%u", can_timing->phase_seg1);
+	LOG_DBG("can_timing->phase_seg2 = 0x%u", can_timing->phase_seg2);
+	LOG_DBG("can_timing->prescaler = 0x%u", can_timing->prescaler);
+}
+
 static int gs_usb_host2dev_hnd(struct gs_usb_can_channel_hnd* can_ch_hnd,
 								struct usb_setup_packet *setup,
 								int32_t *len, uint8_t **data)
@@ -757,6 +766,7 @@ static int gs_usb_host2dev_hnd(struct gs_usb_can_channel_hnd* can_ch_hnd,
 		case GS_USB_BREQ_BITTIMING:
 			LOG_DBG("GS_USB_BREQ_BITTIMING");
 			gs_usb_bytes_to_can_timing(data, len, &can_timing);
+			dump_can_timing(&can_timing);
 			ret = can_set_timing(can_ch_hnd->can_handle.dev, &can_timing);
 			break;
 		case GS_USB_BREQ_DATA_BITTIMING:
