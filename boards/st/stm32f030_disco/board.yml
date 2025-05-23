@@ -1,0 +1,6 @@
+board:
+  name: stm32f030_disco
+  full_name: STM32F030x4 Discovery
+  vendor: st
+  socs:
+    - name: stm32f030x4

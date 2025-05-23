@@ -1,0 +1,11 @@
+identifier: stm32f030_disco
+name: ST STM32F030 Discovery
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 8
+supported:
+  - watchdog
+vendor: st
