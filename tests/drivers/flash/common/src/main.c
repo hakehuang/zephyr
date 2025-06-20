@@ -22,6 +22,15 @@
 #define TEST_AREA	storage_partition
 #endif
 
+#define TEST_OFFSET      128
+#define TEST_WRITE_LEN   16
+#define TEST_READ_LEN    64
+#define TEST_PAGE_SIZE   4096
+
+#define TEST_OFFSET2     131
+#define TEST_WRITE_LEN2  16
+#define TEST_READ_LEN2   64
+
 /* TEST_AREA is only defined for configurations that realy on
  * fixed-partition nodes.
  */
@@ -477,6 +486,87 @@ ZTEST(flash_driver, test_flash_copy)
 	test_flash_copy_inner(flash_dev, page_info.start_offset, flash_dev,
 			      page_info.start_offset + (page_info.size / 4),
 			      page_info.size - (page_info.size / 4), buf, sizeof(buf), -EINVAL);
+}
+
+ZTEST(flash_driver, test_flash_area_rw)
+{
+	const struct flash_area *flash_area;
+	int rc;
+
+	static const uint8_t test_write_buf[TEST_WRITE_LEN] = {
+		0xAA, 0xBB, 0xCC, 0xDD,
+		0x11, 0x22, 0x33, 0x44,
+		0x55, 0x66, 0x77, 0x88,
+		0x99, 0x00, 0xEE, 0xFF
+	};
+
+	static const uint8_t test_write_buf2[TEST_WRITE_LEN2] = {
+		0x10, 0x20, 0x30, 0x40,
+		0x50, 0x60, 0x70, 0x80,
+		0x90, 0xA0, 0xB0, 0xC0,
+		0xD0, 0xE0, 0xF0, 0x00
+	};
+
+	uint8_t test_read_buf[TEST_READ_LEN] = {0};
+	uint8_t test_read_buf2[TEST_READ_LEN2] = {0};
+
+	rc = flash_area_open(FIXED_PARTITION_ID(TEST_AREA), &flash_area);
+	if (rc < 0) {
+		TC_PRINT("Failed to open flash area: %d", rc);
+		return;
+	}
+
+	// Erase first page (4KB)
+	rc = flash_area_erase(flash_area, 0, TEST_PAGE_SIZE);
+	if (rc < 0) {
+		TC_PRINT("Failed to erase flash: %d", rc);
+		goto cleanup;
+	}
+
+	// First test at offset 128
+	rc = flash_area_write(flash_area, TEST_OFFSET, test_write_buf, TEST_WRITE_LEN);
+	if (rc < 0) {
+		TC_PRINT("Failed to write flash at offset 128: %d", rc);
+		goto cleanup;
+	}
+
+	rc = flash_area_read(flash_area, TEST_OFFSET, test_read_buf, TEST_READ_LEN);
+	if (rc < 0) {
+		TC_PRINT("Failed to read flash at offset 128: %d", rc);
+		goto cleanup;
+	}
+
+	TC_PRINT("Flash read result from offset 128:");
+	for (int i = 0; i < TEST_READ_LEN; ++i) {
+		printk("%02X ", test_read_buf[i]);
+		if ((i + 1) % 16 == 0) {
+			printk("\n");
+		}
+	}
+
+	// Second test at offset 131
+	rc = flash_area_write(flash_area, TEST_OFFSET2, test_write_buf2, TEST_WRITE_LEN2);
+	if (rc < 0) {
+		TC_PRINT("Failed to write flash at offset 131: %d", rc);
+		goto cleanup;
+	}
+
+	rc = flash_area_read(flash_area, TEST_OFFSET2, test_read_buf2, TEST_READ_LEN2);
+	if (rc < 0) {
+		TC_PRINT("Failed to read flash at offset 131: %d", rc);
+		goto cleanup;
+	}
+
+	TC_PRINT("Flash read result from offset 131:");
+	for (int i = 0; i < TEST_READ_LEN2; ++i) {
+		printk("%02X ", test_read_buf2[i]);
+		if ((i + 1) % 16 == 0) {
+			printk("\n");
+		}
+	}
+
+cleanup:
+	flash_area_close(flash_area);
 }
 
 ZTEST_SUITE(flash_driver, NULL, NULL, flash_driver_before, NULL, NULL);

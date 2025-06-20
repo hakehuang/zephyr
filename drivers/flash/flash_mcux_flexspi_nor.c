@@ -26,6 +26,8 @@
 static uint8_t nor_write_buf[SPI_NOR_PAGE_SIZE];
 #endif
 
+#define CONFIG_FLASH_LOG_LEVEL 3
+
 /*
  * NOTE: If CONFIG_FLASH_MCUX_FLEXSPI_XIP is selected, Any external functions
  * called while interacting with the flexspi MUST be relocated to SRAM or ITCM
@@ -1452,8 +1454,9 @@ static int flash_flexspi_nor_init(const struct device *dev)
 		LOG_ERR("Could not set flexspi clock speed");
 		return -ENOTSUP;
 	}
-
-
+#if 1
+	LOG_ERR("data->config.flexspiRootClk = %d\n", data->config.flexspiRootClk);
+#endif
 	memc_flexspi_reset(&data->controller);
 
 	if (flash_flexspi_nor_read_id(dev, (uint8_t *)&vendor_id)) {
