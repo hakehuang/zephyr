@@ -1150,7 +1150,7 @@ static int flash_flexspi_nor_check_jedec(struct flash_flexspi_nor_data *data,
 				kFLEXSPI_Command_RADDR_SDR, kFLEXSPI_4PAD, 32);
 		/* Flash needs 8 dummy cycles (at 133MHz) */
 		flexspi_lut[READ][1] = FLEXSPI_LUT_SEQ(
-				kFLEXSPI_Command_DUMMY_SDR, kFLEXSPI_4PAD, 8,
+				kFLEXSPI_Command_DUMMY_SDR, kFLEXSPI_4PAD, 6,
 				kFLEXSPI_Command_READ_SDR, kFLEXSPI_4PAD, 0x04);
 		/* Only 1S-1S-4S page program supported */
 		flexspi_lut[PAGE_PROGRAM][0] = FLEXSPI_LUT_SEQ(
