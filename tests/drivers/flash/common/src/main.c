@@ -544,6 +544,12 @@ ZTEST(flash_driver, test_flash_area_rw)
 		}
 	}
 
+	rc = flash_area_erase(flash_area, 0, TEST_PAGE_SIZE);
+	if (rc < 0) {
+		TC_PRINT("Failed to erase flash: %d", rc);
+		goto cleanup;
+	}
+
 	// Second test at offset 131
 	rc = flash_area_write(flash_area, TEST_OFFSET2, test_write_buf2, TEST_WRITE_LEN2);
 	if (rc < 0) {
