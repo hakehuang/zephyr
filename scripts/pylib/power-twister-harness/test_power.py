@@ -11,8 +11,12 @@ from utils.UtilityFunctions import current_RMS
 
 logger = logging.getLogger(__name__)
 
+# Either probe can drive this test; the harness picks one so that both are not
+# run (and connected) for the same measurement.
+PROBE_CLASS = os.environ.get('PROBE_CLASS', 'stm_powershield')
 
-@pytest.mark.parametrize("probe_class", ['stm_powershield'], indirect=True)
+
+@pytest.mark.parametrize("probe_class", [PROBE_CLASS], indirect=True)
 def test_power_harness(probe_class: PowerMonitor, test_data, dut: DeviceAdapter):
     """
     This test measures and validates the RMS current values from the power monitor

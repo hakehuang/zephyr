@@ -1,0 +1,2 @@
+# Dependencies of the general ADC platform probe
+pyyaml>=6.0
