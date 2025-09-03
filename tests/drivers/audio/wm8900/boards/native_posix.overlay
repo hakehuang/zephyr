@@ -17,3 +17,17 @@
 		#clock-cells = <0>;
 	};
 };
+
+/ {
+	emul {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		wm8900_emul: wm8900_emul@1a {
+			compatible = "wolfson,wm8900-emul";
+			reg = <0x1a>;
+			status = "okay";
+		};
+	};
+};

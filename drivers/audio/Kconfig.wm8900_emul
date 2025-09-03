@@ -1,0 +1,32 @@
+# Copyright 2025 NXP
+# SPDX-License-Identifier: Apache-2.0
+
+config AUDIO_CODEC_WM8900_EMUL
+	bool "Wolfson WM8900 Audio Codec Emulator"
+	default y
+	depends on DT_HAS_WOLFSON_WM8900_EMUL_ENABLED
+	depends on EMUL
+	select I2C_EMUL
+	help
+		Enable Wolfson WM8900 audio codec emulator.
+
+		This emulator provides a virtual WM8900 audio codec for testing
+		purposes on native_posix and other emulation platforms.
+
+if AUDIO_CODEC_WM8900_EMUL
+
+config WM8900_EMUL_LOG_LEVEL
+	int "WM8900 emulator log level"
+	default 2
+	range 0 4
+	help
+		Set log level for WM8900 emulator.
+
+		Levels are:
+		- 0 OFF
+		- 1 ERROR
+		- 2 WARNING
+		- 3 INFO
+		- 4 DEBUG
+
+endif # AUDIO_CODEC_WM8900_EMUL
