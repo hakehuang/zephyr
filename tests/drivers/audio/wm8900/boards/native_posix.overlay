@@ -1,0 +1,19 @@
+/ {
+	aliases {
+		wm8900 = &wm8900;
+	};
+
+	wm8900: wm8900@1a {
+		compatible = "wolfson,wm8900";
+		reg = <0x1a>;
+		clock-source = "MCLK";
+		clocks = <&dummy_clock>;
+		clock-names = "mclk";
+	};
+
+	dummy_clock: dummy_clock {
+		compatible = "fixed-clock";
+		clock-frequency = <12288000>;
+		#clock-cells = <0>;
+	};
+};

@@ -1,0 +1,52 @@
+# Copyright 2024 NXP
+# SPDX-License-Identifier: Apache-2.0
+
+description: WM8900 audio codec
+
+include: [i2c-device.yaml]
+
+compatible: "wolfson,wm8900"
+
+properties:
+  reg:
+    required: true
+  clock-source:
+    type: string
+    default: "MCLK"
+    description: |
+      Codec's internal clock signal (SYSCLK) source selection. These options
+      are available:
+      - "MCLK": WM8900's MCLK pin (supplied by the host)
+      - "FLL":  WM8900's FLL facility, can be free-running
+      The "MCLK" option is default, as this clock signal is usually supplied
+      by the host.
+    enum:
+      - "MCLK"
+      - "FLL"
+
+  clocks:
+    type: phandle-array
+    required: true
+    description: |
+      Phandle to the clock provider and a clock specifier for the MCLK input.
+
+  clock-names:
+    type: string
+    required: true
+    description: |
+      Must be "mclk".
+
+  #interrupts:
+  #  type: phandle-array
+  #  description: |
+  #    Optional interrupt line for codec events.
+
+  #reset-gpios:
+  #  type: phandle-array
+  #  description: |
+  #    Optional GPIO line for hardware reset.
+
+required:
+  - reg
+  - clocks
+  - clock-names

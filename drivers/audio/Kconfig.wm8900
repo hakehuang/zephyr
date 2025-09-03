@@ -1,0 +1,42 @@
+# Copyright 2024 NXP
+# SPDX-License-Identifier: Apache-2.0
+
+config AUDIO_CODEC_WM8900
+	bool "Wolfson WM8900 Audio Codec"
+	depends on I2C
+	help
+		Enable Wolfson WM8900 audio codec driver.
+
+		This driver supports the WM8900 stereo audio codec with headphone
+		and line outputs, and microphone inputs.
+
+if AUDIO_CODEC_WM8900
+
+config WM8900_INIT_PRIORITY
+	int "WM8900 initialization priority"
+	default 70
+	range 0 99
+	help
+		Initialization priority for WM8900 audio codec driver.
+
+config WM8900_I2C_ADDRESS
+	hex "WM8900 I2C address"
+	default 0x1A
+	range 0x1A 0x1B
+	help
+		I2C address for the WM8900 audio codec.
+
+		The WM8900 supports two I2C addresses:
+		- 0x1A when ADDR pin is low
+		- 0x1B when ADDR pin is high
+
+config WM8900_CLOCK_SOURCE
+	int "WM8900 clock source"
+	default 0
+	help
+		Clock source selection for WM8900.
+
+		0: MCLK
+		1: PLL
+
+endif # AUDIO_CODEC_WM8900

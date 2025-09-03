@@ -1,0 +1,4 @@
+tests:
+  drivers.audio.wm8900:
+    tags: audio codec i2c
+    filter: CONFIG_AUDIO_CODEC_WM8900
