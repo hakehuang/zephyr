@@ -90,6 +90,12 @@ config PM_EARLY_SYSTEM_TIMER_RESUME
 
 	  If unsure, say N.
 
+config ENABLE_PM_MEASURE
+	bool "System Power Measure"
+	depends on SYS_CLOCK_EXISTS && HAS_PM
+	help
+	  This option enables measurement on target power state
+
 rsource "policy/Kconfig"
 
 if PM
@@ -287,5 +293,15 @@ config PM_CPU_SHELL
 	    - listing supported CPU low power states from devicetree;
 	    - checking whether states are currently available;
 	    - idling the shell thread so the system naturally enters low power;
+
+if ENABLE_PM_MEASURE
+
+config PM_STATE_SUSTAIN_DURATION
+	int "PM state sustain duration"
+	default 5
+	help
+	  time for target status to sustain
+
+endif # ENABLE_PM_MEASURE
 
 endmenu
