@@ -6,8 +6,8 @@
  */
 
 #include <zephyr/drivers/adc.h>
+#include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
-#include <zephyr/console/console.h>
 #include <zephyr/shell/shell.h>
 
 /* ADC node from the devicetree. */
@@ -18,6 +18,10 @@
 
 /* Data of ADC device specified in devicetree. */
 static const struct device *adc = DEVICE_DT_GET(ADC_NODE);
+
+#ifndef CONFIG_SHELL_ADC_PS
+const struct device *const uart_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+#endif
 
 /* Data array of ADC channels for the specified ADC. */
 static const struct adc_channel_cfg channel_cfgs[] = {
@@ -138,12 +142,8 @@ int main(void)
 {
 	int err;
 
-#ifndef CONFIG_SHELL_ADC_PS
-	console_init();
-#endif
-
 	if (!device_is_ready(adc)) {
-		printf("ADC controller device %s not ready\n", adc->name);
+		//printf("ADC controller device %s not ready\n", adc->name);
 		return 0;
 	}
 
@@ -152,7 +152,7 @@ int main(void)
 		sequence.channels |= BIT(channel_cfgs[i].channel_id);
 		err = adc_channel_setup(adc, &channel_cfgs[i]);
 		if (err < 0) {
-			printf("Could not setup channel #%d (%d)\n", i, err);
+			//printf("Could not setup channel #%d (%d)\n", i, err);
 			return 0;
 		}
 		if ((vrefs_mv[i] == 0) && (channel_cfgs[i].reference == ADC_REF_INTERNAL)) {
@@ -160,17 +160,21 @@ int main(void)
 		}
 	}
 
-	printf("\r\nadc power shield sample starts\n");
+	//printf("\r\nadc power shield sample starts\n");
 
 	while (1) {
 #ifndef CONFIG_SHELL_ADC_PS
-		uint8_t c = console_getchar();
+		uint8_t c;
+		
+		if (uart_poll_in(uart_dev, &c) < 0) {
+			k_msleep(100);
+			continue;
+		}
 
 		k_msleep(100);
 
 		/* print capacity when input is '\r'*/
 		if (c == '\r') {
-			console_putchar('\n');
 			printf("==== start of adc features ===\n");
 			printf("CHANNEL_COUNT: %d\n", CHANNEL_COUNT);
 			printf("Resolution: %d\n", CONFIG_SEQUENCE_RESOLUTION);
@@ -193,7 +197,7 @@ int main(void)
 
 		err = adc_read(adc, &sequence);
 		if (err < 0) {
-			printf("Could not read (%d)\n", err);
+			//printf("Could not read (%d)\n", err);
 			continue;
 		}
 
