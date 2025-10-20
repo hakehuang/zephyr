@@ -194,6 +194,7 @@ static void init_app(void)
 		conn_mgr_mon_resend_status();
 	}
 
+	net_dhcpv4_start(net_if_get_default());
 	init_vlan();
 	init_tunnel();
 	init_ws();
