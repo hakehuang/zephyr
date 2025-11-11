@@ -213,15 +213,38 @@ static int cmd_sample_quit(const struct shell *sh,
 	return 0;
 }
 
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/sys/reboot.h>
+#define PHY_NODE DT_NODELABEL(phy)
+
+
+static int cmd_reset_phy(const struct shell *sh,
+			  size_t argc, char *argv[])
+{
+	const struct gpio_dt_spec reset_gpio = \
+			GPIO_DT_SPEC_GET(PHY_NODE, reset_gpios);
+
+	gpio_pin_toggle(reset_gpio.port, reset_gpio.pin);
+	k_busy_wait(5000);
+	gpio_pin_toggle(reset_gpio.port, reset_gpio.pin);
+	/* now system reset*/
+	sys_reboot(SYS_REBOOT_WARM);
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sample_commands,
 	SHELL_CMD(quit, NULL,
 		  "Quit the sample application\n",
 		  cmd_sample_quit),
+	SHELL_CMD(reset, NULL,
+		  "rset phy\n",
+		  cmd_reset_phy),
 	SHELL_SUBCMD_SET_END
 );
 
 SHELL_CMD_REGISTER(sample, &sample_commands,
 		   "Sample application commands", NULL);
+
 
 int main(void)
 {
