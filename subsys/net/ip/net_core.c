@@ -29,6 +29,10 @@ LOG_MODULE_REGISTER(net_core, CONFIG_NET_CORE_LOG_LEVEL);
 #include <zephyr/net/net_log.h>
 #include <zephyr/net/net_mgmt.h>
 #include <zephyr/net/net_pkt.h>
+
+#ifdef CONFIG_NDP_PACKET_PROCESSING
+#include <zephyr/net/net_ndp.h>
+#endif
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/dns_resolve.h>
 #include <zephyr/net/gptp.h>
@@ -587,6 +591,29 @@ int net_recv_data(struct net_if *iface, struct net_pkt *pkt)
 
 	net_pkt_set_iface(pkt, iface);
 
+	/* Call NDP packet processing if enabled */
+	if (IS_ENABLED(CONFIG_NDP_PACKET_PROCESSING)) {
+		enum net_verdict ndp_verdict = net_ndp_process_packet(iface, pkt);
+		
+		/* If NDP callback returns DROP, silently drop the packet */
+		if (ndp_verdict == NET_DROP) {
+			net_stats_update_filter_rx_drop(net_pkt_iface(pkt));
+			net_pkt_unref(pkt);
+			goto ndp_processed;
+		}
+		
+		/* If NDP-only mode enabled, bypass native stack */
+		if (IS_ENABLED(CONFIG_NDP_ONLY_MODE) && ndp_verdict == NET_OK) {
+			/* NDP callback has processed the packet, bypass native stack */
+			goto ndp_processed;
+		}
+		
+		/* If NDP callback returns OK, continue with normal processing */
+		if (ndp_verdict == NET_OK) {
+			/* Continue with normal packet processing */
+		}
+	}
+
 	if (!net_pkt_filter_recv_ok(pkt)) {
 		/* Silently drop the packet, but update the statistics in order
 		 * to be able to monitor filter activity.
@@ -596,6 +623,8 @@ int net_recv_data(struct net_if *iface, struct net_pkt *pkt)
 	} else {
 		net_queue_rx(iface, pkt);
 	}
+
+ndp_processed:
 
 	ret = 0;
 

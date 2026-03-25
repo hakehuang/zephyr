@@ -1,0 +1,13 @@
+sample:
+  name: NDP Sample
+  description: Network Data Plane callback system demonstration
+
+tests:
+  sample.net.ndp:
+    tags: net ndp
+    platform_allow: qemu_x86 native_posix
+    filter: CONFIG_NETWORKING and CONFIG_NDP_PACKET_PROCESSING
+    integration_platforms:
+      - qemu_x86
+      - native_posix
+    extra_args: "-DCONFIG_NETWORKING=y -DCONFIG_NDP_PACKET_PROCESSING=y"

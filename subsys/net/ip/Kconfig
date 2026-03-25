@@ -50,7 +50,52 @@ config NET_NATIVE
 config NET_NATIVE_IP
 	bool
 	depends on NET_NATIVE
-	default y if NET_IP
+
+# NDP (Network Data Plane) configuration
+config NDP_PACKET_PROCESSING
+	bool "Enable NDP packet processing"
+	depends on NET_NATIVE
+	help
+	  Enable Network Data Plane (NDP) callback system for packet processing.
+	  This allows registering callback functions that process network packets
+	  before they enter the standard protocol stack.
+
+config NDP_ONLY_MODE
+	bool "Enable NDP-only mode (bypass native stack)"
+	depends on NDP_PACKET_PROCESSING
+	help
+	  Enable NDP-only mode where packets processed by NDP callbacks bypass
+	  the native protocol stack. This provides DPDK-like performance but
+	  requires applications to handle all protocol processing.
+
+config NDP_LOG_LEVEL
+	int "NDP log level"
+	range 0 4
+	default 3 if NET_LOG
+	default 0
+	help
+	  Set log level for NDP (Network Data Plane) module.
+
+	  Levels are:
+	  - 0 OFF
+	  - 1 ERROR
+	  - 2 WARNING
+	  - 3 INFO
+	  - 4 DEBUG
+
+config NDP_SAMPLE_LOG_LEVEL
+	int "NDP sample log level"
+	range 0 4
+	default 3
+	help
+	  Set log level for NDP sample application.
+
+	  Levels are:
+	  - 0 OFF
+	  - 1 ERROR
+	  - 2 WARNING
+	  - 3 INFO
+	  - 4 DEBUG
 
 config NET_NATIVE_IPV6
 	bool
