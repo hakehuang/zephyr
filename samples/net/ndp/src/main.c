@@ -19,21 +19,58 @@ LOG_MODULE_REGISTER(ndp_sample, CONFIG_NDP_SAMPLE_LOG_LEVEL);
  */
 static enum net_verdict ndp_mixed_callback(struct net_pkt *pkt)
 {
-    /* Simple packet processing logic */
-    LOG_INF("NDP: Processing packet in mixed mode");
-    /* Custom packet processing logic here */
-    return NET_CONTINUE; /* Continue with native stack */
+    /* Log packet information */
+    LOG_INF("NDP Mixed Mode: Processing packet");
+    
+    /* Example: Check packet type and make decisions */
+    if (net_pkt_family(pkt) == AF_INET) {
+        LOG_INF("IPv4 packet");
+    } else if (net_pkt_family(pkt) == AF_INET6) {
+        LOG_INF("IPv6 packet");
+    }
+    
+    /* Return CONTINUE to let packet continue to native stack */
+    return NET_CONTINUE;
 }
 
 /**
- * @brief NDP callback function for packet processing (NDP-Only Mode)
+ * @brief NDP callback function for packet processing (Pure NDP Mode)
  */
-static enum net_verdict ndp_only_callback(struct net_pkt *pkt)
+static enum net_verdict ndp_pure_callback(struct net_pkt *pkt)
 {
-    /* Simple packet processing logic for NDP-only mode */
-    LOG_INF("NDP-Only: Processing packet");
-    /* Custom packet processing logic here */
-    return NET_CONTINUE; /* Continue with native stack */
+    /* Log packet information */
+    LOG_INF("NDP Pure Mode: Processing packet");
+    
+    /* Example: Handle specific packet types directly */
+    if (net_pkt_family(pkt) == AF_INET) {
+        LOG_INF("Handling IPv4 packet in pure NDP mode");
+        /* Process packet directly without native stack */
+        return NET_OK; /* Packet handled */
+    }
+    
+    /* For other packet types, continue to native stack (if not in NDP-only mode) */
+    return NET_CONTINUE;
+}
+
+/**
+ * @brief Network interface event callback
+ */
+static void iface_cb(struct net_mgmt_event_callback *cb,
+                     uint32_t mgmt_event, struct net_if *iface)
+{
+    if (mgmt_event == NET_EVENT_IF_UP) {
+        LOG_INF("Network interface %s is up", net_if_get_name(iface, NULL));
+        
+        /* Register NDP callback based on configuration */
+        int ret;
+        if (IS_ENABLED(CONFIG_NDP_ONLY_MODE)) {
+            ret = net_ndp_register_callback(iface, ndp_pure_callback);
+            LOG_INF("Pure NDP mode callback registered: %d", ret);
+        } else {
+            ret = net_ndp_register_callback(iface, ndp_mixed_callback);
+            LOG_INF("Mixed mode NDP callback registered: %d", ret);
+        }
+    }
 }
 
 /**
@@ -41,73 +78,29 @@ static enum net_verdict ndp_only_callback(struct net_pkt *pkt)
  */
 int main(void)
 {
-    int ret;
-    struct net_if *iface;
-
+    static struct net_mgmt_event_callback mgmt_cb;
+    
     LOG_INF("NDP Sample Application Started");
-
-    /* Get first network interface */
-    iface = net_if_get_first_by_type(&NET_L2_GET_NAME(ETHERNET));
-    if (iface == NULL) {
-        LOG_ERR("No Ethernet interface found");
-<<<<<<< HEAD
-        return;
-    }
-
-    LOG_INF("Ethernet interface found");
     
-=======
-        return -1;
-    }
-
-    LOG_INF("Ethernet interface found");
-
->>>>>>> github/main
-    /* Register NDP callback based on configuration */
-#ifdef CONFIG_NDP_ONLY_MODE
-    ret = net_ndp_register_callback(iface, ndp_only_callback);
-    LOG_INF("NDP-Only Mode: Custom packet processing enabled");
-<<<<<<< HEAD
-    LOG_INF("Packets with NET_OK verdict will bypass native stack");
-#else
-    ret = net_ndp_register_callback(iface, ndp_mixed_callback);
-    LOG_INF("Mixed Mode: NDP preprocessing + native stack");
-    LOG_INF("All packets continue to native protocol stack");
-#endif
+    /* Configure network interface management callback */
+    net_mgmt_init_event_callback(&mgmt_cb, iface_cb, NET_EVENT_IF_UP);
+    net_mgmt_add_event_callback(&mgmt_cb);
     
-    if (ret < 0) {
-        LOG_ERR("NDP registration failed: %d", ret);
-        return;
+    /* Log configuration */
+    if (IS_ENABLED(CONFIG_NDP_ONLY_MODE)) {
+        LOG_INF("Running in Pure NDP mode (bypassing native stack)");
+    } else {
+        LOG_INF("Running in Mixed NDP mode (preprocessing + native stack)");
     }
     
-    LOG_INF("NDP callback registered successfully");
-    
-=======
-#else
-    ret = net_ndp_register_callback(iface, ndp_mixed_callback);
-    LOG_INF("Mixed Mode: NDP preprocessing + native stack");
-#endif
-
-    if (ret < 0) {
-        LOG_ERR("Failed to register NDP callback: %d", ret);
-        return -1;
-    }
-
->>>>>>> github/main
     /* Main loop */
     while (1) {
         /* Simple counter for demonstration */
         static uint32_t counter = 0;
         LOG_INF("NDP sample running for %u seconds", counter++);
-<<<<<<< HEAD
-        
-        k_sleep(K_SECONDS(5));
-    }
-=======
 
         k_sleep(K_SECONDS(5));
     }
 
     return 0;
->>>>>>> github/main
 }

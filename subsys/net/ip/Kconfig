@@ -1,857 +1,860 @@
-# IP stack config
-
-# Copyright (c) 2016 Intel Corporation.
-# Copyright (c) 2021 Nordic Semiconductor
-# Copyright (c) 2023 Arm Limited (or its affiliates). All rights reserved.
-# Copyright 2025 NXP
-# SPDX-License-Identifier: Apache-2.0
-
-menu "IP stack"
-
-config NET_NAMESPACE_COMPAT_MODE
-	bool "Network namespace compatibility mode"
-	# Disable the compatibility mode for network tests. But if the tests
-	# uses POSIX APIs, then currently the compat mode is needed.
-	depends on !NET_TEST || POSIX_API
-	default y
-	help
-	  The networking APIs and code is now namespaced i.e., relevant network
-	  APIs now have either net_, NET_ or ZSOCK_ prefixes. This avoids
-	  circular dependency against a Posix subsystem which might define
-	  duplicate symbols. The compatibility mode will be deprecated in the
-	  future and eventually removed.
-
-# Hidden option enabled whenever an IP stack is available.
-config NET_IP
-	bool
-	default y if NET_IPV6 || NET_IPV4
-
-# Hidden option enabled whenever an IP fragmentation is enabled.
-config NET_IP_FRAGMENT
-	bool
-	default y if NET_IPV6_FRAGMENT || NET_IPV4_FRAGMENT
-
-# Hidden option selected by net connection based socket implementations
-# to draw in all code required for connection infrastructure.
-config NET_CONNECTION_SOCKETS
-	bool
-
-config NET_NATIVE
-	bool "Native network stack support"
-	default y
-	help
-	  Enables Zephyr native IP stack. If you disable this, then
-	  you need to enable the offloading support if you want to
-	  have IP connectivity.
-
-# Hidden options for enabling native IPv6/IPv4. Using these options
-# avoids having "defined(CONFIG_NET_IPV6) && defined(CONFIG_NET_NATIVE)"
-# in the code as we can have "defined(CONFIG_NET_NATIVE_IPV6)" instead.
-config NET_NATIVE_IP
-	bool
-	depends on NET_NATIVE
-	default y if NET_IP
-
-config NET_NATIVE_IPV6
-	bool
-	depends on NET_NATIVE
-	default y if NET_IPV6
-
-config NET_NATIVE_IPV4
-	bool
-	depends on NET_NATIVE
-	default y if NET_IPV4
-
-# NDP (Network Data Plane) configuration
-config NDP_PACKET_PROCESSING
-	bool "Enable NDP packet processing"
-	depends on NET_NATIVE
-	help
-	  Enable Network Data Plane (NDP) callback system for packet processing.
-	  This allows registering callback functions that process network packets
-	  before they enter the standard protocol stack.
-
-config NDP_ONLY_MODE
-	bool "Enable NDP-only mode (bypass native stack)"
-	depends on NDP_PACKET_PROCESSING
-	help
-	  Enable NDP-only mode where packets processed by NDP callbacks bypass
-	  the native protocol stack. This provides DPDK-like performance but
-	  requires applications to handle all protocol processing.
-
-config NDP_LOG_LEVEL
-	int "NDP log level"
-	range 0 4
-	default 3
-	help
-	  Set log level for NDP (Network Data Plane) module.
-
-	  Levels are:
-	  - 0 OFF
-	  - 1 ERROR
-	  - 2 WARNING
-	  - 3 INFO
-	  - 4 DEBUG
-
-config NDP_SAMPLE_LOG_LEVEL
-	int "NDP sample log level"
-	range 0 4
-	default 3
-	help
-	  Set log level for NDP sample application.
-
-	  Levels are:
-	  - 0 OFF
-	  - 1 ERROR
-	  - 2 WARNING
-	  - 3 INFO
-	  - 4 DEBUG
-
-config NET_PMTU
-	bool
-	select NET_MGMT
-	select NET_MGMT_EVENT
-	select NET_MGMT_EVENT_INFO
-	default y
-	depends on NET_IPV6_PMTU || NET_IPV4_PMTU
-
-if NET_PMTU
-module = NET_PMTU
-module-dep = NET_LOG
-module-str = Log level for PMTU
-module-help = Enables PMTU to output debug messages.
-source "subsys/net/Kconfig.template.log_config.net"
-endif # NET_PMTU
-
-config NET_NATIVE_TCP
-	bool
-	depends on NET_NATIVE
-	default y if NET_TCP
-
-config NET_NATIVE_UDP
-	bool
-	depends on NET_NATIVE
-	default y if NET_UDP
-
-config NET_OFFLOAD
-	bool "Offload IP stack"
-	help
-	  Enables TCP/IP stack to be offload to a co-processor.
-
-config NET_OFFLOADING_SUPPORT
-	bool
-	default y if NET_OFFLOAD || NET_SOCKETS_OFFLOAD
-	help
-	  Hidden option that is set if either NET_OFFLOAD or
-	  NET_SOCKETS_OFFLOAD is set. This allows us to check
-	  only one option instead of two.
-
-if NET_OFFLOAD
-module = NET_OFFLOAD
-module-dep = NET_LOG
-module-str = Log level for offload layer
-module-help = Enables offload layer to output debug messages.
-source "subsys/net/Kconfig.template.log_config.net"
-endif # NET_OFFLOAD
-
-config NET_RAW_MODE
-	bool
-	help
-	  This is a very specific option used to built only the very minimal
-	  part of the net stack in order to get network drivers working without
-	  any net stack above: core, L2 etc... Basically this will build only
-	  net_pkt part. It is currently used only by IEEE 802.15.4 drivers,
-	  though any type of net drivers could use it.
-
-choice NET_QEMU_NETWORKING
-	prompt "Qemu networking"
-	default NET_QEMU_PPP if NET_PPP
-	default NET_QEMU_SLIP
-	depends on QEMU_TARGET
-	help
-	  Can be used to select how the network connectivity is established
-	  from inside qemu to host system. This can be done either via
-	  serial connection (SLIP) or via Qemu ethernet driver.
-
-config NET_QEMU_SLIP
-	bool "SLIP"
-	help
-	  Connect to host or to another Qemu via SLIP.
-
-config NET_QEMU_PPP
-	bool "PPP"
-	help
-	  Connect to host via PPP.
-
-config NET_QEMU_ETHERNET
-	bool "Ethernet"
-	help
-	  Connect to host system via Qemu ethernet driver support. One such
-	  driver that Zephyr supports is Intel e1000 ethernet driver.
-
-config NET_QEMU_USER
-	bool "SLIRP"
-	help
-	  Connect to host system via Qemu's built-in User Networking support. This
-	  is implemented using "slirp", which provides a full TCP/IP stack within
-	  QEMU and uses that stack to implement a virtual NAT'd network.
-endchoice
-
-config NET_QEMU_USER_EXTRA_ARGS
-	string "Qemu User Networking Args"
-	depends on NET_QEMU_USER
-	default ""
-	help
-	  Extra arguments passed to QEMU when User Networking is enabled. This may
-	  include host / guest port forwarding, device id, Network address
-	  information etc. This string is appended to the QEMU "-net user" option.
-
-if !NET_RAW_MODE
-
-config NET_INIT_PRIO
-	int
-	default 90
-	help
-	  Network initialization priority level. This number tells how
-	  early in the boot the network stack is initialized.
-
-config NET_IP_DSCP_ECN
-	bool "DSCP/ECN processing at IP layer"
-	depends on NET_IP
-	default y
-	help
-	  Specify whether DSCP/ECN values are processed at IP layer. The values
-	  are encoded within ToS field in IPv4 and TC field in IPv6.
-
-source "subsys/net/ip/Kconfig.ipv6"
-
-source "subsys/net/ip/Kconfig.ipv4"
-
-config NET_IPV4_MAPPING_TO_IPV6
-	bool "Support IPv4 mapped on IPv6 addresses"
-	depends on NET_NATIVE_IPV6
-	help
-	  Support v4-mapped-on-v6 address type. This allows IPv4 and IPv6
-	  to share a local port space. When the application gets an IPv4
-	  connection or packet to an IPv6 socket, its source address will
-	  be mapped to IPv6. This is turned off by default which means
-	  that IPV6_V6ONLY socket option is always on. If you enable this
-	  option, then you can still control the behaviour of the socket
-	  via the IPV6_V6ONLY option at runtime.
-
-config NET_TC_TX_COUNT
-	int "How many Tx traffic classes to have for each network device"
-	default 1 if USERSPACE || USB_DEVICE_NETWORK || \
-		     USBD_CDC_ECM_CLASS || USBD_CDC_NCM_CLASS || \
-		     NET_SHELL_REQUIRE_TX_THREAD
-	default 0
-	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8 && \
-		(USERSPACE || NET_SHELL_REQUIRE_TX_THREAD)
-	range 0 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
-	range 1 8 if USERSPACE || NET_SHELL_REQUIRE_TX_THREAD
-	range 0 8
-	help
-	  Define how many Tx traffic classes (queues) the system should have
-	  when sending a network packet. The network packet priority can then
-	  be mapped to this traffic class so that higher prioritized packets
-	  can be processed before lower prioritized ones. Each queue is handled
-	  by a separate thread which will need RAM for stack space.
-	  Only increase the value from 1 if you really need this feature.
-	  The default value is 1 which means that all the network traffic is
-	  handled equally. In this implementation, the higher traffic class
-	  value corresponds to lower thread priority.
-	  If you select 0 here, then it means that all the network traffic
-	  is pushed to the driver directly without any queues.
-	  Note that if USERSPACE support is enabled, then currently we need to
-	  enable at least 1 TX thread.
-
-config NET_TC_RX_COUNT
-	int "How many Rx traffic classes to have for each network device"
-	default 1
-	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8 && USERSPACE
-	range 0 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
-	range 1 8 if USERSPACE
-	range 0 8
-	help
-	  Define how many Rx traffic classes (queues) the system should have
-	  when receiving a network packet. The network packet priority can then
-	  be mapped to this traffic class so that higher prioritized packets
-	  can be processed before lower prioritized ones. Each queue is handled
-	  by a separate thread which will need RAM for stack space.
-	  Only increase the value from 1 if you really need this feature.
-	  The default value is 1 which means that all the network traffic is
-	  handled equally. In this implementation, the higher traffic class
-	  value corresponds to lower thread priority.
-	  If you select 0 here, then it means that all the network traffic
-	  is pushed from the driver to application thread without any
-	  intermediate RX queue. There is always a receive socket queue between
-	  device driver and application. Disabling RX thread means that the
-	  network device driver, that is typically running in IRQ context, will
-	  handle the packet all the way to the application. This might cause
-	  other incoming packets to be lost if the RX processing takes long
-	  time.
-	  Note that if USERSPACE support is enabled, then currently we need to
-	  enable at least 1 RX thread.
-
-config NET_TC_SKIP_FOR_HIGH_PRIO
-	bool "Push high priority packets directly to network driver [DEPRECATED]"
-	select DEPRECATED
-	help
-	  Deprecated, use NET_TC_TX_SKIP_FOR_HIGH_PRIO instead.
-
-config NET_TC_TX_SKIP_FOR_HIGH_PRIO
-	bool "Push high priority packets directly to network driver"
-	default NET_TC_SKIP_FOR_HIGH_PRIO
-	help
-	  If this is set, then high priority (>= NET_PRIORITY_CA) net_pkt will
-	  be pushed directly to network driver and will skip the traffic class
-	  queues. This is currently not enabled by default.
-
-config NET_TC_RX_SKIP_FOR_HIGH_PRIO
-	bool "Push high priority packets directly to the application"
-	help
-	  If this is set, then high priority (>= NET_PRIORITY_CA) net_pkt will
-	  be pushed directly to the application and will skip the traffic class
-	  queues. If you select this option, then it means that high priority
-	  network traffic is pushed from the driver to the application thread
-	  without any intermediate RX queue. If the network device driver is
-	  running in IRQ context, it will handle the packet all the way to the
-	  application. This might cause other incoming packets to be lost if
-	  the RX processing takes long time.
-	  This is currently not enabled by default.
-
-choice NET_TC_THREAD_TYPE
-	prompt "How the network RX/TX threads should work"
-	help
-	  Please select the RX/TX threads to be either pre-emptive or
-	  co-operative.
-
-config NET_TC_THREAD_COOPERATIVE
-	bool "Use co-operative TX/RX threads"
-	depends on COOP_ENABLED
-	help
-	  With co-operative threads, the thread cannot be pre-empted.
-
-config NET_TC_THREAD_PREEMPTIVE
-	bool "Use pre-emptive TX/RX threads [EXPERIMENTAL]"
-	depends on PREEMPT_ENABLED
-	select EXPERIMENTAL
-	help
-	  With pre-emptive threads, the thread can be pre-empted.
-
-endchoice
-
-config NET_TC_NUM_PRIORITIES
-	int
-	default NUM_COOP_PRIORITIES if NET_TC_THREAD_COOPERATIVE
-	default NUM_PREEMPT_PRIORITIES if NET_TC_THREAD_PREEMPTIVE
-
-config NET_TC_THREAD_PRIO_CUSTOM
-	bool "Customize traffic class thread priority"
-	help
-	  Customise net threads priority by each.
-
-if NET_TC_THREAD_PRIO_CUSTOM
-
-config NET_TC_TX_THREAD_PRIO_SPREAD
-	int "Transmit traffic class thread priority spread"
-	default 1
-	range 1 255
-	help
-	  Transmit traffic class threads priority will increase/decrease
-	  by this step. They will be separated by this many levels.
-
-config NET_TC_RX_THREAD_PRIO_SPREAD
-	int "Receive traffic class thread priority spread"
-	default 1
-	range 1 255
-	help
-	  Receive traffic class threads priority will increase/decrease
-	  by this step. They will be separated by this many levels.
-
-config NET_TC_TX_THREAD_BASE_PRIO
-	int "Transmit traffic class base thread priority"
-	default 0
-	help
-	  Transmit traffic class threads priority will increase/decrease
-	  from this priority.
-	  If NET_TC_TX_COUNT is 1, this will be transmit traffic class
-	  thread priority.
-
-config NET_TC_RX_THREAD_BASE_PRIO
-	int "Receive traffic class base thread priority"
-	default 0
-	help
-	  Receive traffic class threads priority will increase/decrease
-	  from this priority.
-	  If NET_TC_RX_COUNT is 1, this will be receive traffic class
-	  thread priority.
-
-endif # NET_TC_THREAD_CUSTOM_PRIO
-
-choice
-	prompt "Priority to traffic class mapping"
-	help
-	  Select mapping to use to map network packet priorities to traffic
-	  classes.
-
-config NET_TC_MAPPING_STRICT
-	bool "Strict priority mapping"
-	help
-	  This is the recommended default priority to traffic class mapping.
-	  Use it for implementations that do not support the credit-based
-	  shaper transmission selection algorithm.
-	  See 802.1Q, chapter 8.6.6 for more information.
-
-config NET_TC_MAPPING_SR_CLASS_A_AND_B
-	bool "SR class A and class B mapping"
-	depends on NET_TC_TX_COUNT >= 2
-	depends on NET_TC_RX_COUNT >= 2
-	help
-	  This is the recommended priority to traffic class mapping for a
-	  system that supports SR (Stream Reservation) class A and SR class B.
-	  See 802.1Q, chapter 34.5 for more information.
-
-config NET_TC_MAPPING_SR_CLASS_B_ONLY
-	bool "SR class B only mapping"
-	depends on NET_TC_TX_COUNT >= 2
-	depends on NET_TC_RX_COUNT >= 2
-	help
-	  This is the recommended priority to traffic class mapping for a
-	  system that supports SR (Stream Reservation) class B only.
-	  See 802.1Q, chapter 34.5 for more information.
-endchoice
-
-config NET_TX_DEFAULT_PRIORITY
-	int "Default network TX packet priority if none have been set"
-	default 1
-	range 0 7
-	help
-	  What is the default network packet priority if user has not specified
-	  one. The value 0 means lowest priority and 7 is the highest.
-
-config NET_RX_DEFAULT_PRIORITY
-	int "Default network RX packet priority if none have been set"
-	default 0
-	range 0 7
-	help
-	  What is the default network RX packet priority if user has not set
-	  one. The value 0 means lowest priority and 7 is the highest.
-
-config NET_ALLOW_ANY_PRIORITY
-	bool "Allow any network packet priority to be used"
-	help
-	  If this is set, then any user given network packet priority can be used. Otherwise
-	  the network packet priorities are limited to 0-7 range.
-
-config NET_IP_ADDR_CHECK
-	bool "Check IP address validity before sending IP packet"
-	default y
-	help
-	  Check that either the source or destination address is
-	  correct before sending either IPv4 or IPv6 network packet.
-
-config NET_MAX_ROUTERS
-	int "How many routers are supported"
-	default 2 if NET_IPV4 && NET_IPV6
-	default 1 if NET_IPV4 && !NET_IPV6
-	default 1 if !NET_IPV4 && NET_IPV6
-	range 1 254
-	help
-	  The value depends on your network needs.
-
-# Normally the route support is enabled by RPL or similar technology
-# that needs to use the routing infrastructure.
-config NET_ROUTE
-	bool
-	depends on NET_IPV6_NBR_CACHE
-	default y if NET_IPV6_NBR_CACHE
-
-config NET_ROUTING
-	bool "IP routing between interfaces"
-	depends on NET_ROUTE
-	help
-	  Allow IPv6 routing between different network interfaces and
-	  technologies. Currently this has limited use as some entity
-	  would need to populate the routing table. RPL used to do that
-	  earlier but currently there is no RPL support in Zephyr.
-
-config NET_MAX_ROUTES
-	int "Max number of routing entries stored."
-	default NET_IPV6_MAX_NEIGHBORS
-	depends on NET_ROUTE
-	help
-	  This determines how many entries can be stored in routing table.
-
-config NET_MAX_NEXTHOPS
-	int "Max number of next hop entries stored."
-	default NET_MAX_ROUTES
-	depends on NET_ROUTE
-	help
-	  This determines how many entries can be stored in nexthop table.
-
-config NET_ROUTE_MCAST
-	bool "Multicast Routing / Forwarding"
-	depends on NET_ROUTE
-	help
-	  Activates multicast routing/forwarding
-
-config NET_MAX_MCAST_ROUTES
-	int "Max number of multicast routing entries stored."
-	default 1
-	depends on NET_ROUTE_MCAST
-	help
-	  This determines how many entries can be stored in multicast
-	  routing table.
-
-config NET_MCAST_ROUTE_MAX_IFACES
-	int "Max number of network interfaces per multicast routing entry"
-	default 1
-	range 1 8
-	depends on NET_ROUTE_MCAST
-	help
-	  Determines how many network interfaces can be assigned to a
-	  single multicast route entry.
-
-config NET_MCAST_ROUTE_MLD_REPORTS
-	bool "Report multicast routes as a part of MLDv2 reports"
-	depends on NET_ROUTE_MCAST
-	depends on NET_IPV6_MLD
-	help
-	  Determines whether a multicast route entry should be advertised
-	  in MLDv2 reports.
-
-source "subsys/net/ip/Kconfig.tcp"
-
-config NET_TEST_PROTOCOL
-	bool "JSON based test protocol (UDP)"
-	help
-	  Enable JSON based test protocol (UDP).
-
-config NET_UDP
-	bool "UDP"
-	default y
-	depends on NET_IP
-	help
-	  The value depends on your network needs.
-
-config NET_UDP_CHECKSUM
-	bool "Check UDP checksum"
-	default y
-	depends on NET_UDP
-	help
-	  Enables UDP handler to check UDP checksum. If the checksum is invalid,
-	  then the packet is discarded.
-
-config NET_UDP_MISSING_CHECKSUM
-	bool "Accept missing checksum (IPv4 only)"
-	default y
-	depends on NET_UDP && NET_IPV4
-	help
-	  RFC 768 states the possibility to have a missing checksum, for
-	  debugging purposes for instance. That feature is however valid only
-	  for IPv4 and on reception only, since Zephyr will always compute the
-	  UDP checksum in transmission path.
-
-if NET_UDP
-module = NET_UDP
-module-dep = NET_LOG
-module-str = Log level for UDP
-module-help = Enables UDP handler output debug messages
-source "subsys/net/Kconfig.template.log_config.net"
-endif # NET_UDP
-
-config NET_MAX_CONN
-	int "How many network connections are supported"
-	depends on NET_UDP || NET_TCP || NET_SOCKETS_PACKET || NET_SOCKETS_CAN
-	default 8 if NET_IPV6 && NET_IPV4
-	default 4
-	help
-	  The value depends on your network needs. The value
-	  should include both UDP and TCP connections.
-
-config NET_CONN_PACKET_CLONE_TIMEOUT
-	int "Timeout value in milliseconds for cloning a packet"
-	default 100
-	help
-	  Maximum wait time when cloning a packet for a network connection.
-
-config NET_MAX_CONTEXTS
-	int "Number of network contexts to allocate"
-	default 6
-	help
-	  Each network context is used to describe a network 5-tuple that
-	  is used when listening or sending network traffic. This is very
-	  similar as one could call a network socket in some other systems.
-
-config ZVFS_OPEN_ADD_SIZE_NET
-	int "Number of network sockets to allocate"
-	default NET_MAX_CONTEXTS if NET_NATIVE && NET_SOCKETS
-	default 0
-
-config NET_CONTEXT_NET_PKT_POOL
-	bool "Net_buf TX pool / context"
-	default y if NET_TCP && NET_6LO
-	help
-	  If enabled, then it is possible to fine-tune network packet pool
-	  for each context when sending network data. If this setting is
-	  enabled, then you should define the context pools in your application
-	  using NET_PKT_TX_POOL_DEFINE() and NET_PKT_DATA_POOL_DEFINE()
-	  macros and tie these pools to desired context using the
-	  net_context_setup_pools() function.
-
-config NET_CONTEXT_SYNC_RECV
-	bool "Support synchronous functionality in net_context_recv() API"
-	default y
-	help
-	  You can disable sync support to save some memory if you are calling
-	  net_context_recv() in async way only when timeout is set to 0.
-
-config NET_CONTEXT_CHECK
-	bool "Check options when calling various net_context functions"
-	default y
-	help
-	  If you know that the options passed to net_context...() functions
-	  are ok, then you can disable the checks to save some memory.
-
-config NET_CONTEXT_PRIORITY
-	bool "Add priority support to net_context"
-	help
-	  It is possible to prioritize network traffic. This requires
-	  also traffic class support to work as expected.
-
-config NET_CONTEXT_TXTIME
-	bool "Add TXTIME support to net_context"
-	select NET_PKT_TXTIME
-	help
-	  It is possible to add information when the outgoing network packet
-	  should be sent. The TX time information should be placed into
-	  ancillary data field in sendmsg call.
-
-config NET_CONTEXT_RCVTIMEO
-	bool "Add RCVTIMEO support to net_context"
-	help
-	  It is possible to time out receiving a network packet. The timeout
-	  time is configurable run-time in the application code. For network
-	  sockets timeout is configured per socket with
-	  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, ...) function.
-
-config NET_CONTEXT_SNDTIMEO
-	bool "Add SNDTIMEO support to net_context"
-	help
-	  It is possible to time out sending a network packet. The timeout
-	  time is configurable run-time in the application code. For network
-	  sockets timeout is configured per socket with
-	  setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, ...) function.
-
-config NET_CONTEXT_RCVBUF
-	bool "Add RCVBUF support to net_context"
-	help
-	  It is possible to set receive buffer size for a network context.
-
-config NET_CONTEXT_SNDBUF
-	bool "Add SNDBUF support to net_context"
-	help
-	  It is possible to set send buffer size for a network context.
-
-config NET_CONTEXT_TCP_NODELAY
-	bool "Add TCP_NODELAY support to net_context"
-	help
-	  It is possible to set TCP_NODELAY option for a TCP connection.
-
-config NET_CONTEXT_TCP_KEEPALIVE
-	bool "Add TCP_KEEPALIVE support to net_context"
-	help
-	  It is possible to set TCP_KEEPALIVE option for a TCP connection.
-
-config NET_CONTEXT_TCP_KEEPIDLE
-	bool "Add TCP_KEEPIDLE support to net_context"
-	help
-	  It is possible to set TCP_KEEPIDLE option for a TCP connection.
-
-config NET_CONTEXT_TCP_KEEPINTVL
-	bool "Add TCP_KEEPINTVL support to net_context"
-	help
-	  It is possible to set TCP_KEEPINTVL option for a TCP connection.
-
-config NET_CONTEXT_TCP_KEEPCNT
-	bool "Add TCP_KEEPCNT support to net_context"
-	help
-	  It is possible to set TCP_KEEPCNT option for a TCP connection.
-
-config NET_CONTEXT_TCP_USER_TIMEOUT
-	bool "Add TCP_USER_TIMEOUT support to net_context"
-	help
-	  It is possible to set TCP_USER_TIMEOUT option for a TCP connection.
-
-config NET_CONTEXT_TCP_CORK
-	bool "Add TCP_CORK support to net_context"
-	help
-	  It is possible to set TCP_CORK option for a TCP connection.
-
-config NET_CONTEXT_TCP_QUICKACK
-	bool "Add TCP_QUICKACK support to net_context"
-	help
-	  It is possible to set TCP_QUICKACK option for a TCP connection.
-
-config NET_CONTEXT_TCP_DEFER_ACCEPT
-	bool "Add TCP_DEFER_ACCEPT support to net_context"
-	help
-	  It is possible to set TCP_DEFER_ACCEPT option for a TCP connection.
-
-config NET_CONTEXT_TCP_FASTOPEN
-	bool "Add TCP_FASTOPEN support to net_context"
-	help
-	  It is possible to set TCP_FASTOPEN option for a TCP connection.
-
-config NET_CONTEXT_TCP_SYNCNT
-	bool "Add TCP_SYNCNT support to net_context"
-	help
-	  It is possible to set TCP_SYNCNT option for a TCP connection.
-
-config NET_CONTEXT_TCP_WINDOW_CLAMP
-	bool "Add TCP_WINDOW_CLAMP support to net_context"
-	help
-	  It is possible to set TCP_WINDOW_CLAMP option for a TCP connection.
-
-config NET_CONTEXT_TCP_INFO
-	bool "Add TCP_INFO support to net_context"
-	help
-	  It is possible to get TCP connection information.
-
-config NET_CONTEXT_TCP_LINGER2
-	bool "Add TCP_LINGER2 support to net_context"
-	help
-	  It is possible to set TCP_LINGER2 option for a TCP connection.
-
-config NET_CONTEXT_TCP_REPAIR
-	bool "Add TCP_REPAIR support to net_context"
-	help
-	  It is possible to set TCP_REPAIR option for a TCP connection.
-
-config NET_CONTEXT_TCP_THIN_LINEAR_TIMEOUTS
-	bool "Add TCP_THIN_LINEAR_TIMEOUTS support to net_context"
-	help
-	  It is possible to set TCP_THIN_LINEAR_TIMEOUTS option for a TCP connection.
-
-config NET_CONTEXT_TCP_THIN_DUPACK
-	bool "Add TCP_THIN_DUPACK support to net_context"
-	help
-	  It is possible to set TCP_THIN_DUPACK option for a TCP connection.
-
-config NET_CONTEXT_TCP_USER_MSS
-	bool "Add TCP_USER_MSS support to net_context"
-	help
-	  It is possible to set TCP_USER_MSS option for a TCP connection.
-
-config NET_CONTEXT_TCP_MTU_DISCOVERY
-	bool "Add TCP_MTU_DISCOVERY support to net_context"
-	help
-	  It is possible to set TCP_MTU_DISCOVERY option for a TCP connection.
-
-config NET_CONTEXT_TCP_TX_DELAY
-	bool "Add TCP_TX_DELAY support to net_context"
-	help
-	  It is possible to set TCP_TX_DELAY option for a TCP connection.
-
-config NET_CONTEXT_TCP_WSCALE
-	bool "Add TCP_WSCALE support to net_context"
-	help
-	  It is possible to set TCP_WSCALE option for a TCP connection.
-
-config NET_CONTEXT_TCP_TIMESTAMP
-	bool "Add TCP_TIMESTAMP support to net_context"
-	help
-	  It is possible to set TCP_TIMESTAMP option for a TCP connection.
-
-config NET_CONTEXT_TCP_SACK
-	bool "Add TCP_SACK support to net_context"
-	help
-	  It is possible to set TCP_SACK option for a TCP connection.
-
-config NET_CONTEXT_TCP_FACK
-	bool "Add TCP_FACK support to net_context"
-	help
-	  It is possible to set TCP_FACK option for a TCP connection.
-
-config NET_CONTEXT_TCP_RENO
-	bool "Add TCP_RENO support to net_context"
-	help
-	  It is possible to set TCP_RENO option for a TCP connection.
-
-config NET_CONTEXT_TCP_VEGAS
-	bool "Add TCP_VEGAS support to net_context"
-	help
-	  It is possible to set TCP_VEGAS option for a TCP connection.
-
-config NET_CONTEXT_TCP_VENO
-	bool "Add TCP_VENO support to net_context"
-	help
-	  It is possible to set TCP_VENO option for a TCP connection.
-
-config NET_CONTEXT_TCP_BIC
-	bool "Add TCP_BIC support to net_context"
-	help
-	  It is possible to set TCP_BIC option for a TCP connection.
-
-config NET_CONTEXT_TCP_WESTWOOD
-	bool "Add TCP_WESTWOOD support to net_context"
-	help
-	  It is possible to set TCP_WESTWOOD option for a TCP connection.
-
-config NET_CONTEXT_TCP_HTCP
-	bool "Add TCP_HTCP support to net_context"
-	help
-	  It is possible to set TCP_HTCP option for a TCP connection.
-
-config NET_CONTEXT_TCP_HYBLA
-	bool "Add TCP_HYBLA support to net_context"
-	help
-	  It is possible to set TCP_HYBLA option for a TCP connection.
-
-config NET_CONTEXT_TCP_VEGAS
-	bool "Add TCP_VEGAS support to net_context"
-	help
-	  It is possible to set TCP_VEGAS option for a TCP connection.
-
-config NET_CONTEXT_TCP_SCALABLE
-	bool "Add TCP_SCALABLE support to net_context"
-	help
-	  It is possible to set TCP_SCALABLE option for a TCP connection.
-
-config NET_CONTEXT_TCP_LP
-	bool "Add TCP_LP support to net_context"
-	help
-	  It is possible to set TCP_LP option for a TCP connection.
-
-config NET_CONTEXT_TCP_VENO
-	bool "Add TCP_VENO support to net_context"
-	help
-	  It is possible to set TCP_VENO option for a TCP connection.
-
-config NET_CONTEXT_TCP_YEAH
-	bool "Add TCP_YEAH support to net_context"
-	help
-	  It is possible to set TCP_YEAH option for a TCP connection.
-
-config NET_CONTEXT_TCP_ILLINOIS
-	bool "Add TCP_ILLINOIS support to net_context"
-	help
-	  It is possible to set TCP_ILLINOIS option for a TCP connection.
-
-config NET_CONTEXT_TCP_DCTCP
-	bool "Add TCP_DCTCP support to net_context"
-	help
-	  It is possible to set TCP_DCTCP option for a TCP connection.
-
-config NET_CONTEXT_TCP_CDG
-	bool "Add TCP_CDG support to net_context"
-	help
-	  It is possible to set TCP_CDG option for a TCP connection.
-
-config NET_CONTEXT_TCP_BBR
-	bool "Add TCP_BBR support to net_context"
-	help
-	  It is possible to set TCP_BBR option for a TCP connection.
-
-endmenu
+### C:\github\zephyr_project\zephyr\subsys\net\ip\Kconfig
+```
+1: # IP stack config
+2: 
+3: # Copyright (c) 2016 Intel Corporation.
+4: # Copyright (c) 2021 Nordic Semiconductor
+5: # Copyright (c) 2023 Arm Limited (or its affiliates). All rights reserved.
+6: # Copyright 2025 NXP
+7: # SPDX-License-Identifier: Apache-2.0
+8: 
+9: menu "IP stack"
+10: 
+11: config NET_NAMESPACE_COMPAT_MODE
+12: 	bool "Network namespace compatibility mode"
+13: 	# Disable the compatibility mode for network tests. But if the tests
+14: 	# uses POSIX APIs, then currently the compat mode is needed.
+15: 	depends on !NET_TEST || POSIX_API
+16: 	default y
+17: 	help
+18: 	  The networking APIs and code is now namespaced i.e., relevant network
+19: 	  APIs now have either net_, NET_ or ZSOCK_ prefixes. This avoids
+20: 	  circular dependency against a Posix subsystem which might define
+21: 	  duplicate symbols. The compatibility mode will be deprecated in the
+22: 	  future and eventually removed.
+23: 
+24: # Hidden option enabled whenever an IP stack is available.
+25: config NET_IP
+26: 	bool
+27: 	default y if NET_IPV6 || NET_IPV4
+28: 
+29: # Hidden option enabled whenever an IP fragmentation is enabled.
+30: config NET_IP_FRAGMENT
+31: 	bool
+32: 	default y if NET_IPV6_FRAGMENT || NET_IPV4_FRAGMENT
+33: 
+34: # Hidden option selected by net connection based socket implementations
+35: # to draw in all code required for connection infrastructure.
+36: config NET_CONNECTION_SOCKETS
+37: 	bool
+38: 
+39: config NET_NATIVE
+40: 	bool "Native network stack support"
+41: 	default y
+42: 	help
+43: 	  Enables Zephyr native IP stack. If you disable this, then
+44: 	  you need to enable the offloading support if you want to
+45: 	  have IP connectivity.
+46: 
+47: # Hidden options for enabling native IPv6/IPv4. Using these options
+48: # avoids having "defined(CONFIG_NET_IPV6) && defined(CONFIG_NET_NATIVE)"
+49: # in the code as we can have "defined(CONFIG_NET_NATIVE_IPV6)" instead.
+50: config NET_NATIVE_IP
+51: 	bool
+52: 	depends on NET_NATIVE
+53: 	default y if NET_IP
+54: 
+55: config NET_NATIVE_IPV6
+56: 	bool
+57: 	depends on NET_NATIVE
+58: 	default y if NET_IPV6
+59: 
+60: config NET_NATIVE_IPV4
+61: 	bool
+62: 	depends on NET_NATIVE
+63: 	default y if NET_IPV4
+64: 
+65: # NDP (Network Data Plane) configuration
+66: config NDP_PACKET_PROCESSING
+67: 	bool "Enable NDP packet processing"
+68: 	depends on NET_NATIVE
+69: 	help
+70: 	  Enable Network Data Plane (NDP) callback system for packet processing.
+71: 	  This allows registering callback functions that process network packets
+72: 	  before they enter the standard protocol stack.
+73: 
+74: config NDP_ONLY_MODE
+75: 	bool "Enable NDP-only mode (bypass native stack)"
+76: 	depends on NDP_PACKET_PROCESSING
+77: 	help
+78: 	  Enable NDP-only mode where packets processed by NDP callbacks bypass
+79: 	  the native protocol stack. This provides DPDK-like performance but
+80: 	  requires applications to handle all protocol processing.
+81: 
+82: config NDP_LOG_LEVEL
+83: 	int "NDP log level"
+84: 	range 0 4
+85: 	default 3
+86: 	help
+87: 	  Set log level for NDP (Network Data Plane) module.
+88: 
+89: 	  Levels are:
+90: 	  - 0 OFF
+91: 	  - 1 ERROR
+92: 	  - 2 WARNING
+93: 	  - 3 INFO
+94: 	  - 4 DEBUG
+95: 
+96: config NDP_SAMPLE_LOG_LEVEL
+97: 	int "NDP sample log level"
+98: 	range 0 4
+99: 	default 3
+100: 	help
+101: 	  Set log level for NDP sample application.
+102: 
+103: 	  Levels are:
+104: 	  - 0 OFF
+105: 	  - 1 ERROR
+106: 	  - 2 WARNING
+107: 	  - 3 INFO
+108: 	  - 4 DEBUG
+109: 
+110: config NET_PMTU
+111: 	bool
+112: 	select NET_MGMT
+113: 	select NET_MGMT_EVENT
+114: 	select NET_MGMT_EVENT_INFO
+115: 	default y
+116: 	depends on NET_IPV6_PMTU || NET_IPV4_PMTU
+117: 
+118: if NET_PMTU
+119: module = NET_PMTU
+120: module-dep = NET_LOG
+121: module-str = Log level for PMTU
+122: module-help = Enables PMTU to output debug messages.
+123: source "subsys/net/Kconfig.template.log_config.net"
+124: endif # NET_PMTU
+125: 
+126: config NET_NATIVE_TCP
+127: 	bool
+128: 	depends on NET_NATIVE
+129: 	default y if NET_TCP
+130: 
+131: config NET_NATIVE_UDP
+132: 	bool
+133: 	depends on NET_NATIVE
+134: 	default y if NET_UDP
+135: 
+136: config NET_OFFLOAD
+137: 	bool "Offload IP stack"
+138: 	help
+139: 	  Enables TCP/IP stack to be offload to a co-processor.
+140: 
+141: config NET_OFFLOADING_SUPPORT
+142: 	bool
+143: 	default y if NET_OFFLOAD || NET_SOCKETS_OFFLOAD
+144: 	help
+145: 	  Hidden option that is set if either NET_OFFLOAD or
+146: 	  NET_SOCKETS_OFFLOAD is set. This allows us to check
+147: 	  only one option instead of two.
+148: 
+149: if NET_OFFLOAD
+150: module = NET_OFFLOAD
+151: module-dep = NET_LOG
+152: module-str = Log level for offload layer
+153: module-help = Enables offload layer to output debug messages.
+154: source "subsys/net/Kconfig.template.log_config.net"
+155: endif # NET_OFFLOAD
+156: 
+157: config NET_RAW_MODE
+158: 	bool
+159: 	help
+160: 	  This is a very specific option used to built only the very minimal
+161: 	  part of the net stack in order to get network drivers working without
+162: 	  any net stack above: core, L2 etc... Basically this will build only
+163: 	  net_pkt part. It is currently used only by IEEE 802.15.4 drivers,
+164: 	  though any type of net drivers could use it.
+165: 
+166: choice NET_QEMU_NETWORKING
+167: 	prompt "Qemu networking"
+168: 	default NET_QEMU_PPP if NET_PPP
+169: 	default NET_QEMU_SLIP
+170: 	depends on QEMU_TARGET
+171: 	help
+172: 	  Can be used to select how the network connectivity is established
+173: 	  from inside qemu to host system. This can be done either via
+174: 	  serial connection (SLIP) or via Qemu ethernet driver.
+175: 
+176: config NET_QEMU_SLIP
+177: 	bool "SLIP"
+178: 	help
+179: 	  Connect to host or to another Qemu via SLIP.
+180: 
+181: config NET_QEMU_PPP
+182: 	bool "PPP"
+183: 	help
+184: 	  Connect to host via PPP.
+185: 
+186: config NET_QEMU_ETHERNET
+187: 	bool "Ethernet"
+188: 	help
+189: 	  Connect to host system via Qemu ethernet driver support. One such
+190: 	  driver that Zephyr supports is Intel e1000 ethernet driver.
+191: 
+192: config NET_QEMU_USER
+193: 	bool "SLIRP"
+194: 	help
+195: 	  Connect to host system via Qemu's built-in User Networking support. This
+196: 	  is implemented using "slirp", which provides a full TCP/IP stack within
+197: 	  QEMU and uses that stack to implement a virtual NAT'd network.
+198: endchoice
+199: 
+200: config NET_QEMU_USER_EXTRA_ARGS
+201: 	string "Qemu User Networking Args"
+202: 	depends on NET_QEMU_USER
+203: 	default ""
+204: 	help
+205: 	  Extra arguments passed to QEMU when User Networking is enabled. This may
+206: 	  include host / guest port forwarding, device id, Network address
+207: 	  information etc. This string is appended to the QEMU "-net user" option.
+208: 
+209: if !NET_RAW_MODE
+210: 
+211: config NET_INIT_PRIO
+212: 	int
+213: 	default 90
+214: 	help
+215: 	  Network initialization priority level. This number tells how
+216: 	  early in the boot the network stack is initialized.
+217: 
+218: config NET_IP_DSCP_ECN
+219: 	bool "DSCP/ECN processing at IP layer"
+220: 	depends on NET_IP
+221: 	default y
+222: 	help
+223: 	  Specify whether DSCP/ECN values are processed at IP layer. The values
+224: 	  are encoded within ToS field in IPv4 and TC field in IPv6.
+225: 
+226: source "subsys/net/ip/Kconfig.ipv6"
+227: 
+228: source "subsys/net/ip/Kconfig.ipv4"
+229: 
+230: config NET_IPV4_MAPPING_TO_IPV6
+231: 	bool "Support IPv4 mapped on IPv6 addresses"
+232: 	depends on NET_NATIVE_IPV6
+233: 	help
+234: 	  Support v4-mapped-on-v6 address type. This allows IPv4 and IPv6
+235: 	  to share a local port space. When the application gets an IPv4
+236: 	  connection or packet to an IPv6 socket, its source address will
+237: 	  be mapped to IPv6. This is turned off by default which means
+238: 	  that IPV6_V6ONLY socket option is always on. If you enable this
+239: 	  option, then you can still control the behaviour of the socket
+240: 	  via the IPV6_V6ONLY option at runtime.
+241: 
+242: config NET_TC_TX_COUNT
+243: 	int "How many Tx traffic classes to have for each network device"
+244: 	default 1 if USERSPACE || USB_DEVICE_NETWORK || \
+245: 		     USBD_CDC_ECM_CLASS || USBD_CDC_NCM_CLASS || \
+246: 		     NET_SHELL_REQUIRE_TX_THREAD
+247: 	default 0
+248: 	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8 && \
+249: 		(USERSPACE || NET_SHELL_REQUIRE_TX_THREAD)
+250: 	range 0 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
+251: 	range 1 8 if USERSPACE || NET_SHELL_REQUIRE_TX_THREAD
+252: 	range 0 8
+253: 	help
+254: 	  Define how many Tx traffic classes (queues) the system should have
+255: 	  when sending a network packet. The network packet priority can then
+256: 	  be mapped to this traffic class so that higher prioritized packets
+257: 	  can be processed before lower prioritized ones. Each queue is handled
+258: 	  by a separate thread which will need RAM for stack space.
+259: 	  Only increase the value from 1 if you really need this feature.
+260: 	  The default value is 1 which means that all the network traffic is
+261: 	  handled equally. In this implementation, the higher traffic class
+262: 	  value corresponds to lower thread priority.
+263: 	  If you select 0 here, then it means that all the network traffic
+264: 	  is pushed to the driver directly without any queues.
+265: 	  Note that if USERSPACE support is enabled, then currently we need to
+266: 	  enable at least 1 TX thread.
+267: 
+268: config NET_TC_RX_COUNT
+269: 	int "How many Rx traffic classes to have for each network device"
+270: 	default 1
+271: 	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8 && USERSPACE
+272: 	range 0 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
+273: 	range 1 8 if USERSPACE
+274: 	range 0 8
+275: 	help
+276: 	  Define how many Rx traffic classes (queues) the system should have
+277: 	  when receiving a network packet. The network packet priority can then
+278: 	  be mapped to this traffic class so that higher prioritized packets
+279: 	  can be processed before lower prioritized ones. Each queue is handled
+280: 	  by a separate thread which will need RAM for stack space.
+281: 	  Only increase the value from 1 if you really need this feature.
+282: 	  The default value is 1 which means that all the network traffic is
+283: 	  handled equally. In this implementation, the higher traffic class
+284: 	  value corresponds to lower thread priority.
+285: 	  If you select 0 here, then it means that all the network traffic
+286: 	  is pushed from the driver to application thread without any
+287: 	  intermediate RX queue. There is always a receive socket queue between
+288: 	  device driver and application. Disabling RX thread means that the
+289: 	  network device driver, that is typically running in IRQ context, will
+290: 	  handle the packet all the way to the application. This might cause
+291: 	  other incoming packets to be lost if the RX processing takes long
+292: 	  time.
+293: 	  Note that if USERSPACE support is enabled, then currently we need to
+294: 	  enable at least 1 RX thread.
+295: 
+296: config NET_TC_SKIP_FOR_HIGH_PRIO
+297: 	bool "Push high priority packets directly to network driver [DEPRECATED]"
+298: 	select DEPRECATED
+299: 	help
+300: 	  Deprecated, use NET_TC_TX_SKIP_FOR_HIGH_PRIO instead.
+301: 
+302: config NET_TC_TX_SKIP_FOR_HIGH_PRIO
+303: 	bool "Push high priority packets directly to network driver"
+304: 	default NET_TC_SKIP_FOR_HIGH_PRIO
+305: 	help
+306: 	  If this is set, then high priority (>= NET_PRIORITY_CA) net_pkt will
+307: 	  be pushed directly to network driver and will skip the traffic class
+308: 	  queues. This is currently not enabled by default.
+309: 
+310: config NET_TC_RX_SKIP_FOR_HIGH_PRIO
+311: 	bool "Push high priority packets directly to the application"
+312: 	help
+313: 	  If this is set, then high priority (>= NET_PRIORITY_CA) net_pkt will
+314: 	  be pushed directly to the application and will skip the traffic class
+315: 	  queues. If you select this option, then it means that high priority
+316: 	  network traffic is pushed from the driver to the application thread
+317: 	  without any intermediate RX queue. If the network device driver is
+318: 	  running in IRQ context, it will handle the packet all the way to the
+319: 	  application. This might cause other incoming packets to be lost if
+320: 	  the RX processing takes long time.
+321: 	  This is currently not enabled by default.
+322: 
+323: choice NET_TC_THREAD_TYPE
+324: 	prompt "How the network RX/TX threads should work"
+325: 	help
+326: 	  Please select the RX/TX threads to be either pre-emptive or
+327: 	  co-operative.
+328: 
+329: config NET_TC_THREAD_COOPERATIVE
+330: 	bool "Use co-operative TX/RX threads"
+331: 	depends on COOP_ENABLED
+332: 	help
+333: 	  With co-operative threads, the thread cannot be pre-empted.
+334: 
+335: config NET_TC_THREAD_PREEMPTIVE
+336: 	bool "Use pre-emptive TX/RX threads [EXPERIMENTAL]"
+337: 	depends on PREEMPT_ENABLED
+338: 	select EXPERIMENTAL
+339: 	help
+340: 	  With pre-emptive threads, the thread can be pre-empted.
+341: 
+342: endchoice
+343: 
+344: config NET_TC_NUM_PRIORITIES
+345: 	int
+346: 	default NUM_COOP_PRIORITIES if NET_TC_THREAD_COOPERATIVE
+347: 	default NUM_PREEMPT_PRIORITIES if NET_TC_THREAD_PREEMPTIVE
+348: 
+349: config NET_TC_THREAD_PRIO_CUSTOM
+350: 	bool "Customize traffic class thread priority"
+351: 	help
+352: 	  Customise net threads priority by each.
+353: 
+354: if NET_TC_THREAD_PRIO_CUSTOM
+355: 
+356: config NET_TC_TX_THREAD_PRIO_SPREAD
+357: 	int "Transmit traffic class thread priority spread"
+358: 	default 1
+359: 	range 1 255
+360: 	help
+361: 	  Transmit traffic class threads priority will increase/decrease
+362: 	  by this step. They will be separated by this many levels.
+363: 
+364: config NET_TC_RX_THREAD_PRIO_SPREAD
+365: 	int "Receive traffic class thread priority spread"
+366: 	default 1
+367: 	range 1 255
+368: 	help
+369: 	  Receive traffic class threads priority will increase/decrease
+370: 	  by this step. They will be separated by this many levels.
+371: 
+372: config NET_TC_TX_THREAD_BASE_PRIO
+373: 	int "Transmit traffic class base thread priority"
+374: 	default 0
+375: 	help
+376: 	  Transmit traffic class threads priority will increase/decrease
+377: 	  from this priority.
+378: 	  If NET_TC_TX_COUNT is 1, this will be transmit traffic class
+379: 	  thread priority.
+380: 
+381: config NET_TC_RX_THREAD_BASE_PRIO
+382: 	int "Receive traffic class base thread priority"
+383: 	default 0
+384: 	help
+385: 	  Receive traffic class threads priority will increase/decrease
+386: 	  from this priority.
+387: 	  If NET_TC_RX_COUNT is 1, this will be receive traffic class
+388: 	  thread priority.
+389: 
+390: endif # NET_TC_THREAD_CUSTOM_PRIO
+391: 
+392: choice
+393: 	prompt "Priority to traffic class mapping"
+394: 	help
+395: 	  Select mapping to use to map network packet priorities to traffic
+396: 	  classes.
+397: 
+398: config NET_TC_MAPPING_STRICT
+399: 	bool "Strict priority mapping"
+400: 	help
+401: 	  This is the recommended default priority to traffic class mapping.
+402: 	  Use it for implementations that do not support the credit-based
+403: 	  shaper transmission selection algorithm.
+404: 	  See 802.1Q, chapter 8.6.6 for more information.
+405: 
+406: config NET_TC_MAPPING_SR_CLASS_A_AND_B
+407: 	bool "SR class A and class B mapping"
+408: 	depends on NET_TC_TX_COUNT >= 2
+409: 	depends on NET_TC_RX_COUNT >= 2
+410: 	help
+411: 	  This is the recommended priority to traffic class mapping for a
+412: 	  system that supports SR (Stream Reservation) class A and SR class B.
+413: 	  See 802.1Q, chapter 34.5 for more information.
+414: 
+415: config NET_TC_MAPPING_SR_CLASS_B_ONLY
+416: 	bool "SR class B only mapping"
+417: 	depends on NET_TC_TX_COUNT >= 2
+418: 	depends on NET_TC_RX_COUNT >= 2
+419: 	help
+420: 	  This is the recommended priority to traffic class mapping for a
+421: 	  system that supports SR (Stream Reservation) class B only.
+422: 	  See 802.1Q, chapter 34.5 for more information.
+423: endchoice
+424: 
+425: config NET_TX_DEFAULT_PRIORITY
+426: 	int "Default network TX packet priority if none have been set"
+427: 	default 1
+428: 	range 0 7
+429: 	help
+430: 	  What is the default network packet priority if user has not specified
+431: 	  one. The value 0 means lowest priority and 7 is the highest.
+432: 
+433: config NET_RX_DEFAULT_PRIORITY
+434: 	int "Default network RX packet priority if none have been set"
+435: 	default 0
+436: 	range 0 7
+437: 	help
+438: 	  What is the default network RX packet priority if user has not set
+439: 	  one. The value 0 means lowest priority and 7 is the highest.
+440: 
+441: config NET_ALLOW_ANY_PRIORITY
+442: 	bool "Allow any network packet priority to be used"
+443: 	help
+444: 	  If this is set, then any user given network packet priority can be used. Otherwise
+445: 	  the network packet priorities are limited to 0-7 range.
+446: 
+447: config NET_IP_ADDR_CHECK
+448: 	bool "Check IP address validity before sending IP packet"
+449: 	default y
+450: 	help
+451: 	  Check that either the source or destination address is
+452: 	  correct before sending either IPv4 or IPv6 network packet.
+453: 
+454: config NET_MAX_ROUTERS
+455: 	int "How many routers are supported"
+456: 	default 2 if NET_IPV4 && NET_IPV6
+457: 	default 1 if NET_IPV4 && !NET_IPV6
+458: 	default 1 if !NET_IPV4 && NET_IPV6
+459: 	range 1 254
+460: 	help
+461: 	  The value depends on your network needs.
+462: 
+463: # Normally the route support is enabled by RPL or similar technology
+464: # that needs to use the routing infrastructure.
+465: config NET_ROUTE
+466: 	bool
+467: 	depends on NET_IPV6_NBR_CACHE
+468: 	default y if NET_IPV6_NBR_CACHE
+469: 
+470: config NET_ROUTING
+471: 	bool "IP routing between interfaces"
+472: 	depends on NET_ROUTE
+473: 	help
+474: 	  Allow IPv6 routing between different network interfaces and
+475: 	  technologies. Currently this has limited use as some entity
+476: 	  would need to populate the routing table. RPL used to do that
+477: 	  earlier but currently there is no RPL support in Zephyr.
+478: 
+479: config NET_MAX_ROUTES
+480: 	int "Max number of routing entries stored."
+481: 	default NET_IPV6_MAX_NEIGHBORS
+482: 	depends on NET_ROUTE
+483: 	help
+484: 	  This determines how many entries can be stored in routing table.
+485: 
+486: config NET_MAX_NEXTHOPS
+487: 	int "Max number of next hop entries stored."
+488: 	default NET_MAX_ROUTES
+489: 	depends on NET_ROUTE
+490: 	help
+491: 	  This determines how many entries can be stored in nexthop table.
+492: 
+493: config NET_ROUTE_MCAST
+494: 	bool "Multicast Routing / Forwarding"
+495: 	depends on NET_ROUTE
+496: 	help
+497: 	  Activates multicast routing/forwarding
+498: 
+499: config NET_MAX_MCAST_ROUTES
+500: 	int "Max number of multicast routing entries stored."
+501: 	default 1
+502: 	depends on NET_ROUTE_MCAST
+503: 	help
+504: 	  This determines how many entries can be stored in multicast
+505: 	  routing table.
+506: 
+507: config NET_MCAST_ROUTE_MAX_IFACES
+508: 	int "Max number of network interfaces per multicast routing entry"
+509: 	default 1
+510: 	range 1 8
+511: 	depends on NET_ROUTE_MCAST
+512: 	help
+513: 	  Determines how many network interfaces can be assigned to a
+514: 	  single multicast route entry.
+515: 
+516: config NET_MCAST_ROUTE_MLD_REPORTS
+517: 	bool "Report multicast routes as a part of MLDv2 reports"
+518: 	depends on NET_ROUTE_MCAST
+519: 	depends on NET_IPV6_MLD
+520: 	help
+521: 	  Determines whether a multicast route entry should be advertised
+522: 	  in MLDv2 reports.
+523: 
+524: source "subsys/net/ip/Kconfig.tcp"
+525: 
+526: config NET_TEST_PROTOCOL
+527: 	bool "JSON based test protocol (UDP)"
+528: 	help
+529: 	  Enable JSON based test protocol (UDP).
+530: 
+531: config NET_UDP
+532: 	bool "UDP"
+533: 	default y
+534: 	depends on NET_IP
+535: 	help
+536: 	  The value depends on your network needs.
+537: 
+538: config NET_UDP_CHECKSUM
+539: 	bool "Check UDP checksum"
+540: 	default y
+541: 	depends on NET_UDP
+542: 	help
+543: 	  Enables UDP handler to check UDP checksum. If the checksum is invalid,
+544: 	  then the packet is discarded.
+545: 
+546: config NET_UDP_MISSING_CHECKSUM
+547: 	bool "Accept missing checksum (IPv4 only)"
+548: 	default y
+549: 	depends on NET_UDP && NET_IPV4
+550: 	help
+551: 	  RFC 768 states the possibility to have a missing checksum, for
+552: 	  debugging purposes for instance. That feature is however valid only
+553: 	  for IPv4 and on reception only, since Zephyr will always compute the
+554: 	  UDP checksum in transmission path.
+555: 
+556: if NET_UDP
+557: module = NET_UDP
+558: module-dep = NET_LOG
+559: module-str = Log level for UDP
+560: module-help = Enables UDP handler output debug messages
+561: source "subsys/net/Kconfig.template.log_config.net"
+562: endif # NET_UDP
+563: 
+564: config NET_MAX_CONN
+565: 	int "How many network connections are supported"
+566: 	depends on NET_UDP || NET_TCP || NET_SOCKETS_PACKET || NET_SOCKETS_CAN
+567: 	default 8 if NET_IPV6 && NET_IPV4
+568: 	default 4
+569: 	help
+570: 	  The value depends on your network needs. The value
+571: 	  should include both UDP and TCP connections.
+572: 
+573: config NET_CONN_PACKET_CLONE_TIMEOUT
+574: 	int "Timeout value in milliseconds for cloning a packet"
+575: 	default 100
+576: 	help
+577: 	  Maximum wait time when cloning a packet for a network connection.
+578: 
+579: config NET_MAX_CONTEXTS
+580: 	int "Number of network contexts to allocate"
+581: 	default 6
+582: 	help
+583: 	  Each network context is used to describe a network 5-tuple that
+584: 	  is used when listening or sending network traffic. This is very
+585: 	  similar as one could call a network socket in some other systems.
+586: 
+587: config ZVFS_OPEN_ADD_SIZE_NET
+588: 	int "Number of network sockets to allocate"
+589: 	default NET_MAX_CONTEXTS if NET_NATIVE && NET_SOCKETS
+590: 	default 0
+591: 
+592: config NET_CONTEXT_NET_PKT_POOL
+593: 	bool "Net_buf TX pool / context"
+594: 	default y if NET_TCP && NET_6LO
+595: 	help
+596: 	  If enabled, then it is possible to fine-tune network packet pool
+597: 	  for each context when sending network data. If this setting is
+598: 	  enabled, then you should define the context pools in your application
+599: 	  using NET_PKT_TX_POOL_DEFINE() and NET_PKT_DATA_POOL_DEFINE()
+600: 	  macros and tie these pools to desired context using the
+601: 	  net_context_setup_pools() function.
+602: 
+603: config NET_CONTEXT_SYNC_RECV
+604: 	bool "Support synchronous functionality in net_context_recv() API"
+605: 	default y
+606: 	help
+607: 	  You can disable sync support to save some memory if you are calling
+608: 	  net_context_recv() in async way only when timeout is set to 0.
+609: 
+610: config NET_CONTEXT_CHECK
+611: 	bool "Check options when calling various net_context functions"
+612: 	default y
+613: 	help
+614: 	  If you know that the options passed to net_context...() functions
+615: 	  are ok, then you can disable the checks to save some memory.
+616: 
+617: config NET_CONTEXT_PRIORITY
+618: 	bool "Add priority support to net_context"
+619: 	help
+620: 	  It is possible to prioritize network traffic. This requires
+621: 	  also traffic class support to work as expected.
+622: 
+623: config NET_CONTEXT_TXTIME
+624: 	bool "Add TXTIME support to net_context"
+625: 	select NET_PKT_TXTIME
+626: 	help
+627: 	  It is possible to add information when the outgoing network packet
+628: 	  should be sent. The TX time information should be placed into
+629: 	  ancillary data field in sendmsg call.
+630: 
+631: config NET_CONTEXT_RCVTIMEO
+632: 	bool "Add RCVTIMEO support to net_context"
+633: 	help
+634: 	  It is possible to time out receiving a network packet. The timeout
+635: 	  time is configurable run-time in the application code. For network
+636: 	  sockets timeout is configured per socket with
+637: 	  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, ...) function.
+638: 
+639: config NET_CONTEXT_SNDTIMEO
+640: 	bool "Add SNDTIMEO support to net_context"
+641: 	help
+642: 	  It is possible to time out sending a network packet. The timeout
+643: 	  time is configurable run-time in the application code. For network
+644: 	  sockets timeout is configured per socket with
+645: 	  setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, ...) function.
+646: 
+647: config NET_CONTEXT_RCVBUF
+648: 	bool "Add RCVBUF support to net_context"
+649: 	help
+650: 	  It is possible to set receive buffer size for a network context.
+651: 
+652: config NET_CONTEXT_SNDBUF
+653: 	bool "Add SNDBUF support to net_context"
+654: 	help
+655: 	  It is possible to set send buffer size for a network context.
+656: 
+657: config NET_CONTEXT_TCP_NODELAY
+658: 	bool "Add TCP_NODELAY support to net_context"
+659: 	help
+660: 	  It is possible to set TCP_NODELAY option for a TCP connection.
+661: 
+662: config NET_CONTEXT_TCP_KEEPALIVE
+663: 	bool "Add TCP_KEEPALIVE support to net_context"
+664: 	help
+665: 	  It is possible to set TCP_KEEPALIVE option for a TCP connection.
+666: 
+667: config NET_CONTEXT_TCP_KEEPIDLE
+668: 	bool "Add TCP_KEEPIDLE support to net_context"
+669: 	help
+670: 	  It is possible to set TCP_KEEPIDLE option for a TCP connection.
+671: 
+672: config NET_CONTEXT_TCP_KEEPINTVL
+673: 	bool "Add TCP_KEEPINTVL support to net_context"
+674: 	help
+675: 	  It is possible to set TCP_KEEPINTVL option for a TCP connection.
+676: 
+677: config NET_CONTEXT_TCP_KEEPCNT
+678: 	bool "Add TCP_KEEPCNT support to net_context"
+679: 	help
+680: 	  It is possible to set TCP_KEEPCNT option for a TCP connection.
+681: 
+682: config NET_CONTEXT_TCP_USER_TIMEOUT
+683: 	bool "Add TCP_USER_TIMEOUT support to net_context"
+684: 	help
+685: 	  It is possible to set TCP_USER_TIMEOUT option for a TCP connection.
+686: 
+687: config NET_CONTEXT_TCP_CORK
+688: 	bool "Add TCP_CORK support to net_context"
+689: 	help
+690: 	  It is possible to set TCP_CORK option for a TCP connection.
+691: 
+692: config NET_CONTEXT_TCP_QUICKACK
+693: 	bool "Add TCP_QUICKACK support to net_context"
+694: 	help
+695: 	  It is possible to set TCP_QUICKACK option for a TCP connection.
+696: 
+697: config NET_CONTEXT_TCP_DEFER_ACCEPT
+698: 	bool "Add TCP_DEFER_ACCEPT support to net_context"
+699: 	help
+700: 	  It is possible to set TCP_DEFER_ACCEPT option for a TCP connection.
+701: 
+702: config NET_CONTEXT_TCP_FASTOPEN
+703: 	bool "Add TCP_FASTOPEN support to net_context"
+704: 	help
+705: 	  It is possible to set TCP_FASTOPEN option for a TCP connection.
+706: 
+707: config NET_CONTEXT_TCP_SYNCNT
+708: 	bool "Add TCP_SYNCNT support to net_context"
+709: 	help
+710: 	  It is possible to set TCP_SYNCNT option for a TCP connection.
+711: 
+712: config NET_CONTEXT_TCP_WINDOW_CLAMP
+713: 	bool "Add TCP_WINDOW_CLAMP support to net_context"
+714: 	help
+715: 	  It is possible to set TCP_WINDOW_CLAMP option for a TCP connection.
+716: 
+717: config NET_CONTEXT_TCP_INFO
+718: 	bool "Add TCP_INFO support to net_context"
+719: 	help
+720: 	  It is possible to get TCP connection information.
+721: 
+722: config NET_CONTEXT_TCP_LINGER2
+723: 	bool "Add TCP_LINGER2 support to net_context"
+724: 	help
+725: 	  It is possible to set TCP_LINGER2 option for a TCP connection.
+726: 
+727: config NET_CONTEXT_TCP_REPAIR
+728: 	bool "Add TCP_REPAIR support to net_context"
+729: 	help
+730: 	  It is possible to set TCP_REPAIR option for a TCP connection.
+731: 
+732: config NET_CONTEXT_TCP_THIN_LINEAR_TIMEOUTS
+733: 	bool "Add TCP_THIN_LINEAR_TIMEOUTS support to net_context"
+734: 	help
+735: 	  It is possible to set TCP_THIN_LINEAR_TIMEOUTS option for a TCP connection.
+736: 
+737: config NET_CONTEXT_TCP_THIN_DUPACK
+738: 	bool "Add TCP_THIN_DUPACK support to net_context"
+739: 	help
+740: 	  It is possible to set TCP_THIN_DUPACK option for a TCP connection.
+741: 
+742: config NET_CONTEXT_TCP_USER_MSS
+743: 	bool "Add TCP_USER_MSS support to net_context"
+744: 	help
+745: 	  It is possible to set TCP_USER_MSS option for a TCP connection.
+746: 
+747: config NET_CONTEXT_TCP_MTU_DISCOVERY
+748: 	bool "Add TCP_MTU_DISCOVERY support to net_context"
+749: 	help
+750: 	  It is possible to set TCP_MTU_DISCOVERY option for a TCP connection.
+751: 
+752: config NET_CONTEXT_TCP_TX_DELAY
+753: 	bool "Add TCP_TX_DELAY support to net_context"
+754: 	help
+755: 	  It is possible to set TCP_TX_DELAY option for a TCP connection.
+756: 
+757: config NET_CONTEXT_TCP_WSCALE
+758: 	bool "Add TCP_WSCALE support to net_context"
+759: 	help
+760: 	  It is possible to set TCP_WSCALE option for a TCP connection.
+761: 
+762: config NET_CONTEXT_TCP_TIMESTAMP
+763: 	bool "Add TCP_TIMESTAMP support to net_context"
+764: 	help
+765: 	  It is possible to set TCP_TIMESTAMP option for a TCP connection.
+766: 
+767: config NET_CONTEXT_TCP_SACK
+768: 	bool "Add TCP_SACK support to net_context"
+769: 	help
+770: 	  It is possible to set TCP_SACK option for a TCP connection.
+771: 
+772: config NET_CONTEXT_TCP_FACK
+773: 	bool "Add TCP_FACK support to net_context"
+774: 	help
+775: 	  It is possible to set TCP_FACK option for a TCP connection.
+776: 
+777: config NET_CONTEXT_TCP_RENO
+778: 	bool "Add TCP_RENO support to net_context"
+779: 	help
+780: 	  It is possible to set TCP_RENO option for a TCP connection.
+781: 
+782: config NET_CONTEXT_TCP_VEGAS
+783: 	bool "Add TCP_VEGAS support to net_context"
+784: 	help
+785: 	  It is possible to set TCP_VEGAS option for a TCP connection.
+786: 
+787: config NET_CONTEXT_TCP_VENO
+788: 	bool "Add TCP_VENO support to net_context"
+789: 	help
+790: 	  It is possible to set TCP_VENO option for a TCP connection.
+791: 
+792: config NET_CONTEXT_TCP_BIC
+793: 	bool "Add TCP_BIC support to net_context"
+794: 	help
+795: 	  It is possible to set TCP_BIC option for a TCP connection.
+796: 
+797: config NET_CONTEXT_TCP_WESTWOOD
+798: 	bool "Add TCP_WESTWOOD support to net_context"
+799: 	help
+800: 	  It is possible to set TCP_WESTWOOD option for a TCP connection.
+801: 
+802: config NET_CONTEXT_TCP_HTCP
+803: 	bool "Add TCP_HTCP support to net_context"
+804: 	help
+805: 	  It is possible to set TCP_HTCP option for a TCP connection.
+806: 
+807: config NET_CONTEXT_TCP_HYBLA
+808: 	bool "Add TCP_HYBLA support to net_context"
+809: 	help
+810: 	  It is possible to set TCP_HYBLA option for a TCP connection.
+811: 
+812: config NET_CONTEXT_TCP_VEGAS
+813: 	bool "Add TCP_VEGAS support to net_context"
+814: 	help
+815: 	  It is possible to set TCP_VEGAS option for a TCP connection.
+816: 
+817: config NET_CONTEXT_TCP_SCALABLE
+818: 	bool "Add TCP_SCALABLE support to net_context"
+819: 	help
+820: 	  It is possible to set TCP_SCALABLE option for a TCP connection.
+821: 
+822: config NET_CONTEXT_TCP_LP
+823: 	bool "Add TCP_LP support to net_context"
+824: 	help
+825: 	  It is possible to set TCP_LP option for a TCP connection.
+826: 
+827: config NET_CONTEXT_TCP_VENO
+828: 	bool "Add TCP_VENO support to net_context"
+829: 	help
+830: 	  It is possible to set TCP_VENO option for a TCP connection.
+831: 
+832: config NET_CONTEXT_TCP_YEAH
+833: 	bool "Add TCP_YEAH support to net_context"
+834: 	help
+835: 	  It is possible to set TCP_YEAH option for a TCP connection.
+836: 
+837: config NET_CONTEXT_TCP_ILLINOIS
+838: 	bool "Add TCP_ILLINOIS support to net_context"
+839: 	help
+840: 	  It is possible to set TCP_ILLINOIS option for a TCP connection.
+841: 
+842: config NET_CONTEXT_TCP_DCTCP
+843: 	bool "Add TCP_DCTCP support to net_context"
+844: 	help
+845: 	  It is possible to set TCP_DCTCP option for a TCP connection.
+846: 
+847: config NET_CONTEXT_TCP_CDG
+848: 	bool "Add TCP_CDG support to net_context"
+849: 	help
+850: 	  It is possible to set TCP_CDG option for a TCP connection.
+851: 
+852: config NET_CONTEXT_TCP_BBR
+853: 	bool "Add TCP_BBR support to net_context"
+854: 	help
+855: 	  It is possible to set TCP_BBR option for a TCP connection.
+856: 
+857: endmenu
+```
