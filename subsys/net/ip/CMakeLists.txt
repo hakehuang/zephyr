@@ -16,8 +16,9 @@ zephyr_library_sources(
   net_if.c
   net_timeout.c
   utils.c
-  net_ndp.c
   )
+
+zephyr_library_sources_ifdef(CONFIG_NDP_PACKET_PROCESSING net_ndp.c)
 
 if(CONFIG_NET_OFFLOAD)
 zephyr_library_sources(net_context.c net_pkt.c)

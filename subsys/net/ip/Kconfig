@@ -50,6 +50,17 @@ config NET_NATIVE
 config NET_NATIVE_IP
 	bool
 	depends on NET_NATIVE
+	default y if NET_IP
+
+config NET_NATIVE_IPV6
+	bool
+	depends on NET_NATIVE
+	default y if NET_IPV6
+
+config NET_NATIVE_IPV4
+	bool
+	depends on NET_NATIVE
+	default y if NET_IPV4
 
 # NDP (Network Data Plane) configuration
 config NDP_PACKET_PROCESSING
@@ -71,8 +82,7 @@ config NDP_ONLY_MODE
 config NDP_LOG_LEVEL
 	int "NDP log level"
 	range 0 4
-	default 3 if NET_LOG
-	default 0
+	default 3
 	help
 	  Set log level for NDP (Network Data Plane) module.
 
@@ -96,16 +106,6 @@ config NDP_SAMPLE_LOG_LEVEL
 	  - 2 WARNING
 	  - 3 INFO
 	  - 4 DEBUG
-
-config NET_NATIVE_IPV6
-	bool
-	depends on NET_NATIVE
-	default y if NET_IPV6
-
-config NET_NATIVE_IPV4
-	bool
-	depends on NET_NATIVE
-	default y if NET_IPV4
 
 config NET_PMTU
 	bool
@@ -195,7 +195,6 @@ config NET_QEMU_USER
 	  Connect to host system via Qemu's built-in User Networking support. This
 	  is implemented using "slirp", which provides a full TCP/IP stack within
 	  QEMU and uses that stack to implement a virtual NAT'd network.
-
 endchoice
 
 config NET_QEMU_USER_EXTRA_ARGS
@@ -648,417 +647,211 @@ config NET_CONTEXT_SNDTIMEO
 config NET_CONTEXT_RCVBUF
 	bool "Add RCVBUF support to net_context"
 	help
-	  If is possible to define the maximum socket receive buffer per socket.
-	  The default value is set by CONFIG_NET_TCP_MAX_RECV_WINDOW_SIZE. For
-	  TCP sockets, the rcvbuf will determine the receive window size.
+	  It is possible to set receive buffer size for a network context.
 
 config NET_CONTEXT_SNDBUF
 	bool "Add SNDBUF support to net_context"
 	help
-	  It is possible to define the maximum socket send buffer per socket.
-	  For TCP sockets, the sndbuf will determine the total size of queued
-	  data in the TCP layer.
+	  It is possible to set send buffer size for a network context.
 
-config NET_CONTEXT_DSCP_ECN
-	bool "Add support for setting DSCP/ECN IP properties on net_context"
-	depends on NET_IP_DSCP_ECN
-	default y
+config NET_CONTEXT_TCP_NODELAY
+	bool "Add TCP_NODELAY support to net_context"
 	help
-	  Allow to set Differentiated Services and Explicit Congestion
-	  Notification values on net_context. Those values are then used in
-	  IPv4/IPv6 header when sending packets over net_context.
+	  It is possible to set TCP_NODELAY option for a TCP connection.
 
-config NET_CONTEXT_REUSEADDR
-	bool "Add REUSEADDR support to net_context"
-	default y if NET_TCP || NET_UDP
+config NET_CONTEXT_TCP_KEEPALIVE
+	bool "Add TCP_KEEPALIVE support to net_context"
 	help
-	  Allow to set the SO_REUSEADDR flag on a socket. This enables multiple
-	  sockets to bind to the same local IP address.
+	  It is possible to set TCP_KEEPALIVE option for a TCP connection.
 
-config NET_CONTEXT_REUSEPORT
-	bool "Add REUSEPORT support to net_context"
-	default y if NET_TCP || NET_UDP
+config NET_CONTEXT_TCP_KEEPIDLE
+	bool "Add TCP_KEEPIDLE support to net_context"
 	help
-	  Allow to set the SO_REUSEPORT flag on a socket. This enables multiple
-	  sockets to bind to the same local IP address and port combination.
+	  It is possible to set TCP_KEEPIDLE option for a TCP connection.
 
-config NET_CONTEXT_RECV_PKTINFO
-	bool "Add receive PKTINFO support to net_context"
-	depends on NET_UDP
+config NET_CONTEXT_TCP_KEEPINTVL
+	bool "Add TCP_KEEPINTVL support to net_context"
 	help
-	  Allow to set the IP_PKTINFO or IPV6_RECVPKTINFO flags on a socket.
-	  This way user can get extra information about the received data in the
-	  socket.
+	  It is possible to set TCP_KEEPINTVL option for a TCP connection.
 
-config NET_CONTEXT_RECV_HOPLIMIT
-	bool "Add receive hop limit (IPv6) or TTL (IPv4) support to net_context"
-	depends on NET_UDP
+config NET_CONTEXT_TCP_KEEPCNT
+	bool "Add TCP_KEEPCNT support to net_context"
 	help
-	  Allow to set the IPV6_RECVHOPLIMIT or IP_RECVTTL flags on a socket.
-	  This way user can get extra information about hop limit (IPv6) or TTL (IPv4) in the
-	  socket.
+	  It is possible to set TCP_KEEPCNT option for a TCP connection.
 
-config NET_CONTEXT_TIMESTAMPING
-	bool "Add TIMESTAMPING support to net_context"
-	default y if (NET_UDP && NET_PKT_TIMESTAMP)
+config NET_CONTEXT_TCP_USER_TIMEOUT
+	bool "Add TCP_USER_TIMEOUT support to net_context"
 	help
-	  Allow to set the TIMESTAMPING option on a socket. This way timestamp for a network
-	  packet will be added to the net_pkt structure.
+	  It is possible to set TCP_USER_TIMEOUT option for a TCP connection.
 
-config NET_CONTEXT_CLAMP_PORT_RANGE
-	bool "Allow clamping down the global local port range for net_context"
-	depends on NET_UDP || NET_TCP
+config NET_CONTEXT_TCP_CORK
+	bool "Add TCP_CORK support to net_context"
 	help
-	  Set or get the per-context default local port range. This
-	  option can be used to clamp down the global local UDP/TCP port
-	  range for a given context. The port range is typically set by
-	  IP_LOCAL_PORT_RANGE socket option.
+	  It is possible to set TCP_CORK option for a TCP connection.
 
-endif # NET_RAW_MODE
-
-config NET_SLIP_TAP
-	bool "TAP SLIP driver"
-	depends on NET_QEMU_SLIP
-	depends on NET_NATIVE
-	select SLIP
-	select UART_PIPE
-	select UART_INTERRUPT_DRIVEN
-	select SLIP_TAP
-	select NET_L2_ETHERNET
-	default y if (QEMU_TARGET && !NET_TEST)
+config NET_CONTEXT_TCP_QUICKACK
+	bool "Add TCP_QUICKACK support to net_context"
 	help
-	  SLIP TAP support is necessary when testing with QEMU. The host
-	  needs to have tunslip6 with TAP support running in order to
-	  communicate via the SLIP driver. See net-tools project at
-	  https://github.com/zephyrproject-rtos/net-tools for more details.
+	  It is possible to set TCP_QUICKACK option for a TCP connection.
 
-config NET_TEST
-	bool "Network Testing"
+config NET_CONTEXT_TCP_DEFER_ACCEPT
+	bool "Add TCP_DEFER_ACCEPT support to net_context"
 	help
-	  Used for self-contained networking tests that do not require a
-	  network device.
+	  It is possible to set TCP_DEFER_ACCEPT option for a TCP connection.
 
-config NET_PKT_RX_COUNT
-	int "How many packet receives can be pending at the same time"
-	default 14 if NET_L2_ETHERNET
-	default 4
+config NET_CONTEXT_TCP_FASTOPEN
+	bool "Add TCP_FASTOPEN support to net_context"
 	help
-	  Each RX buffer will occupy smallish amount of memory.
-	  See include/net/net_pkt.h and the sizeof(struct net_pkt)
+	  It is possible to set TCP_FASTOPEN option for a TCP connection.
 
-config NET_PKT_TX_COUNT
-	int "How many packet sends can be pending at the same time"
-	default 14 if NET_L2_ETHERNET
-	default 4
+config NET_CONTEXT_TCP_SYNCNT
+	bool "Add TCP_SYNCNT support to net_context"
 	help
-	  Each TX buffer will occupy smallish amount of memory.
-	  See include/net/net_pkt.h and the sizeof(struct net_pkt)
+	  It is possible to set TCP_SYNCNT option for a TCP connection.
 
-config NET_BUF_RX_COUNT
-	int "How many network buffers are allocated for receiving data"
-	default 36 if NET_L2_ETHERNET
-	default 16
+config NET_CONTEXT_TCP_WINDOW_CLAMP
+	bool "Add TCP_WINDOW_CLAMP support to net_context"
 	help
-	  Each data buffer will occupy CONFIG_NET_BUF_DATA_SIZE + smallish
-	  header (sizeof(struct net_buf)) amount of data.
+	  It is possible to set TCP_WINDOW_CLAMP option for a TCP connection.
 
-config NET_BUF_TX_COUNT
-	int "How many network buffers are allocated for sending data"
-	default 36 if NET_L2_ETHERNET
-	default 16
+config NET_CONTEXT_TCP_INFO
+	bool "Add TCP_INFO support to net_context"
 	help
-	  Each data buffer will occupy CONFIG_NET_BUF_DATA_SIZE + smallish
-	  header (sizeof(struct net_buf)) amount of data.
+	  It is possible to get TCP connection information.
 
-choice NET_PKT_DATA_ALLOC_TYPE
-	prompt "Network packet data allocator type"
-	default NET_BUF_FIXED_DATA_SIZE
+config NET_CONTEXT_TCP_LINGER2
+	bool "Add TCP_LINGER2 support to net_context"
 	help
-	  Select the memory allocator for the network buffers that hold the
-	  packet data.
+	  It is possible to set TCP_LINGER2 option for a TCP connection.
 
-config NET_BUF_FIXED_DATA_SIZE
-	bool "Fixed data size buffer"
+config NET_CONTEXT_TCP_REPAIR
+	bool "Add TCP_REPAIR support to net_context"
 	help
-	  Each buffer comes with a built time configured size. If runtime
-	  requested is bigger than that, it will allocate as many net_buf
-	  as necessary to reach that request.
+	  It is possible to set TCP_REPAIR option for a TCP connection.
 
-config NET_BUF_VARIABLE_DATA_SIZE
-	bool "Variable data size buffer [EXPERIMENTAL]"
-	select EXPERIMENTAL
+config NET_CONTEXT_TCP_THIN_LINEAR_TIMEOUTS
+	bool "Add TCP_THIN_LINEAR_TIMEOUTS support to net_context"
 	help
-	  The buffer is dynamically allocated from runtime requested size.
+	  It is possible to set TCP_THIN_LINEAR_TIMEOUTS option for a TCP connection.
 
-endchoice
-
-config NET_BUF_DATA_SIZE
-	int "Size of each network data fragment"
-	default 128
-	depends on NET_BUF_FIXED_DATA_SIZE
+config NET_CONTEXT_TCP_THIN_DUPACK
+	bool "Add TCP_THIN_DUPACK support to net_context"
 	help
-	  This value tells what is the fixed size of each network buffer.
+	  It is possible to set TCP_THIN_DUPACK option for a TCP connection.
 
-config NET_PKT_BUF_RX_DATA_POOL_SIZE
-	int "Size of the RX memory pool where buffers are allocated from"
-	default 4096 if NET_L2_ETHERNET
-	default 2048
-	depends on NET_BUF_VARIABLE_DATA_SIZE
+config NET_CONTEXT_TCP_USER_MSS
+	bool "Add TCP_USER_MSS support to net_context"
 	help
-	  This value tell what is the size of the RX memory pool where each
-	  network buffer is allocated from.
+	  It is possible to set TCP_USER_MSS option for a TCP connection.
 
-config NET_PKT_BUF_TX_DATA_POOL_SIZE
-	int "Size of the TX memory pool where buffers are allocated from"
-	default 4096 if NET_L2_ETHERNET
-	default 2048
-	depends on NET_BUF_VARIABLE_DATA_SIZE
+config NET_CONTEXT_TCP_MTU_DISCOVERY
+	bool "Add TCP_MTU_DISCOVERY support to net_context"
 	help
-	  This value tell what is the size of the TX memory pool where each
-	  network buffer is allocated from.
+	  It is possible to set TCP_MTU_DISCOVERY option for a TCP connection.
 
-config NET_PKT_BUF_USER_DATA_SIZE
-	int "Size of user_data available in rx and tx network buffers"
-	default 4
-	range 4 16
+config NET_CONTEXT_TCP_TX_DELAY
+	bool "Add TCP_TX_DELAY support to net_context"
 	help
-	  User data size used in rx and tx network buffers.
+	  It is possible to set TCP_TX_DELAY option for a TCP connection.
 
-config NET_PKT_BUF_TX_DATA_ALLOC_ALIGN_LEN
-	int "Amount of alignment for TX net_buf allocations"
-	default 0
-	range 0 8
-	depends on NET_BUF_VARIABLE_DATA_SIZE
+config NET_CONTEXT_TCP_WSCALE
+	bool "Add TCP_WSCALE support to net_context"
 	help
-	  This value tell amount of alignment of buffer length when allocating
-	  net_buf data for sending. By default there is no special alignment.
-	  This is needed for example with Nordic Wi-Fi chip that uses SPI driver
-	  that expects 4 byte alignment for the length of the data and the start
-	  of the data that is being sent.
+	  It is possible to set TCP_WSCALE option for a TCP connection.
 
-config NET_PKT_CONTROL_BLOCK
-	bool "pkt control block"
+config NET_CONTEXT_TCP_TIMESTAMP
+	bool "Add TCP_TIMESTAMP support to net_context"
 	help
-	  This is to enable control block which can be used by any layer.
+	  It is possible to set TCP_TIMESTAMP option for a TCP connection.
 
-config NET_PKT_CONTROL_BLOCK_SIZE
-	int "Size of pkt control block in bytes"
-	depends on NET_PKT_CONTROL_BLOCK
-	default 1 if DSA_TAG_PROTOCOL_NETC
-	default 1
+config NET_CONTEXT_TCP_SACK
+	bool "Add TCP_SACK support to net_context"
 	help
-	  Size of pkt control block in bytes if there are no other specific control blocks
-	  enabled. If there are already specific control blocks enabled, like
-	  net_pkt_cb_ieee802154, the actual pkt control block size will be the
-	  maximum of them.
+	  It is possible to set TCP_SACK option for a TCP connection.
 
-config NET_HEADERS_ALWAYS_CONTIGUOUS
-	bool
+config NET_CONTEXT_TCP_FACK
+	bool "Add TCP_FACK support to net_context"
 	help
-	  This a hidden option, which one should use with a lot of care.
-	  NO bug reports will be accepted if that option is enabled!
-	  You are warned.
-	  If you are 100% sure the headers memory space is always in a
-	  contiguous space, this will save stack usage and ROM in net core.
-	  This is a possible case when using IPv4 only, with
-	  NET_BUF_FIXED_DATA_SIZE enabled and NET_BUF_DATA_SIZE of 128 for
-	  instance.
+	  It is possible to set TCP_FACK option for a TCP connection.
 
-config NET_LINK_ADDR_CUSTOM_LENGTH
-	int "Size of custom link layer address length"
-	default 0
+config NET_CONTEXT_TCP_RENO
+	bool "Add TCP_RENO support to net_context"
 	help
-	  This option allows to define custom link layer address length
-	  if your link layer technology is not supported directly.
-	  As a default, custom link layer address length is not used.
+	  It is possible to set TCP_RENO option for a TCP connection.
 
-# If we are running network tests found in tests/net, then the NET_TEST is
-# set and in that case we default to Dummy L2 layer as typically the tests
-# use that by default.
-choice NET_DEFAULT_IF
-	prompt "Default Network Interface"
-	default NET_DEFAULT_IF_DUMMY if NET_TEST
-	default NET_DEFAULT_IF_FIRST
+config NET_CONTEXT_TCP_VEGAS
+	bool "Add TCP_VEGAS support to net_context"
 	help
-	  If system has multiple interfaces enabled, then user shall be able
-	  to choose default interface. Otherwise first interface will be the
-	  default interface.
+	  It is possible to set TCP_VEGAS option for a TCP connection.
 
-config NET_DEFAULT_IF_FIRST
-	bool "First available interface"
-
-config NET_DEFAULT_IF_UP
-	bool "First interface which is up"
-
-config NET_DEFAULT_IF_ETHERNET
-	bool "Ethernet"
-	depends on NET_L2_ETHERNET
-
-config NET_DEFAULT_IF_IEEE802154
-	bool "IEEE 802.15.4"
-	depends on NET_L2_IEEE802154
-
-config NET_DEFAULT_IF_OFFLOAD
-	bool "Offloaded interface"
-	depends on NET_OFFLOAD
-
-config NET_DEFAULT_IF_DUMMY
-	bool "Dummy testing interface"
-	depends on NET_L2_DUMMY
-
-config NET_DEFAULT_IF_CANBUS_RAW
-	bool "Socket CAN interface"
-	depends on NET_L2_CANBUS_RAW
-
-config NET_DEFAULT_IF_PPP
-	bool "PPP interface"
-	depends on NET_L2_PPP
-
-config NET_DEFAULT_IF_OFFLOADED_NETDEV
-	bool "Offloaded network device"
-
-config NET_DEFAULT_IF_WIFI
-	bool "WiFi interface"
-	depends on NET_L2_ETHERNET
-
-endchoice
-
-config NET_INTERFACE_NAME
-	bool "Allow setting a name to a network interface"
-	default y
+config NET_CONTEXT_TCP_VENO
+	bool "Add TCP_VENO support to net_context"
 	help
-	  Allow application to set a name to the network interface in order
-	  to simplify network interface management.
+	  It is possible to set TCP_VENO option for a TCP connection.
 
-config NET_INTERFACE_NAME_LEN
-	int "Network interface max name length"
-	default 8
-	range 2 15
-	depends on NET_INTERFACE_NAME
+config NET_CONTEXT_TCP_BIC
+	bool "Add TCP_BIC support to net_context"
 	help
-	  Maximum length of the network interface name.
+	  It is possible to set TCP_BIC option for a TCP connection.
 
-config NET_PKT_TIMESTAMP
-	bool "Network packet timestamp support"
+config NET_CONTEXT_TCP_WESTWOOD
+	bool "Add TCP_WESTWOOD support to net_context"
 	help
-	  Enable network packet timestamp support. This is needed for
-	  example in gPTP which needs to know how long it takes to send
-	  a network packet or for timed radio protocols like IEEE 802.15.4
-	  CSL and TSCH.
+	  It is possible to set TCP_WESTWOOD option for a TCP connection.
 
-config NET_PKT_TIMESTAMP_THREAD
-	bool "Create TX timestamp thread"
-	depends on NET_PKT_TIMESTAMP
+config NET_CONTEXT_TCP_HTCP
+	bool "Add TCP_HTCP support to net_context"
 	help
-	  Create a TX timestamp thread that will pass the timestamped network
-	  packets to some other module like gPTP for further processing.
-	  If you just want to timestamp network packets and get information
-	  how long the network packets flow in the system, you can disable
-	  the thread support.
+	  It is possible to set TCP_HTCP option for a TCP connection.
 
-config NET_PKT_TIMESTAMP_STACK_SIZE
-	int "Timestamp thread stack size"
-	default 1024
-	depends on NET_PKT_TIMESTAMP_THREAD
+config NET_CONTEXT_TCP_HYBLA
+	bool "Add TCP_HYBLA support to net_context"
 	help
-	  Set the timestamp thread stack size in bytes. The timestamp
-	  thread waits for timestamped TX frames and calls registered
-	  callbacks.
+	  It is possible to set TCP_HYBLA option for a TCP connection.
 
-config NET_PKT_TXTIME
-	bool "Network packet TX time support"
+config NET_CONTEXT_TCP_VEGAS
+	bool "Add TCP_VEGAS support to net_context"
 	help
-	  Enable network packet TX time support. This is needed for
-	  when the application wants to set the exact time when the network
-	  packet should be sent.
+	  It is possible to set TCP_VEGAS option for a TCP connection.
 
-config NET_PKT_RXTIME_STATS
-	bool "Network packet RX time statistics"
-	select NET_PKT_TIMESTAMP
-	select NET_STATISTICS
-	depends on (NET_UDP || NET_TCP || NET_SOCKETS_PACKET) && NET_NATIVE
+config NET_CONTEXT_TCP_SCALABLE
+	bool "Add TCP_SCALABLE support to net_context"
 	help
-	  Enable network packet RX time statistics support. This is used to
-	  calculate how long on average it takes for a packet to travel from
-	  device driver to just before it is given to application. The RX
-	  timing information can then be seen in network interface statistics
-	  in net-shell.
-	  The RX statistics are only calculated for UDP and TCP packets.
+	  It is possible to set TCP_SCALABLE option for a TCP connection.
 
-config NET_PKT_RXTIME_STATS_DETAIL
-	bool "Get extra receive detail statistics in RX path"
-	depends on NET_PKT_RXTIME_STATS
+config NET_CONTEXT_TCP_LP
+	bool "Add TCP_LP support to net_context"
 	help
-	  Store receive statistics detail information in certain key points
-	  in RX path. This is very special configuration and will increase
-	  the size of net_pkt so in typical cases you should not enable it.
-	  The extra statistics can be seen in net-shell using "net stats"
-	  command.
+	  It is possible to set TCP_LP option for a TCP connection.
 
-config NET_PKT_TXTIME_STATS
-	bool "Network packet TX time statistics"
-	select NET_PKT_TIMESTAMP
-	select NET_STATISTICS
-	depends on (NET_UDP || NET_TCP || NET_SOCKETS_PACKET) && NET_NATIVE
+config NET_CONTEXT_TCP_VENO
+	bool "Add TCP_VENO support to net_context"
 	help
-	  Enable network packet TX time statistics support. This is used to
-	  calculate how long on average it takes for a packet to travel from
-	  application to just before it is sent to network. The TX timing
-	  information can then be seen in network interface statistics in
-	  net-shell.
-	  The RX calculation is done only for UDP, TCP or RAW packets,
-	  but for TX we do not know the protocol so the TX packet timing is
-	  done for all network protocol packets.
+	  It is possible to set TCP_VENO option for a TCP connection.
 
-config NET_PKT_TXTIME_STATS_DETAIL
-	bool "Get extra transmit detail statistics in TX path"
-	depends on NET_PKT_TXTIME_STATS
+config NET_CONTEXT_TCP_YEAH
+	bool "Add TCP_YEAH support to net_context"
 	help
-	  Store receive statistics detail information in certain key points
-	  in TX path. This is very special configuration and will increase
-	  the size of net_pkt so in typical cases you should not enable it.
-	  The extra statistics can be seen in net-shell using "net stats"
-	  command.
+	  It is possible to set TCP_YEAH option for a TCP connection.
 
-config NET_PKT_ALLOC_STATS
-	bool "Get net_pkt allocation statistics"
+config NET_CONTEXT_TCP_ILLINOIS
+	bool "Add TCP_ILLINOIS support to net_context"
 	help
-	  Collect net_pkt allocation statistics, like number of allocations,
-	  average allocation size, average allocation time in usec, for both
-	  succeeded and failed allocations.
-	  The extra statistics can be seen in net-shell using "net mem"
-	  command.
+	  It is possible to set TCP_ILLINOIS option for a TCP connection.
 
-config NET_PROMISCUOUS_MODE
-	bool "Promiscuous mode support"
-	select NET_MGMT
-	select NET_MGMT_EVENT
-	select NET_L2_ETHERNET_MGMT if NET_L2_ETHERNET
+config NET_CONTEXT_TCP_DCTCP
+	bool "Add TCP_DCTCP support to net_context"
 	help
-	  Enable promiscuous mode support. This only works if the network
-	  device driver supports promiscuous mode. The user application
-	  also needs to read the promiscuous mode data.
+	  It is possible to set TCP_DCTCP option for a TCP connection.
 
-if NET_PROMISCUOUS_MODE
-module = NET_PROMISC
-module-dep = NET_LOG
-module-str = Log level for promiscuous mode
-module-help = Enables promiscuous mode to output debug messages.
-source "subsys/net/Kconfig.template.log_config.net"
-endif # NET_PROMISCUOUS_MODE
-
-config NET_DISABLE_ICMP_DESTINATION_UNREACHABLE
-	bool "Disable destination unreachable ICMP errors"
+config NET_CONTEXT_TCP_CDG
+	bool "Add TCP_CDG support to net_context"
 	help
-	  Suppress the generation of ICMP destination unreachable errors
-	  when ports that are not in a listening state receive packets.
+	  It is possible to set TCP_CDG option for a TCP connection.
 
-source "subsys/net/ip/Kconfig.stack"
-
-source "subsys/net/ip/Kconfig.mgmt"
-
-source "subsys/net/ip/Kconfig.stats"
-
-source "subsys/net/ip/Kconfig.debug"
+config NET_CONTEXT_TCP_BBR
+	bool "Add TCP_BBR support to net_context"
+	help
+	  It is possible to set TCP_BBR option for a TCP connection.
 
 endmenu

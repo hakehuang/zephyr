@@ -50,15 +50,24 @@ int main(void)
     iface = net_if_get_first_by_type(&NET_L2_GET_NAME(ETHERNET));
     if (iface == NULL) {
         LOG_ERR("No Ethernet interface found");
+<<<<<<< HEAD
         return;
     }
 
     LOG_INF("Ethernet interface found");
     
+=======
+        return -1;
+    }
+
+    LOG_INF("Ethernet interface found");
+
+>>>>>>> github/main
     /* Register NDP callback based on configuration */
 #ifdef CONFIG_NDP_ONLY_MODE
     ret = net_ndp_register_callback(iface, ndp_only_callback);
     LOG_INF("NDP-Only Mode: Custom packet processing enabled");
+<<<<<<< HEAD
     LOG_INF("Packets with NET_OK verdict will bypass native stack");
 #else
     ret = net_ndp_register_callback(iface, ndp_mixed_callback);
@@ -73,12 +82,32 @@ int main(void)
     
     LOG_INF("NDP callback registered successfully");
     
+=======
+#else
+    ret = net_ndp_register_callback(iface, ndp_mixed_callback);
+    LOG_INF("Mixed Mode: NDP preprocessing + native stack");
+#endif
+
+    if (ret < 0) {
+        LOG_ERR("Failed to register NDP callback: %d", ret);
+        return -1;
+    }
+
+>>>>>>> github/main
     /* Main loop */
     while (1) {
         /* Simple counter for demonstration */
         static uint32_t counter = 0;
         LOG_INF("NDP sample running for %u seconds", counter++);
+<<<<<<< HEAD
         
         k_sleep(K_SECONDS(5));
     }
+=======
+
+        k_sleep(K_SECONDS(5));
+    }
+
+    return 0;
+>>>>>>> github/main
 }

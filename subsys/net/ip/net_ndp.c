@@ -61,11 +61,9 @@ int net_ndp_register_callback(struct net_if *iface,
     
     /* Check if callback already registered */
     for (int i = 0; i < MAX_CALLBACKS; i++) {
-        if (callbacks[i].active && 
-            callbacks[i].iface == iface && 
+        if (callbacks[i].active && callbacks[i].iface == iface && 
             callbacks[i].cb == cb) {
             k_mutex_unlock(&callback_mutex);
-            LOG_WRN("Callback already registered");
             return -EALREADY;
         }
     }
@@ -97,7 +95,6 @@ int net_ndp_unregister_callback(struct net_if *iface,
     int ret;
     
     if (iface == NULL || cb == NULL) {
-        LOG_ERR("Invalid parameters");
         return -EINVAL;
     }
     
@@ -108,13 +105,11 @@ int net_ndp_unregister_callback(struct net_if *iface,
     
     k_mutex_lock(&callback_mutex, K_FOREVER);
     
+    /* Find and remove callback */
     for (int i = 0; i < MAX_CALLBACKS; i++) {
-        if (callbacks[i].active && 
-            callbacks[i].iface == iface && 
+        if (callbacks[i].active && callbacks[i].iface == iface && 
             callbacks[i].cb == cb) {
             callbacks[i].active = false;
-            callbacks[i].iface = NULL;
-            callbacks[i].cb = NULL;
             k_mutex_unlock(&callback_mutex);
             
             /* NDP callback unregistered */
@@ -128,38 +123,37 @@ int net_ndp_unregister_callback(struct net_if *iface,
 
 /**
  * @brief Process packet through registered NDP callbacks
- * 
- * @param iface Network interface
- * @param pkt Packet to process
- * @return enum net_verdict Processing verdict
  */
 enum net_verdict net_ndp_process_packet(struct net_if *iface, struct net_pkt *pkt)
 {
     int ret;
-    enum net_verdict verdict = NET_CONTINUE;
     
     if (iface == NULL || pkt == NULL) {
-        return NET_DROP;
+        return NET_CONTINUE;
     }
     
     ret = net_ndp_init();
     if (ret < 0) {
-        return NET_DROP;
+        return NET_CONTINUE;
     }
     
     k_mutex_lock(&callback_mutex, K_FOREVER);
     
+    /* Process through all registered callbacks for this interface */
     for (int i = 0; i < MAX_CALLBACKS; i++) {
         if (callbacks[i].active && callbacks[i].iface == iface) {
-            verdict = callbacks[i].cb(pkt);
+            enum net_verdict verdict = callbacks[i].cb(pkt);
             
-            /* If callback returns anything other than CONTINUE, stop processing */
-            if (verdict != NET_CONTINUE) {
-                break;
+            /* If callback returns DROP or OK, return immediately */
+            if (verdict == NET_DROP || verdict == NET_OK) {
+                k_mutex_unlock(&callback_mutex);
+                return verdict;
             }
+            
+            /* If callback returns CONTINUE, continue to next callback */
         }
     }
     
     k_mutex_unlock(&callback_mutex);
-    return verdict;
+    return NET_CONTINUE;
 }
