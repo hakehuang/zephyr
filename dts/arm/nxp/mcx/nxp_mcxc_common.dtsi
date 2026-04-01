@@ -322,6 +322,21 @@
 			status = "disabled";
 		};
 
+		sai0: i2s@4002f000 {
+			compatible = "nxp,mcux-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x4002f000 0x1000>;
+			clocks = <&sim KINETIS_SIM_CLOCK(KINETIS_SIM_BUS_CLK, 0x103c, 15)>;
+			interrupts = <23 0>;
+			dmas = <&dma 2 12>, <&dma 3 13>;
+			dma-names = "rx", "tx";
+			nxp,tx-channel = <1>;
+			nxp,tx-dma-channel = <3>;
+			nxp,rx-dma-channel = <2>;
+			status = "disabled";
+		};
+
 		pit0: pit@40037000 {
 			compatible = "nxp,pit";
 			reg = <0x40037000 0x1000>;
