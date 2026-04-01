@@ -48,15 +48,15 @@ Hardware
 - Module Demo Board build by MDBT53V-1M
 - Nordic nRF5340 SoC Solution
 - A recommended 3rd-party module by Nordic Semiconductor.
-- Dual-core Arm® Cortex® M33
+- Dual-core Arm® Cortex®-M33
 - 1MB/256KB Flash Memory; 512kB/ 64kB RAM
 - Supports BT5 Long Range Features
 - Bluetooth specification v5.2
 - Supports BT5 Long Range Features
 - Supports Bluetooth Direction Finding & Mesh
 - Supports Bluetooth low energy audio
-- Cerifications: FCC, IC, CE, Telec(MIC), KC, SRRC, NCC, RCM, WPC
-- RoHs & Reach Compiant.
+- Certifications: FCC, IC, CE, Telec(MIC), KC, SRRC, NCC, RCM, WPC
+- RoHs & Reach Compliant.
 - 25 GPIO
 - Chip Antenna
 - Interfaces: SPI, UART, I2C, I2S, PWM, ADC, and NFC
@@ -119,6 +119,8 @@ Security components
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 nRF5340 application core supports the Armv8-M Security Extension.
 Applications built for the raytac_mdbt53v_db_40_nrf5340_cpuapp board by

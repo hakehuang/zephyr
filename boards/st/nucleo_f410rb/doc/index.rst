@@ -30,7 +30,7 @@ Hardware
 Nucleo F410RB provides the following hardware components:
 
 - STM32F410RBT6 in LQFP64 package
-- ARM |reg| 32-bit Cortex |reg|-M4 CPU with FPU
+- ARM® 32-bit Cortex®-M4 CPU with FPU
 - Adaptive real-time accelerator (ART Accelerator)
 - 100 MHz max CPU frequency
 - VDD from 1.7 V to 3.6 V
@@ -112,6 +112,8 @@ Default settings are 115200 8N1.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Nucleo F410RB board includes an ST-LINK/V2-1 embedded debug tool interface.
 

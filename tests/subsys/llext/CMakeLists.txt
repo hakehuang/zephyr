@@ -16,16 +16,16 @@ target_include_directories(app PRIVATE
 )
 
 set(ext_names
-	hello_world
-	logging
-	relative_jump
-	object
-	syscalls
-	inspect
-	threads_kernel_objects
-	export_dependent
-	export_dependency
-	align
+  hello_world
+  logging
+  relative_jump
+  object
+  syscalls
+  inspect
+  threads_kernel_objects
+  export_dependent
+  export_dependency
+  align
 )
 
 if(CONFIG_ARM)
@@ -34,17 +34,21 @@ if(CONFIG_ARM)
   endif()
 endif()
 
-if (CONFIG_LLEXT_TYPE_ELF_RELOCATABLE AND NOT CONFIG_ARM)
+if(CONFIG_LLEXT_TYPE_ELF_RELOCATABLE AND NOT CONFIG_ARM)
     list(APPEND ext_names pre_located)
 endif()
 
-if (CONFIG_LLEXT_STORAGE_WRITABLE)
+if(CONFIG_LLEXT_STORAGE_WRITABLE)
     list(APPEND ext_names find_section detached_fn)
 endif()
 
-if (NOT CONFIG_LLEXT_TYPE_ELF_SHAREDLIB)
+if(NOT CONFIG_LLEXT_TYPE_ELF_SHAREDLIB)
     # ELF shared libraries do not support init sections
     list(APPEND ext_names init_fini)
+endif()
+
+if(CONFIG_LLEXT_RODATA_NO_RELOC)
+    list(APPEND ext_names rodata_no_reloc)
 endif()
 
 # generate extension targets for each extension in 'ext_names'
@@ -69,7 +73,12 @@ if(NOT CONFIG_LLEXT_TYPE_ELF_OBJECT)
   )
 endif()
 
-if (CONFIG_LLEXT_TYPE_ELF_RELOCATABLE AND NOT CONFIG_ARM AND NOT CONFIG_RISCV)
+get_property(TOPT GLOBAL PROPERTY TOPT)
+get_property(COMPILER_TOPT TARGET compiler PROPERTY linker_script)
+set_ifndef(  TOPT "${COMPILER_TOPT}")
+set_ifndef(  TOPT -Wl,-T) # Use this if the compiler driver doesn't set a value
+
+if(CONFIG_LLEXT_TYPE_ELF_RELOCATABLE AND CONFIG_XTENSA)
   # Manually fix the pre_located extension's text address at a multiple of 4
   get_target_property(pre_located_target pre_located_ext lib_target)
   get_target_property(pre_located_file pre_located_ext pkg_input)
@@ -78,7 +87,7 @@ if (CONFIG_LLEXT_TYPE_ELF_RELOCATABLE AND NOT CONFIG_ARM AND NOT CONFIG_RISCV)
     POST_BUILD
     COMMAND ${CMAKE_C_COMPILER}
     ${LLEXT_APPEND_FLAGS}
-    -Wl,-r -Wl,-Ttext=0xbada110c -nostdlib -nodefaultlibs -nostartfiles
+    -Wl,-r ${TOPT}text=0xbada110c -nostdlib -nodefaultlibs -nostartfiles
     $<TARGET_OBJECTS:${pre_located_target}> -o ${pre_located_file}
   )
 endif()

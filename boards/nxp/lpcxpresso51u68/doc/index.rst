@@ -67,6 +67,8 @@ The IOCON controller can be used to configure the LPC51U68 pins.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
 
@@ -133,8 +135,7 @@ should see the following message in the terminal:
    ***** Booting Zephyr OS build zephyr-v2.6.0-934-g4c438c0c7d13 *****
    Hello World! lpcxpresso51u68
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _LPC51U68 SoC Website:
    https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/high-performance-power-efficient-and-cost-sensitive-arm-cortex-m0-plus-mcus:LPC51U68

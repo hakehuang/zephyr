@@ -306,11 +306,12 @@ static bool callback_process(struct icmsg_data_t *dev_data)
 				return false;
 			}
 
+			atomic_set(&dev_data->state, ICMSG_STATE_CONNECTED_SID_DISABLED);
+
 			if (dev_data->cb->bound) {
 				dev_data->cb->bound(dev_data->ctx);
 			}
 
-			atomic_set(&dev_data->state, ICMSG_STATE_CONNECTED_SID_DISABLED);
 			notify_remote = true;
 		}
 
@@ -412,6 +413,10 @@ int icmsg_open(const struct icmsg_config_t *conf,
 	k_mutex_init(&dev_data->tx_lock);
 #endif
 
+#if defined(CONFIG_ARCH_POSIX)
+	pbuf_native_addr_remap(dev_data->tx_pb);
+#endif
+
 	ret = pbuf_rx_init(dev_data->rx_pb);
 
 	if (ret < 0) {
@@ -436,6 +441,9 @@ int icmsg_open(const struct icmsg_config_t *conf,
 			MAKE_RX_HANDSHAKE(dev_data->local_sid, SID_DISCONNECTED));
 	} else if (UNBOUND_DISABLED) {
 		ret = initialize_tx_with_sid_disabled(dev_data);
+		if (ret < 0) {
+			goto cleanup_and_exit;
+		}
 	}
 
 	if (old_state == ICMSG_STATE_OFF && (UNBOUND_ENABLED || UNBOUND_DETECT)) {

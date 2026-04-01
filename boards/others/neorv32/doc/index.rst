@@ -13,7 +13,7 @@ For more information about the NEORV32, see the following websites:
 - `The NEORV32 RISC-V Processor Datasheet`_
 - `The NEORV32 RISC-V Processor User Guide`_
 
-The currently supported version is NEORV32 v1.11.2.
+The currently supported version is NEORV32 v1.11.6.
 
 Supported Board Targets
 =======================
@@ -53,8 +53,8 @@ enabled:
 - Zicsr (Control and Status Register (CSR) Instructions, always enabled)
 - Zifencei (Instruction-fetch fence, always enabled)
 
-Other supported RISC-V ISA extensions must be enabled via Kconfig on the board level, and the
-``riscv,isa`` devicetree property of the ``cpu0`` node must be set accordingly.
+Other supported RISC-V ISA extensions can be enabled by changing the ``riscv,isa-extensions``
+devicetree property of the ``cpu0`` node accordingly.
 
 Core Local Interruptor
 ======================
@@ -97,6 +97,13 @@ supporting the GPIOs, support can be enabled by setting the ``status`` property 
 devicetree node to ``okay``. The number of supported GPIOs can be set via the ``ngpios`` devicetree
 property.
 
+Pulse-Width Modulation
+======================
+
+The NEORV32 PWM controller is supported but disabled by default. For NEORV32 SoC implementations
+supporting PWM, support can be enabled by setting the ``status`` property of the ``pwm`` devicetree
+node to ``okay``.
+
 True Random-Number Generator
 ============================
 
@@ -104,8 +111,18 @@ The True Random-Number Generator (TRNG) of the NEORV32 is supported, but disable
 NEORV32 SoC implementations supporting the TRNG, support can be enabled by setting the ``status``
 property of the ``trng`` devicetree node to ``okay``.
 
+General Purpose Timer
+=====================
+
+The General Purpose Timer (GPTMR) of the NEORV32 is supported, but disabled by default. For NEORV32
+SoC implementations supporting the GPTMR, support can be enabled by setting the ``status`` property
+of the ``gptmr`` devicetree node to ``okay`` and selecting the desired GPTMR clock prescaler using
+the node's ``prescaler`` property.
+
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 First, configure the FPGA with the NEORV32 bitstream as described in the NEORV32
 user guide.

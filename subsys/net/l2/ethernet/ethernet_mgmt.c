@@ -25,7 +25,7 @@ static inline bool is_hw_caps_supported(const struct device *dev,
 	return ((api->get_capabilities(dev) & caps) != 0);
 }
 
-static int ethernet_set_config(uint32_t mgmt_request,
+static int ethernet_set_config(uint64_t mgmt_request,
 			       struct net_if *iface,
 			       void *data, size_t len)
 {
@@ -34,6 +34,7 @@ static int ethernet_set_config(uint32_t mgmt_request,
 	const struct ethernet_api *api = dev->api;
 	struct ethernet_config config = { 0 };
 	enum ethernet_config_type type;
+	int ret;
 
 	if (!api) {
 		return -ENOENT;
@@ -47,49 +48,7 @@ static int ethernet_set_config(uint32_t mgmt_request,
 		return -EINVAL;
 	}
 
-	if (mgmt_request == NET_REQUEST_ETHERNET_SET_AUTO_NEGOTIATION) {
-		if (!is_hw_caps_supported(dev,
-					  ETHERNET_AUTO_NEGOTIATION_SET)) {
-			return -ENOTSUP;
-		}
-
-		config.auto_negotiation = params->auto_negotiation;
-		type = ETHERNET_CONFIG_TYPE_AUTO_NEG;
-	} else if (mgmt_request == NET_REQUEST_ETHERNET_SET_LINK) {
-		if (params->l.link_10bt) {
-			if (!is_hw_caps_supported(dev,
-						  ETHERNET_LINK_10BASE_T)) {
-				return -ENOTSUP;
-			}
-
-			config.l.link_10bt = true;
-		} else if (params->l.link_100bt) {
-			if (!is_hw_caps_supported(dev,
-						  ETHERNET_LINK_100BASE_T)) {
-				return -ENOTSUP;
-			}
-
-			config.l.link_100bt = true;
-		} else if (params->l.link_1000bt) {
-			if (!is_hw_caps_supported(dev,
-						  ETHERNET_LINK_1000BASE_T)) {
-				return -ENOTSUP;
-			}
-
-			config.l.link_1000bt = true;
-		} else {
-			return -EINVAL;
-		}
-
-		type = ETHERNET_CONFIG_TYPE_LINK;
-	} else if (mgmt_request == NET_REQUEST_ETHERNET_SET_DUPLEX) {
-		if (!is_hw_caps_supported(dev, ETHERNET_DUPLEX_SET)) {
-			return -ENOTSUP;
-		}
-
-		config.full_duplex = params->full_duplex;
-		type = ETHERNET_CONFIG_TYPE_DUPLEX;
-	} else if (mgmt_request == NET_REQUEST_ETHERNET_SET_MAC_ADDRESS) {
+	if (mgmt_request == NET_REQUEST_ETHERNET_SET_MAC_ADDRESS) {
 		if (net_if_is_admin_up(iface)) {
 			return -EACCES;
 		}
@@ -100,7 +59,7 @@ static int ethernet_set_config(uint32_t mgmt_request,
 		 */
 		if (IS_ENABLED(CONFIG_NET_NATIVE_IPV6) &&
 		    IS_ENABLED(CONFIG_NET_IPV6_IID_EUI_64)) {
-			struct in6_addr iid;
+			struct net_in6_addr iid;
 
 			net_ipv6_addr_create_iid(&iid,
 						 net_if_get_link_addr(iface));
@@ -114,7 +73,17 @@ static int ethernet_set_config(uint32_t mgmt_request,
 		memcpy(&config.mac_address, &params->mac_address,
 		       sizeof(struct net_eth_addr));
 		type = ETHERNET_CONFIG_TYPE_MAC_ADDRESS;
-	} else if (mgmt_request == NET_REQUEST_ETHERNET_SET_QAV_PARAM) {
+
+		ret = api->set_config(dev, type, &config);
+		if (ret < 0) {
+			return ret;
+		}
+
+		return net_if_set_link_addr(iface, params->mac_address.addr,
+					    sizeof(struct net_eth_addr), NET_LINK_ETHERNET);
+	}
+
+	if (mgmt_request == NET_REQUEST_ETHERNET_SET_QAV_PARAM) {
 		if (!is_hw_caps_supported(dev, ETHERNET_QAV)) {
 			return -ENOTSUP;
 		}
@@ -219,17 +188,8 @@ static int ethernet_set_config(uint32_t mgmt_request,
 		return -EINVAL;
 	}
 
-	return api->set_config(net_if_get_device(iface), type, &config);
+	return api->set_config(dev, type, &config);
 }
-
-NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_ETHERNET_SET_AUTO_NEGOTIATION,
-				  ethernet_set_config);
-
-NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_ETHERNET_SET_LINK,
-				  ethernet_set_config);
-
-NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_ETHERNET_SET_DUPLEX,
-				  ethernet_set_config);
 
 NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_ETHERNET_SET_MAC_ADDRESS,
 				  ethernet_set_config);
@@ -258,7 +218,7 @@ NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_ETHERNET_SET_TXINJECTION_MODE,
 NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_ETHERNET_SET_MAC_FILTER,
 				  ethernet_set_config);
 
-static int ethernet_get_config(uint32_t mgmt_request,
+static int ethernet_get_config(uint64_t mgmt_request,
 			       struct net_if *iface,
 			       void *data, size_t len)
 {

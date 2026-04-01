@@ -83,6 +83,8 @@ Only USB device function is supported in Zephyr at the moment.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
 
@@ -176,8 +178,7 @@ should see the following message in the terminal:
    ***** Booting Zephyr OS v1.14.0-xxx-gxxxxxxxxxxxx *****
    Hello World! frdm_k82f
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _FRDM-K82F Website:
    https://www.nxp.com/design/development-boards/freedom-development-boards/mcu-boards/freedom-development-platform-for-kinetis-k82-k81-and-k80-mcus:FRDM-K82F

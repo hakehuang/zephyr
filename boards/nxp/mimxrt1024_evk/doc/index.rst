@@ -160,6 +160,8 @@ remaining are not used.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 This board supports 3 debug host tools. Please install your preferred host
 tool, then follow the instructions in `Configuring a Debug Probe`_ to
 configure the board appropriately.
@@ -174,8 +176,7 @@ Configuring a Debug Probe
 For the RT1024, J47/J48 are the SWD isolation jumpers, J42 is the DFU
 mode jumper, and J55 is the 10 pin JTAG/SWD header.
 
-.. include:: ../../common/rt1xxx-lpclink2-debug.rst
-   :start-after: rt1xxx-lpclink2-probes
+.. include:: ../../common/rt1xxx-lpclink2-debug.rst.inc
 
 Configuring a Console
 =====================
@@ -231,8 +232,7 @@ should see the following message in the terminal:
    ***** Booting Zephyr OS v2.4.0-rc1 *****
    Hello World! mimxrt1024_evk
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _MIMXRT1024-EVK Website:
    https://www.nxp.com/design/development-boards/i-mx-evaluation-and-development-boards/i-mx-rt1024-evaluation-kit:MIMXRT1024-EVK

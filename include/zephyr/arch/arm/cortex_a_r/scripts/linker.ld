@@ -34,16 +34,20 @@
  #define ROMSTART_REGION ROMABLE_REGION
 #endif
 
-#if !defined(CONFIG_XIP) && (CONFIG_FLASH_SIZE == 0)
-  #define ROM_ADDR RAM_ADDR
-#else
-  #define ROM_ADDR (CONFIG_FLASH_BASE_ADDRESS + CONFIG_FLASH_LOAD_OFFSET)
-#endif
-
 #if defined(CONFIG_ROM_END_OFFSET)
 #define ROM_END_OFFSET CONFIG_ROM_END_OFFSET
 #else
 #define ROM_END_OFFSET 0
+#endif
+
+#if defined(CONFIG_FLASH_USES_MAPPED_PARTITION) && defined(CONFIG_XIP)
+#define ROM_ADDR (DT_REG_ADDR(DT_CHOSEN(zephyr_code_partition)))
+#define ROM_SIZE (DT_REG_SIZE(DT_CHOSEN(zephyr_code_partition)) - ROM_END_OFFSET)
+#else
+#if !defined(CONFIG_XIP) && (CONFIG_FLASH_SIZE == 0)
+#define ROM_ADDR RAM_ADDR
+#else
+#define ROM_ADDR (CONFIG_FLASH_BASE_ADDRESS + CONFIG_FLASH_LOAD_OFFSET)
 #endif
 
 #if CONFIG_FLASH_LOAD_SIZE > 0
@@ -51,6 +55,7 @@
 #else
   #define ROM_SIZE (CONFIG_FLASH_SIZE*1K - CONFIG_FLASH_LOAD_OFFSET - ROM_END_OFFSET)
 #endif
+#endif /* defined(CONFIG_FLASH_USES_MAPPED_PARTITION) */
 
 #define RAM_SIZE (CONFIG_SRAM_SIZE * 1K)
 #define RAM_ADDR CONFIG_SRAM_BASE_ADDRESS
@@ -97,10 +102,7 @@ ENTRY(CONFIG_KERNEL_ENTRY)
 SECTIONS
 {
 #include <zephyr/linker/rel-sections.ld>
-
-#ifdef CONFIG_LLEXT
 #include <zephyr/linker/llext-sections.ld>
-#endif
 
     /*
      * .plt and .iplt are here according to 'arm-zephyr-elf-ld --verbose',
@@ -153,6 +155,9 @@ SECTIONS
 
         *(.text)
         *(".text.*")
+
+#include <snippets-text-sections.ld>
+
         *(.gnu.linkonce.t.*)
 
         /*
@@ -165,7 +170,13 @@ SECTIONS
         . = ALIGN(_region_min_align);
     } GROUP_LINK_IN(ROMABLE_REGION)
 
-#if defined (CONFIG_CPP)
+    SECTION_PROLOGUE(rodata_start,,)
+    {
+        . = ALIGN(_region_min_align);
+        __rodata_region_start = .;
+    } GROUP_LINK_IN(ROMABLE_REGION)
+
+#if defined (CONFIG_CPP) || defined(CONFIG_ARCH_STACKWALK)
     SECTION_PROLOGUE(.ARM.extab,,)
     {
         /*
@@ -188,12 +199,6 @@ SECTIONS
         *(.ARM.exidx* gnu.linkonce.armexidx.*)
 #endif
         __exidx_end = .;
-    } GROUP_LINK_IN(ROMABLE_REGION)
-
-    SECTION_PROLOGUE(rodata_start,,)
-    {
-        . = ALIGN(_region_min_align);
-        __rodata_region_start = .;
     } GROUP_LINK_IN(ROMABLE_REGION)
 
 #include <zephyr/linker/common-rom.ld>
@@ -240,6 +245,7 @@ SECTIONS
     __rom_region_end = .;
     MPU_ALIGN(__rodata_region_end - __rom_region_start);
     _image_rom_end_order = (LOG2CEIL(__rom_region_end) - 1) << 1;
+    __rom_region_mpu_size_bits = (LOG2CEIL(__rodata_region_end - __rom_region_start) - 1) << 1;
 
     GROUP_END(ROMABLE_REGION)
 
@@ -285,36 +291,9 @@ SECTIONS
     _app_smem_rom_start = LOADADDR(_APP_SMEM_SECTION_NAME);
 #endif  /* CONFIG_USERSPACE */
 
-    SECTION_DATA_PROLOGUE(_BSS_SECTION_NAME,(NOLOAD), BSS_ALIGN)
-    {
-        /*
-         * For performance, BSS section is assumed to be 4 byte aligned and
-         * a multiple of 4 bytes
-         */
-        . = ALIGN(4);
-        __bss_start = .;
-        __kernel_ram_start = .;
-
-        *(.bss)
-        *(".bss.*")
-        *(COMMON)
-        *(".kernel_bss.*")
-
-#ifdef CONFIG_CODE_DATA_RELOCATION
-#include <linker_sram_bss_relocate.ld>
-#endif
-
-        /*
-         * As memory is cleared in words only, it is simpler to ensure the BSS
-         * section ends on a 4 byte boundary. This wastes a maximum of 3 bytes.
-         */
-        __bss_end = ALIGN(4);
-    } GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
-
-#include <zephyr/linker/common-noinit.ld>
-
     SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
     {
+        __kernel_ram_start = .;
         __data_region_start = .;
         __data_start = .;
         *(.data)
@@ -348,12 +327,6 @@ SECTIONS
 
     __data_region_end = .;
 
-
-    /* Define linker symbols */
-
-    __kernel_ram_end = RAM_ADDR + RAM_SIZE;
-    __kernel_ram_size = __kernel_ram_end - __kernel_ram_start;
-
 #if DT_NODE_HAS_STATUS(DT_CHOSEN(zephyr_ocm), okay)
 GROUP_START(OCM)
 
@@ -385,12 +358,6 @@ GROUP_END(OCM)
  */
 #include <snippets-sections.ld>
 
-#define LAST_RAM_ALIGN . = ALIGN(_region_min_align);
-
-#include <zephyr/linker/ram-end.ld>
-
-    GROUP_END(RAMABLE_REGION)
-
 #include <zephyr/linker/debug-sections.ld>
 
     SECTION_PROLOGUE(.ARM.attributes, 0,)
@@ -405,15 +372,51 @@ GROUP_END(OCM)
     /* Must be last in romable region */
     SECTION_PROLOGUE(.last_section,,)
     {
-#ifdef CONFIG_LINKER_LAST_SECTION_ID
-      /* Fill last section with a word to ensure location counter and actual rom
-       * region data usage match. */
-      LONG(CONFIG_LINKER_LAST_SECTION_ID_PATTERN)
-#endif
+      /* .last_section contains a fixed word to ensure location counter and actual
+       * rom region data usage match when CONFIG_LINKER_LAST_SECTION_ID=y. */
+      KEEP(*(.last_section))
     } GROUP_LINK_IN(ROMABLE_REGION)
 
     /* To provide the image size as a const expression,
      * calculate this value here. */
     _flash_used = LOADADDR(.last_section) + SIZEOF(.last_section) - __rom_region_start;
+
+    SECTION_DATA_PROLOGUE(_BSS_SECTION_NAME,(NOLOAD), BSS_ALIGN)
+    {
+        /*
+         * For performance, BSS section is assumed to be 4 byte aligned and
+         * a multiple of 4 bytes
+         */
+        . = ALIGN(4);
+        __bss_start = .;
+
+        *(.bss)
+        *(".bss.*")
+        *(COMMON)
+        *(".kernel_bss.*")
+
+#ifdef CONFIG_CODE_DATA_RELOCATION
+#include <linker_sram_bss_relocate.ld>
+#endif
+
+        /*
+         * As memory is cleared in words only, it is simpler to ensure the BSS
+         * section ends on a 4 byte boundary. This wastes a maximum of 3 bytes.
+         */
+        __bss_end = ALIGN(4);
+    } GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
+
+#include <zephyr/linker/common-noinit.ld>
+
+    /* Define linker symbols */
+
+    __kernel_ram_end = RAM_ADDR + RAM_SIZE;
+    __kernel_ram_size = __kernel_ram_end - __kernel_ram_start;
+
+#define LAST_RAM_ALIGN . = ALIGN(_region_min_align);
+
+#include <zephyr/linker/ram-end.ld>
+
+    GROUP_END(RAMABLE_REGION)
 
 }

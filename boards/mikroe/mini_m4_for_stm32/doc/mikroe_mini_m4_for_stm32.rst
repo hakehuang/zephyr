@@ -3,7 +3,7 @@
 Overview
 ********
 
-MINI-M4 for STM32 is a small ARM® Cortex™-M4 development board containing
+MINI-M4 for STM32 is a small ARM® Cortex®-M4 development board containing
 an `STM32F415RG`_ microcontroller. It is pin compatible with PIC16F887 and
 PIC18(L)F45K20 microcontrollers and it perfectly fits into a standard DIP40
 socket. The board is equipped with a 16MHz SMD crystal oscillator, and
@@ -58,6 +58,8 @@ The Zephyr console output is assigned to USART2. Default settings are 115200 8N1
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``mikroe_mini_m4_for_stm32`` board configuration can
 be built and flashed in the usual way (see :ref:`build_an_application` and

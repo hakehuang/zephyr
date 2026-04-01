@@ -12,10 +12,10 @@
 #include <zephyr/storage/flash_map.h>
 
 #define SLOT1_PARTITION		slot1_partition
-#define SLOT1_PARTITION_ID	FIXED_PARTITION_ID(SLOT1_PARTITION)
-#define SLOT1_PARTITION_DEV	FIXED_PARTITION_DEVICE(SLOT1_PARTITION)
+#define SLOT1_PARTITION_ID	PARTITION_ID(SLOT1_PARTITION)
+#define SLOT1_PARTITION_DEV	PARTITION_DEVICE(SLOT1_PARTITION)
 #define SLOT1_PARTITION_NODE	DT_NODELABEL(SLOT1_PARTITION)
-#define SLOT1_PARTITION_OFFSET	FIXED_PARTITION_OFFSET(SLOT1_PARTITION)
+#define SLOT1_PARTITION_OFFSET	PARTITION_OFFSET(SLOT1_PARTITION)
 
 ZTEST(flash_map_sha, test_flash_area_check_int_sha256)
 {
@@ -100,7 +100,7 @@ ZTEST(flash_map_sha, test_flash_area_check_int_sha256)
 	rc = flash_area_open(SLOT1_PARTITION_ID, &fa);
 	zassert_true(rc == 0, "flash_area_open() fail, error %d\n", rc);
 	rc = flash_area_erase(fa, 0, fa->fa_size);
-	zassert_true(rc == 0, "Flash erase failure (%d), error %d\n", rc);
+	zassert_true(rc == 0, "Flash erase failure, error %d\n", rc);
 	rc = flash_area_write(fa, 0, tst_vec, sizeof(tst_vec));
 	zassert_true(rc == 0, "Flash img write, error %d\n", rc);
 

@@ -11,6 +11,7 @@ import textwrap
 from pathlib import Path
 
 from west.commands import WestCommand
+
 from zephyr_ext_common import ZEPHYR_BASE
 
 sys.path.append(os.fspath(Path(__file__).parent.parent))
@@ -23,16 +24,14 @@ class Shields(WestCommand):
     def __init__(self):
         super().__init__(
             'shields',
-            # Keep this in sync with the string in west-commands.yml.
-            'display list of supported shield',
-            'Display supported shields',
+            '',
+            description='Display list of supported shields',
             accepts_unknown_args=False)
 
     def do_add_parser(self, parser_adder):
         default_fmt = '{name}'
         parser = parser_adder.add_parser(
             self.name,
-            help=self.help,
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=self.description,
             epilog=textwrap.dedent(f'''\
@@ -49,6 +48,8 @@ class Shields(WestCommand):
             The following arguments are available:
 
             - name: shield name
+            - full_name: shield full name (typically, its commercial name)
+            - vendor: shield vendor
             - dir: directory that contains the shield definition
             '''))
 
@@ -82,4 +83,9 @@ class Shields(WestCommand):
         for shield in list_shields.find_shields(args):
             if name_re is not None and not name_re.search(shield.name):
                 continue
-            self.inf(args.format.format(name=shield.name, dir=shield.dir))
+            self.inf(args.format.format(
+                name=shield.name,
+                dir=shield.dir,
+                vendor=shield.vendor if hasattr(shield, 'vendor') else '',
+                full_name=shield.full_name if hasattr(shield, 'full_name') else shield.name
+            ))

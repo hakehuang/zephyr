@@ -13,13 +13,13 @@ Here are some highlights of the BLACK_F407ZG_PRO board:
   board and easy probing
 - Flexible board power supply:
 
-       - USB VBUS or external source (3.3V, 5V)
-       - Power management access point
+  - USB VBUS or external source (3.3V, 5V)
+  - Power management access point
 
 - Three LEDs:
 
-       - 3.3 V power on (LD0)
-       - Two user LEDs: green (LD1), green (LD2)
+  - 3.3 V power on (LD0)
+  - Two user LEDs: green (LD1), green (LD2)
 
 - Four push-buttons: RESET, K0, K1 and WK_UP
 - Mini-AB connector
@@ -36,7 +36,7 @@ Hardware
 BLACK_F407ZG_PRO board provides the following hardware components:
 
 - STM32F407ZGT6 in LQFP144 package
-- ARM |reg| 32-bit Cortex |reg| -M4 CPU with FPU
+- ARM® 32-bit Cortex®-M4 CPU with FPU
 - 168 MHz max CPU frequency
 - VDD from 1.8 V to 3.6 V
 - 8MHz system crystal
@@ -73,7 +73,7 @@ BLACK_F407ZG_PRO board provides the following hardware components:
 - Dimensions: 102.5mm x 74.56mm
 
 More information about STM32F407ZG SOC can be found here:
-       - `STM32F407ZG on www.st.com`_
+- `STM32F407ZG on www.st.com`_
 
 Supported Features
 ==================
@@ -134,6 +134,8 @@ it to UART2 pins (PA2/PA3).
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``black_f407zg_pro`` board configuration can be built and
 flashed in the usual way (see :ref:`build_an_application` and

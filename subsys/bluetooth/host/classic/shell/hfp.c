@@ -36,12 +36,15 @@ struct bt_conn *hf_conn;
 struct bt_hfp_hf *hfp_hf;
 struct bt_conn *hf_sco_conn;
 static struct bt_hfp_hf_call *hfp_hf_call[CONFIG_BT_HFP_HF_MAX_CALLS];
+#if defined(CONFIG_BT_HFP_HF_CODEC_NEG)
+static bool hf_auto_select_codec;
+#endif /* CONFIG_BT_HFP_HF_CODEC_NEG */
 
 static void hf_add_a_call(struct bt_hfp_hf_call *call)
 {
-	for (size_t index = 0; index < ARRAY_SIZE(hfp_hf_call); index++) {
-		if (!hfp_hf_call[index]) {
-			hfp_hf_call[index] = call;
+	ARRAY_FOR_EACH(hfp_hf_call, i) {
+		if (!hfp_hf_call[i]) {
+			hfp_hf_call[i] = call;
 			return;
 		}
 	}
@@ -49,10 +52,19 @@ static void hf_add_a_call(struct bt_hfp_hf_call *call)
 
 static void hf_remove_a_call(struct bt_hfp_hf_call *call)
 {
-	for (size_t index = 0; index < ARRAY_SIZE(hfp_hf_call); index++) {
-		if (call == hfp_hf_call[index]) {
-			hfp_hf_call[index] = NULL;
+	ARRAY_FOR_EACH(hfp_hf_call, i) {
+		if (call == hfp_hf_call[i]) {
+			hfp_hf_call[i] = NULL;
 			return;
+		}
+	}
+}
+
+static void hf_remove_calls(void)
+{
+	ARRAY_FOR_EACH(hfp_hf_call, i) {
+		if (hfp_hf_call[i] != NULL) {
+			hfp_hf_call[i] = NULL;
 		}
 	}
 }
@@ -68,19 +80,48 @@ static void hf_disconnected(struct bt_hfp_hf *hf)
 {
 	hf_conn = NULL;
 	hfp_hf = NULL;
+	hf_remove_calls();
 	bt_shell_print("HF disconnected");
 }
 
 static void hf_sco_connected(struct bt_hfp_hf *hf, struct bt_conn *sco_conn)
 {
-	bt_shell_print("HF SCO connected");
-	hf_sco_conn = sco_conn;
+	struct bt_conn_info info;
+	uint16_t handle;
+
+	bt_shell_print("HF SCO connected %p", sco_conn);
+
+	if (hf_sco_conn != NULL) {
+		bt_shell_warn("HF SCO conn %p exists", hf_sco_conn);
+		return;
+	}
+
+	hf_sco_conn = bt_conn_ref(sco_conn);
+	if (bt_hci_get_conn_handle(sco_conn, &handle) < 0) {
+		bt_shell_warn("Failed to get SCO connection handle");
+		return;
+	}
+
+	if (bt_conn_get_info(sco_conn, &info) < 0) {
+		bt_shell_warn("Failed to get SCO connection info");
+		return;
+	}
+	bt_shell_print("HF SCO info:");
+	bt_shell_print("  SCO handle 0x%04X", handle);
+	bt_shell_print("  SCO air mode %u", info.sco.air_mode);
+	bt_shell_print("  SCO link type %u", info.sco.link_type);
 }
 
 static void hf_sco_disconnected(struct bt_conn *sco_conn, uint8_t reason)
 {
-	bt_shell_print("HF SCO disconnected");
-	hf_sco_conn = NULL;
+	bt_shell_print("HF SCO disconnected %p (reason %u)", sco_conn, reason);
+
+	if (hf_sco_conn == sco_conn) {
+		bt_conn_unref(hf_sco_conn);
+		hf_sco_conn = NULL;
+	} else {
+		bt_shell_warn("Unknown SCO disconnected (%p != %p)", hf_sco_conn, sco_conn);
+	}
 }
 
 void hf_service(struct bt_hfp_hf *hf, uint32_t value)
@@ -163,7 +204,7 @@ void hf_dialing(struct bt_hfp_hf *hf, int err)
 }
 
 #if defined(CONFIG_BT_HFP_HF_CLI)
-void hf_clip(struct bt_hfp_hf_call *call, char *number, uint8_t type)
+void hf_clip(struct bt_hfp_hf_call *call, const char *number, uint8_t type)
 {
 	bt_shell_print("HF call %p CLIP %s %d", call, number, type);
 }
@@ -186,7 +227,7 @@ static void hf_inband_ring(struct bt_hfp_hf *hf, bool inband)
 	bt_shell_print("HF ring: %s", inband ? "in-band" : "no in-hand");
 }
 
-static void hf_operator(struct bt_hfp_hf *hf, uint8_t mode, uint8_t format, char *operator)
+static void hf_operator(struct bt_hfp_hf *hf, uint8_t mode, uint8_t format, const char *operator)
 {
 	bt_shell_print("HF mode %d, format %d, operator %s", mode, format, operator);
 }
@@ -195,6 +236,16 @@ static void hf_operator(struct bt_hfp_hf *hf, uint8_t mode, uint8_t format, char
 static void hf_codec_negotiate(struct bt_hfp_hf *hf, uint8_t id)
 {
 	bt_shell_print("codec negotiation: %d", id);
+	if (hf_auto_select_codec) {
+		int err;
+
+		err = bt_hfp_hf_select_codec(hfp_hf, id);
+		if (err) {
+			bt_shell_error("Failed to select codec id: %d", err);
+		} else {
+			bt_shell_print("codec auto selected: id %d", id);
+		}
+	}
 }
 #endif /* CONFIG_BT_HFP_HF_CODEC_NEG */
 
@@ -206,7 +257,7 @@ static void hf_ecnr_turn_off(struct bt_hfp_hf *hf, int err)
 #endif /* CONFIG_BT_HFP_HF_ECNR */
 
 #if defined(CONFIG_BT_HFP_HF_3WAY_CALL)
-static void hf_call_waiting(struct bt_hfp_hf_call *call, char *number, uint8_t type)
+static void hf_call_waiting(struct bt_hfp_hf_call *call, const char *number, uint8_t type)
 {
 	bt_shell_print("3way call %p waiting. number %s type %d", call, number, type);
 }
@@ -227,7 +278,7 @@ void hf_vre_state(struct bt_hfp_hf *hf, uint8_t state)
 
 #if defined(CONFIG_BT_HFP_HF_VOICE_RECG_TEXT)
 void hf_textual_representation(struct bt_hfp_hf *hf, char *id, uint8_t type, uint8_t operation,
-			       char *text)
+			       const char *text)
 {
 	bt_shell_print("Text id %s, type %d, operation %d, string %s", id, type, operation, text);
 }
@@ -248,7 +299,20 @@ void hf_subscriber_number(struct bt_hfp_hf *hf, const char *number, uint8_t type
 	bt_shell_print("Subscriber number %s, type %d, service %d", number, type, service);
 }
 
-static struct bt_hfp_hf_cb hf_cb = {
+#if defined(CONFIG_BT_HFP_HF_ECS)
+void hf_query_call(struct bt_hfp_hf *hf, struct bt_hfp_hf_current_call *call)
+{
+	if (call == NULL) {
+		return;
+	}
+
+	bt_shell_print("CLCC idx %d dir %d status %d mode %d mpty %d number %s type %d",
+		       call->index, call->dir, call->status, call->mode, call->multiparty,
+		       call->number != NULL ? call->number : "UNKNOWN", call->type);
+}
+#endif /* CONFIG_BT_HFP_HF_ECS */
+
+ZTESTABLE_STATIC struct bt_hfp_hf_cb hf_cb = {
 	.connected = hf_connected,
 	.disconnected = hf_disconnected,
 	.sco_connected = hf_sco_connected,
@@ -297,6 +361,9 @@ static struct bt_hfp_hf_cb hf_cb = {
 #endif /* CONFIG_BT_HFP_HF_VOICE_RECG */
 	.request_phone_number = hf_request_phone_number,
 	.subscriber_number = hf_subscriber_number,
+#if defined(CONFIG_BT_HFP_HF_ECS)
+	.query_call = hf_query_call,
+#endif /* CONFIG_BT_HFP_HF_ECS */
 };
 
 static int cmd_reg_enable(const struct shell *sh, size_t argc, char **argv)
@@ -447,6 +514,19 @@ static int cmd_select_codec(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	return err;
+}
+
+static int cmd_auto_select_codec(const struct shell *sh, size_t argc, char **argv)
+{
+	int err = 0;
+
+	hf_auto_select_codec = shell_strtobool(argv[1], 0, &err);
+	if (err != 0) {
+		shell_help(sh);
+		return SHELL_CMD_HELP_PRINTED;
+	}
+
+	return 0;
 }
 
 static int cmd_set_codecs(const struct shell *sh, size_t argc, char **argv)
@@ -888,6 +968,20 @@ static int cmd_battery(const struct shell *sh, size_t argc, char **argv)
 }
 #endif /* CONFIG_BT_HFP_HF_HF_INDICATOR_BATTERY */
 
+#if defined(CONFIG_BT_HFP_HF_ECS)
+static int cmd_query_calls(const struct shell *sh, size_t argc, char **argv)
+{
+	int err;
+
+	err = bt_hfp_hf_query_list_of_current_calls(hfp_hf);
+	if (err != 0) {
+		shell_error(sh, "Failed to query list of current calls: %d", err);
+	}
+
+	return err;
+}
+#endif /* CONFIG_BT_HFP_HF_ECS */
+
 SHELL_STATIC_SUBCMD_SET_CREATE(hf_cmds,
 	SHELL_CMD_ARG(reg, NULL, HELP_NONE, cmd_reg_enable, 1, 0),
 	SHELL_CMD_ARG(connect, NULL, "<channel>", cmd_connect, 2, 0),
@@ -903,6 +997,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(hf_cmds,
 	SHELL_CMD_ARG(operator, NULL, HELP_NONE, cmd_operator, 1, 0),
 #if defined(CONFIG_BT_HFP_HF_CODEC_NEG)
 	SHELL_CMD_ARG(audio_connect, NULL, HELP_NONE, cmd_audio_connect, 1, 0),
+	SHELL_CMD_ARG(auto_select_codec, NULL, "<enable/disable>", cmd_auto_select_codec, 2, 0),
 	SHELL_CMD_ARG(select_codec, NULL, "Codec ID", cmd_select_codec, 2, 0),
 	SHELL_CMD_ARG(set_codecs, NULL, "Codec ID Map", cmd_set_codecs, 2, 0),
 #endif /* CONFIG_BT_HFP_HF_CODEC_NEG */
@@ -952,6 +1047,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(hf_cmds,
 #if defined(CONFIG_BT_HFP_HF_HF_INDICATOR_BATTERY)
 	SHELL_CMD_ARG(battery, NULL, "<level>", cmd_battery, 2, 0),
 #endif /* CONFIG_BT_HFP_HF_HF_INDICATOR_BATTERY */
+#if defined(CONFIG_BT_HFP_HF_ECS)
+	SHELL_CMD_ARG(query_calls, NULL, HELP_NONE, cmd_query_calls, 1, 0),
+#endif /* */
 	SHELL_SUBCMD_SET_END
 );
 #endif /* CONFIG_BT_HFP_HF */
@@ -959,14 +1057,29 @@ SHELL_STATIC_SUBCMD_SET_CREATE(hf_cmds,
 #if defined(CONFIG_BT_HFP_AG)
 
 struct bt_hfp_ag *hfp_ag;
+struct bt_hfp_ag *hfp_ag_ongoing;
 struct bt_conn *hfp_ag_sco_conn;
 static struct bt_hfp_ag_call *hfp_ag_call[CONFIG_BT_HFP_AG_MAX_CALLS];
 
+static struct bt_hfp_ag_ongoing_call ag_ongoing_call_info[CONFIG_BT_HFP_AG_MAX_CALLS];
+
+static size_t ag_ongoing_calls;
+
+static bool has_ongoing_calls;
+
+static char last_number[CONFIG_BT_HFP_AG_PHONE_NUMBER_MAX_LEN + 1];
+
+static bool has_ag_indicator_value;
+static uint8_t ag_indicator_service;
+static uint8_t ag_indicator_strength;
+static uint8_t ag_indicator_roam;
+static uint8_t ag_indicator_battery;
+
 static void ag_add_a_call(struct bt_hfp_ag_call *call)
 {
-	for (size_t index = 0; index < ARRAY_SIZE(hfp_ag_call); index++) {
-		if (!hfp_ag_call[index]) {
-			hfp_ag_call[index] = call;
+	ARRAY_FOR_EACH(hfp_ag_call, i) {
+		if (!hfp_ag_call[i]) {
+			hfp_ag_call[i] = call;
 			return;
 		}
 	}
@@ -974,10 +1087,19 @@ static void ag_add_a_call(struct bt_hfp_ag_call *call)
 
 static void ag_remove_a_call(struct bt_hfp_ag_call *call)
 {
-	for (size_t index = 0; index < ARRAY_SIZE(hfp_ag_call); index++) {
-		if (call == hfp_ag_call[index]) {
-			hfp_ag_call[index] = NULL;
+	ARRAY_FOR_EACH(hfp_ag_call, i) {
+		if (call == hfp_ag_call[i]) {
+			hfp_ag_call[i] = NULL;
 			return;
+		}
+	}
+}
+
+static void ag_remove_calls(void)
+{
+	ARRAY_FOR_EACH(hfp_ag_call, i) {
+		if (hfp_ag_call[i] != NULL) {
+			hfp_ag_call[i] = NULL;
 		}
 	}
 }
@@ -988,24 +1110,90 @@ static void ag_connected(struct bt_conn *conn, struct bt_hfp_ag *ag)
 		bt_shell_warn("The conn %p is not aligned with ACL conn %p", conn, default_conn);
 	}
 	hfp_ag = ag;
-	bt_shell_print("ag connected");
+	bt_shell_print("AG connected");
 }
 
 static void ag_disconnected(struct bt_hfp_ag *ag)
 {
-	bt_shell_print("ag disconnected");
+	ag_remove_calls();
+	bt_shell_print("AG disconnected");
 }
 
 static void ag_sco_connected(struct bt_hfp_ag *ag, struct bt_conn *sco_conn)
 {
-	bt_shell_print("ag sco connected");
-	hfp_ag_sco_conn = sco_conn;
+	struct bt_conn_info info;
+	uint16_t handle;
+
+	bt_shell_print("AG SCO connected %p", sco_conn);
+
+	if (hfp_ag_sco_conn != NULL) {
+		bt_shell_warn("AG SCO conn %p exists", hfp_ag_sco_conn);
+		return;
+	}
+
+	hfp_ag_sco_conn = bt_conn_ref(sco_conn);
+	if (bt_hci_get_conn_handle(sco_conn, &handle) < 0) {
+		bt_shell_warn("Failed to get SCO connection handle");
+		return;
+	}
+
+	if (bt_conn_get_info(sco_conn, &info) < 0) {
+		bt_shell_warn("Failed to get SCO connection info");
+		return;
+	}
+	bt_shell_print("AG SCO info:");
+	bt_shell_print("  SCO handle 0x%04X", handle);
+	bt_shell_print("  SCO air mode %u", info.sco.air_mode);
+	bt_shell_print("  SCO link type %u", info.sco.link_type);
 }
 
-static void ag_sco_disconnected(struct bt_hfp_ag *ag)
+static void ag_sco_disconnected(struct bt_conn *sco_conn, uint8_t reason)
 {
-	bt_shell_print("ag sco disconnected");
-	hfp_ag_sco_conn = NULL;
+	bt_shell_print("AG SCO disconnected %p (reason %u)", sco_conn, reason);
+
+	if (hfp_ag_sco_conn == sco_conn) {
+		bt_conn_unref(hfp_ag_sco_conn);
+		hfp_ag_sco_conn = NULL;
+	} else {
+		bt_shell_warn("Unknown SCO disconnected (%p != %p)", hfp_ag_sco_conn, sco_conn);
+	}
+}
+
+static int ag_get_indicator_value(struct bt_hfp_ag *ag, uint8_t *service, uint8_t *strength,
+				  uint8_t *roam, uint8_t *battery)
+{
+	if (!has_ag_indicator_value) {
+		return -ENODATA;
+	}
+
+	if (service != NULL) {
+		*service = ag_indicator_service;
+	}
+
+	if (strength != NULL) {
+		*strength = ag_indicator_strength;
+	}
+
+	if (roam != NULL) {
+		*roam = ag_indicator_roam;
+	}
+
+	if (battery != NULL) {
+		*battery = ag_indicator_battery;
+	}
+
+	return 0;
+}
+
+static int ag_get_ongoing_call(struct bt_hfp_ag *ag)
+{
+	if (!has_ongoing_calls) {
+		return -EINVAL;
+	}
+
+	hfp_ag_ongoing = ag;
+	bt_shell_print("Please set ongoing calls");
+	return 0;
 }
 
 static int ag_memory_dial(struct bt_hfp_ag *ag, const char *location, char **number)
@@ -1016,7 +1204,7 @@ static int ag_memory_dial(struct bt_hfp_ag *ag, const char *location, char **num
 		return -ENOTSUP;
 	}
 
-	bt_shell_print("ag memory dial");
+	bt_shell_print("AG memory dial");
 
 	*number = phone;
 
@@ -1027,7 +1215,7 @@ static int ag_number_call(struct bt_hfp_ag *ag, const char *number)
 {
 	static char *phone = "123456789";
 
-	bt_shell_print("ag number call");
+	bt_shell_print("AG number call");
 
 	if (strcmp(number, phone)) {
 		return -ENOTSUP;
@@ -1036,73 +1224,84 @@ static int ag_number_call(struct bt_hfp_ag *ag, const char *number)
 	return 0;
 }
 
+static int ag_redial(struct bt_hfp_ag *ag, char number[CONFIG_BT_HFP_AG_PHONE_NUMBER_MAX_LEN + 1])
+{
+	if (strlen(last_number) == 0) {
+		return -EINVAL;
+	}
+
+	strncpy(number, last_number, CONFIG_BT_HFP_AG_PHONE_NUMBER_MAX_LEN);
+
+	return 0;
+}
+
 static void ag_outgoing(struct bt_hfp_ag *ag, struct bt_hfp_ag_call *call, const char *number)
 {
-	bt_shell_print("ag outgoing call %p, number %s", call, number);
+	bt_shell_print("AG outgoing call %p, number %s", call, number);
 	ag_add_a_call(call);
 }
 
 static void ag_incoming(struct bt_hfp_ag *ag, struct bt_hfp_ag_call *call, const char *number)
 {
-	bt_shell_print("ag incoming call %p, number %s", call, number);
+	bt_shell_print("AG incoming call %p, number %s", call, number);
 	ag_add_a_call(call);
 }
 
 static void ag_incoming_held(struct bt_hfp_ag_call *call)
 {
-	bt_shell_print("ag incoming call %p is held", call);
+	bt_shell_print("AG incoming call %p is held", call);
 }
 
 static void ag_ringing(struct bt_hfp_ag_call *call, bool in_band)
 {
-	bt_shell_print("ag call %p start ringing mode %d", call, in_band);
+	bt_shell_print("AG call %p start ringing mode %d", call, in_band);
 }
 
 static void ag_accept(struct bt_hfp_ag_call *call)
 {
-	bt_shell_print("ag call %p accept", call);
+	bt_shell_print("AG call %p accept", call);
 }
 
 static void ag_held(struct bt_hfp_ag_call *call)
 {
-	bt_shell_print("ag call %p held", call);
+	bt_shell_print("AG call %p held", call);
 }
 
 static void ag_retrieve(struct bt_hfp_ag_call *call)
 {
-	bt_shell_print("ag call %p retrieved", call);
+	bt_shell_print("AG call %p retrieved", call);
 }
 
 static void ag_reject(struct bt_hfp_ag_call *call)
 {
-	bt_shell_print("ag call %p reject", call);
+	bt_shell_print("AG call %p reject", call);
 	ag_remove_a_call(call);
 }
 
 static void ag_terminate(struct bt_hfp_ag_call *call)
 {
-	bt_shell_print("ag call %p terminate", call);
+	bt_shell_print("AG call %p terminate", call);
 	ag_remove_a_call(call);
 }
 
 static void ag_codec(struct bt_hfp_ag *ag, uint32_t ids)
 {
-	bt_shell_print("ag received codec id bit map %x", ids);
+	bt_shell_print("AG received codec id bit map %x", ids);
 }
 
 void ag_vgm(struct bt_hfp_ag *ag, uint8_t gain)
 {
-	bt_shell_print("ag received vgm %d", gain);
+	bt_shell_print("AG received vgm %d", gain);
 }
 
 void ag_vgs(struct bt_hfp_ag *ag, uint8_t gain)
 {
-	bt_shell_print("ag received vgs %d", gain);
+	bt_shell_print("AG received vgs %d", gain);
 }
 
 void ag_codec_negotiate(struct bt_hfp_ag *ag, int err)
 {
-	bt_shell_print("ag codec negotiation result %d", err);
+	bt_shell_print("AG codec negotiation result %d", err);
 }
 
 void ag_audio_connect_req(struct bt_hfp_ag *ag)
@@ -1200,13 +1399,16 @@ void ag_hf_indicator_value(struct bt_hfp_ag *ag, enum hfp_ag_hf_indicators indic
 	bt_shell_print("indicator %d value %d", indicator, value);
 }
 
-static struct bt_hfp_ag_cb ag_cb = {
+ZTESTABLE_STATIC struct bt_hfp_ag_cb ag_cb = {
 	.connected = ag_connected,
 	.disconnected = ag_disconnected,
 	.sco_connected = ag_sco_connected,
 	.sco_disconnected = ag_sco_disconnected,
+	.get_indicator_value = ag_get_indicator_value,
+	.get_ongoing_call = ag_get_ongoing_call,
 	.memory_dial = ag_memory_dial,
 	.number_call = ag_number_call,
+	.redial = ag_redial,
 	.outgoing = ag_outgoing,
 	.incoming = ag_incoming,
 	.incoming_held = ag_incoming_held,
@@ -1291,6 +1493,76 @@ static int cmd_ag_sco_disconnect(const struct shell *sh, size_t argc, char **arg
 	}
 
 	return err;
+}
+
+static int set_ongoing_calls(void)
+{
+	int err;
+
+	err = bt_hfp_ag_ongoing_calls(hfp_ag_ongoing, &ag_ongoing_call_info[0], ag_ongoing_calls);
+	ag_ongoing_calls = 0;
+	hfp_ag_ongoing = NULL;
+	if (err != 0) {
+		bt_shell_error("Failed to set ongoing calls (err %d)", err);
+	}
+	return err;
+}
+static int cmd_ag_indicator_value(const struct shell *sh, size_t argc, char **argv)
+{
+	if (argc == 1) {
+		has_ag_indicator_value = false;
+		return 0;
+	}
+
+	if (argc != 5) {
+		shell_help(sh);
+		return SHELL_CMD_HELP_PRINTED;
+	}
+
+	ag_indicator_service  = (uint8_t)atoi(argv[1]);
+	ag_indicator_strength = (uint8_t)atoi(argv[2]);
+	ag_indicator_roam     = (uint8_t)atoi(argv[3]);
+	ag_indicator_battery  = (uint8_t)atoi(argv[4]);
+
+	has_ag_indicator_value = true;
+
+	return 0;
+}
+
+static int cmd_ag_ongoing_calls(const struct shell *sh, size_t argc, char **argv)
+{
+	if (!strcmp(argv[1], "yes")) {
+		has_ongoing_calls = true;
+	} else {
+		has_ongoing_calls = false;
+	}
+	return 0;
+}
+
+static int cmd_ag_set_ongoing_calls(const struct shell *sh, size_t argc, char **argv)
+{
+	size_t max_calls;
+
+	max_calls =  MIN(CONFIG_BT_HFP_AG_MAX_CALLS, ARRAY_SIZE(ag_ongoing_call_info));
+	if (ag_ongoing_calls >= max_calls) {
+		shell_error(sh, "Supported max call count %d", max_calls);
+		return set_ongoing_calls();
+	}
+
+	memset(ag_ongoing_call_info[ag_ongoing_calls].number, 0,
+	       sizeof(ag_ongoing_call_info[ag_ongoing_calls].number));
+	memcpy(ag_ongoing_call_info[ag_ongoing_calls].number, argv[1],
+	       MIN(strlen(argv[1]), sizeof(ag_ongoing_call_info[ag_ongoing_calls].number) - 1));
+	ag_ongoing_call_info[ag_ongoing_calls].type = (uint8_t)atoi(argv[2]);
+	ag_ongoing_call_info[ag_ongoing_calls].status = (enum bt_hfp_ag_call_status)atoi(argv[3]);
+	ag_ongoing_call_info[ag_ongoing_calls].dir = (enum bt_hfp_ag_call_dir)atoi(argv[4]);
+
+	ag_ongoing_calls++;
+
+	if ((argc > 5) && !strcmp(argv[5], "all")) {
+		return set_ongoing_calls();
+	}
+	return 0;
 }
 
 static int cmd_ag_remote_incoming(const struct shell *sh, size_t argc, char **argv)
@@ -1824,15 +2096,33 @@ static int cmd_ag_hf_indicator(const struct shell *sh, size_t argc, char **argv)
 }
 #endif /* CONFIG_BT_HFP_HF_HF_INDICATORS */
 
+static int cmd_ag_last_number(const struct shell *sh, size_t argc, char **argv)
+{
+	memset(last_number, 0, sizeof(last_number));
+	if (argc > 1) {
+		memcpy(last_number, argv[1], sizeof(last_number) - 1);
+	}
+
+	return 0;
+}
+
 #define HELP_AG_TEXTUAL_REPRESENTATION          \
 	"<[R-ready][S-send][P-processing]> "        \
 	"<id> <type> <operation> <text string>"
+
+#define HELP_AG_INDICATOR_VALUE \
+	"[<service availability 0-1> <signal strength 0-5> " \
+	"<roaming status 0-1> <battery level 0-5>]"
 
 SHELL_STATIC_SUBCMD_SET_CREATE(ag_cmds,
 	SHELL_CMD_ARG(reg, NULL, HELP_NONE, cmd_ag_reg_enable, 1, 0),
 	SHELL_CMD_ARG(connect, NULL, "<channel>", cmd_ag_connect, 2, 0),
 	SHELL_CMD_ARG(disconnect, NULL, HELP_NONE, cmd_ag_disconnect, 1, 0),
 	SHELL_CMD_ARG(sco_disconnect, NULL, HELP_NONE, cmd_ag_sco_disconnect, 1, 0),
+	SHELL_CMD_ARG(indicator_value, NULL, HELP_AG_INDICATOR_VALUE, cmd_ag_indicator_value, 1, 4),
+	SHELL_CMD_ARG(ongoing_calls, NULL, "<yes or no>", cmd_ag_ongoing_calls, 2, 0),
+	SHELL_CMD_ARG(set_ongoing_calls, NULL, "<number> <type> <status> <dir> [all]",
+		      cmd_ag_set_ongoing_calls, 5, 1),
 	SHELL_CMD_ARG(remote_incoming, NULL, "<number>", cmd_ag_remote_incoming, 2, 0),
 	SHELL_CMD_ARG(hold_incoming, NULL, "<number>", cmd_ag_hold_incoming, 2, 0),
 	SHELL_CMD_ARG(remote_reject, NULL, "<call index>", cmd_ag_remote_reject, 2, 0),
@@ -1874,6 +2164,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(ag_cmds,
 	SHELL_CMD_ARG(hf_indicator, NULL, "<indicator> <enable/disable>", cmd_ag_hf_indicator, 3,
 		      0),
 #endif /* CONFIG_BT_HFP_HF_HF_INDICATORS */
+	SHELL_CMD_ARG(last_number, NULL, "[number]", cmd_ag_last_number, 1, 1),
 	SHELL_SUBCMD_SET_END
 );
 #endif /* CONFIG_BT_HFP_AG */

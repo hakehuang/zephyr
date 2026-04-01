@@ -17,6 +17,9 @@ set_compiler_property(PROPERTY optimization_size_aggressive)
 
 set_compiler_property(PROPERTY optimization_fast)
 
+set_compiler_property(PROPERTY optimization_lto)
+set_compiler_property(PROPERTY optimization_lto_st)
+
 #######################################################
 # This section covers flags related to warning levels #
 #######################################################
@@ -68,6 +71,7 @@ set_property(TARGET compiler-cpp PROPERTY dialect_cpp17)
 set_property(TARGET compiler-cpp PROPERTY dialect_cpp2a)
 set_property(TARGET compiler-cpp PROPERTY dialect_cpp20)
 set_property(TARGET compiler-cpp PROPERTY dialect_cpp2b)
+set_property(TARGET compiler-cpp PROPERTY dialect_cpp23)
 
 # Flag for disabling strict aliasing rule in C and C++
 set_compiler_property(PROPERTY no_strict_aliasing)
@@ -75,6 +79,9 @@ set_compiler_property(PROPERTY no_strict_aliasing)
 # Extra warnings options for twister run
 set_property(TARGET compiler PROPERTY warnings_as_errors)
 set_property(TARGET asm PROPERTY warnings_as_errors)
+
+set_property(TARGET compiler PROPERTY no_deprecation_warning)
+set_property(TARGET asm PROPERTY no_deprecation_warning)
 
 # Flag for disabling exceptions in C++
 set_property(TARGET compiler-cpp PROPERTY no_exceptions)
@@ -133,6 +140,9 @@ set_property(TARGET asm PROPERTY imacros)
 # Compiler flag for disabling pointer arithmetic warnings
 set_compiler_property(PROPERTY warning_no_pointer_arithmetic)
 
+# Compiler flag for disabling misleading indentation warnings
+set_compiler_property(PROPERTY warning_no_misleading_indentation)
+
 # Compiler flags for disabling position independent code / executable
 set_compiler_property(PROPERTY no_position_independent)
 
@@ -161,3 +171,17 @@ set_compiler_property(PROPERTY include_file)
 set_compiler_property(PROPERTY cmse)
 
 set_property(TARGET asm PROPERTY cmse)
+
+# Compiler flag for not placing functions in their own sections:
+set_compiler_property(PROPERTY no_function_sections)
+
+# Compiler flag for not placing variables in their own sections:
+set_compiler_property(PROPERTY no_data_sections)
+
+# Compiler flag to enable function instrumentation
+set_compiler_property(PROPERTY func_instrumentation)
+
+# Compiler flags to enable or disable code generation of VLIW
+# (Very Long Instruction Word) instructions.
+set_compiler_property(PROPERTY generate_vliw)
+set_compiler_property(PROPERTY no_generate_vliw)

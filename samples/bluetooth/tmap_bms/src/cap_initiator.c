@@ -5,9 +5,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
+#include <zephyr/bluetooth/assigned_numbers.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/audio/audio.h>
 #include <zephyr/bluetooth/audio/bap_lc3_preset.h>
@@ -29,7 +31,8 @@
 
 NET_BUF_POOL_FIXED_DEFINE(tx_pool,
 			  (BROADCAST_ENQUEUE_COUNT * CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT),
-			  BT_ISO_SDU_BUF_SIZE(CONFIG_BT_ISO_TX_MTU), 8, NULL);
+			  BT_ISO_SDU_BUF_SIZE(CONFIG_BT_ISO_TX_MTU),
+			  CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
 
 static K_SEM_DEFINE(sem_broadcast_started, 0, 1);
 static K_SEM_DEFINE(sem_broadcast_stopped, 0, 1);
@@ -49,12 +52,12 @@ static struct bt_bap_lc3_preset broadcast_preset_48_2_1 =
 	BT_BAP_LC3_UNICAST_PRESET_48_2_1(BT_AUDIO_LOCATION_FRONT_LEFT,
 					BT_AUDIO_CONTEXT_TYPE_MEDIA);
 
-struct bt_cap_initiator_broadcast_stream_param stream_params;
-struct bt_cap_initiator_broadcast_subgroup_param subgroup_param;
-struct bt_cap_initiator_broadcast_create_param create_param;
-struct bt_cap_broadcast_source *broadcast_source;
+static struct bt_cap_initiator_broadcast_stream_param stream_params;
+static struct bt_cap_initiator_broadcast_subgroup_param subgroup_param;
+static struct bt_cap_initiator_broadcast_create_param create_param;
+static struct bt_cap_broadcast_source *broadcast_source;
 static struct k_work_delayable audio_send_work;
-struct bt_le_ext_adv *ext_adv;
+static struct bt_le_ext_adv *ext_adv;
 
 static uint8_t tmap_addata[] = {
 	BT_UUID_16_ENCODE(BT_UUID_TMAS_VAL), /* TMAS UUID */

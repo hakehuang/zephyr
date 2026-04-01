@@ -5,13 +5,11 @@
  */
 
 #include <soc.h>
-#include "am_mcu_apollo.h"
 #include <string.h>
 #include <zephyr/drivers/clock_control/clock_control_ambiq.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/usb/udc.h>
-#include <zephyr/sys/util.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/cache.h>
@@ -53,10 +51,7 @@ struct udc_ambiq_data {
 	void *usb_handle;
 	am_hal_usb_dev_speed_e usb_speed;
 	uint8_t setup[8];
-	uint8_t ctrl_pending_setup_buffer[8];
-	bool ctrl_pending_in_ack;
-	bool ctrl_pending_setup;
-	bool ctrl_setup_recv_at_status_in;
+	bool ignore_status_in;
 };
 
 struct udc_ambiq_config {
@@ -71,26 +66,6 @@ struct udc_ambiq_config {
 	void (*irq_disable_func)(const struct device *dev);
 	void (*callback_register_func)(const struct device *dev);
 };
-
-static int udc_ambiq_rx(const struct device *dev, uint8_t ep, struct net_buf *buf);
-
-static int usbd_ctrl_feed_dout(const struct device *dev, const size_t length)
-{
-	struct udc_ep_config *cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT);
-	struct net_buf *buf;
-
-	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, length);
-	if (buf == NULL) {
-		return -ENOMEM;
-	}
-
-	k_fifo_put(&cfg->fifo, buf);
-	if (length) {
-		udc_ambiq_rx(dev, cfg->addr, buf);
-	}
-
-	return 0;
-}
 
 static int udc_ambiq_tx(const struct device *dev, uint8_t ep, struct net_buf *buf)
 {
@@ -108,6 +83,9 @@ static int udc_ambiq_tx(const struct device *dev, uint8_t ep, struct net_buf *bu
 	if (buf == NULL) {
 		status = am_hal_usb_ep_xfer(priv->usb_handle, ep, NULL, 0);
 	} else {
+		if (!IS_ENABLED(CONFIG_UDC_AMBIQ_PIO_MODE) && (ep != USB_CONTROL_EP_IN)) {
+			sys_cache_data_flush_range(buf->data, buf->size);
+		}
 		status = am_hal_usb_ep_xfer(priv->usb_handle, ep, buf->data, buf->len);
 	}
 
@@ -124,7 +102,6 @@ static int udc_ambiq_rx(const struct device *dev, uint8_t ep, struct net_buf *bu
 {
 	struct udc_ambiq_data *priv = udc_get_private(dev);
 	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
-	struct udc_ep_config *cfg = udc_get_ep_cfg(dev, USB_CONTROL_EP_OUT);
 	uint32_t status;
 	uint16_t rx_size = buf->size;
 
@@ -134,9 +111,20 @@ static int udc_ambiq_rx(const struct device *dev, uint8_t ep, struct net_buf *bu
 	}
 	udc_ep_set_busy(ep_cfg, true);
 
-	/* Make sure that OUT transaction size triggered doesn't exceed EP's MPS */
-	if ((ep != USB_CONTROL_EP_OUT) && (cfg->mps < rx_size)) {
-		rx_size = cfg->mps;
+	/*
+	 * Make sure that OUT transaction size triggered doesn't exceed EP's MPS,
+	 * as the USB IP has no way to detect end on transaction when last packet
+	 * is not a short packet. Except for UDC_AMBIQ_DMA1_MODE, where such
+	 * detection is available.
+	 */
+	if (!IS_ENABLED(CONFIG_UDC_AMBIQ_DMA1_MODE) && (ep != USB_CONTROL_EP_OUT) &&
+	    (ep_cfg->mps < rx_size)) {
+		rx_size = ep_cfg->mps;
+	}
+
+	/* Cache management if cache and DMA is enabled */
+	if (!IS_ENABLED(CONFIG_UDC_AMBIQ_PIO_MODE) && (ep != USB_CONTROL_EP_OUT)) {
+		sys_cache_data_invd_range(buf->data, buf->size);
 	}
 
 	status = am_hal_usb_ep_xfer(priv->usb_handle, ep, buf->data, rx_size);
@@ -157,8 +145,9 @@ static void udc_ambiq_evt_callback(const struct device *dev, am_hal_usb_dev_even
 	case AM_HAL_USB_DEV_EVT_BUS_RESET:
 		/* enable usb bus interrupts */
 		am_hal_usb_intr_usb_enable(priv->usb_handle,
-					   USB_CFG2_SOFE_Msk | USB_CFG2_ResumeE_Msk |
-						   USB_CFG2_SuspendE_Msk | USB_CFG2_ResetE_Msk);
+					   IF_ENABLED(CONFIG_UDC_ENABLE_SOF, (USB_CFG2_SOFE_Msk |))
+					   USB_CFG2_ResumeE_Msk |
+					   USB_CFG2_SuspendE_Msk | USB_CFG2_ResetE_Msk);
 		/* init the endpoint */
 		am_hal_usb_ep_init(priv->usb_handle, 0, 0, EP0_MPS);
 		/* Set USB device speed to HAL */
@@ -175,7 +164,7 @@ static void udc_ambiq_evt_callback(const struct device *dev, am_hal_usb_dev_even
 		udc_submit_event(dev, UDC_EVT_RESUME, 0);
 		break;
 	case AM_HAL_USB_DEV_EVT_SOF:
-		udc_submit_event(dev, UDC_EVT_SOF, 0);
+		udc_submit_sof_event(dev);
 		break;
 	case AM_HAL_USB_DEV_EVT_SUSPEND:
 		/* Handle USB Suspend event, then set device state to suspended */
@@ -194,26 +183,12 @@ static void udc_ambiq_ep0_setup_callback(const struct device *dev, uint8_t *usb_
 	struct udc_ambiq_event evt = {.type = UDC_AMBIQ_EVT_HAL_SETUP};
 	struct udc_ambiq_data *priv = udc_get_private(dev);
 
-	/* Defer Setup Packet that arrives when we are waiting for
-	 * status stage for OUT data control transfer to be completed
-	 */
-	if (priv->ctrl_pending_in_ack) {
-		priv->ctrl_pending_setup = true;
-		memcpy(priv->ctrl_pending_setup_buffer, usb_setup, 8);
-		return;
-	}
-
-	/* Check whether we received SETUP packet during OUT_ACK (a.k.a STATUS_IN)
-	 * state. If so, it might be inversion caused by register reading sequence.
-	 * Raise flag accordingly and handle later.
-	 */
-	priv->ctrl_setup_recv_at_status_in = udc_ctrl_stage_is_status_in(dev);
 	memcpy(priv->setup, usb_setup, sizeof(struct usb_setup_packet));
 	k_msgq_put(&drv_msgq, &evt, K_NO_WAIT);
 }
 
 static void udc_ambiq_ep_xfer_complete_callback(const struct device *dev, uint8_t ep_addr,
-						uint16_t xfer_len, am_hal_usb_xfer_code_e code,
+						uint32_t xfer_len, am_hal_usb_xfer_code_e code,
 						void *param)
 {
 	struct net_buf *buf;
@@ -255,7 +230,6 @@ static enum udc_bus_speed udc_ambiq_device_speed(const struct device *dev)
 static int udc_ambiq_ep_enqueue(const struct device *dev, struct udc_ep_config *ep_cfg,
 				struct net_buf *buf)
 {
-	struct udc_ambiq_data *priv = udc_get_private(dev);
 	struct udc_ambiq_event evt = {
 		.ep = ep_cfg->addr,
 		.type = UDC_AMBIQ_EVT_XFER,
@@ -263,10 +237,14 @@ static int udc_ambiq_ep_enqueue(const struct device *dev, struct udc_ep_config *
 
 	LOG_DBG("%p enqueue %x %p", dev, ep_cfg->addr, buf);
 	udc_buf_put(ep_cfg, buf);
-	if (ep_cfg->addr == USB_CONTROL_EP_IN && buf->len == 0 && priv->ctrl_pending_in_ack) {
-		priv->ctrl_pending_in_ack = false;
-		udc_ambiq_ep_xfer_complete_callback(dev, USB_CONTROL_EP_IN, 0, 0, NULL);
-		return 0;
+
+	if (ep_cfg->addr == USB_CONTROL_EP_OUT) {
+		struct udc_buf_info *bi = udc_get_buf_info(buf);
+
+		if (bi->setup) {
+			/* SETUP can be received without any action */
+			return 0;
+		}
 	}
 
 	if (!ep_cfg->stat.halted) {
@@ -280,14 +258,10 @@ static int udc_ambiq_ep_dequeue(const struct device *dev, struct udc_ep_config *
 {
 	unsigned int lock_key;
 	struct udc_ambiq_data *priv = udc_get_private(dev);
-	struct net_buf *buf;
 
 	lock_key = irq_lock();
 
-	buf = udc_buf_get_all(ep_cfg);
-	if (buf) {
-		udc_submit_ep_event(dev, buf, -ECONNABORTED);
-	}
+	udc_ep_cancel_queued(dev, ep_cfg);
 
 	udc_ep_set_busy(ep_cfg, false);
 	am_hal_usb_ep_state_reset(priv->usb_handle, ep_cfg->addr);
@@ -474,11 +448,7 @@ static int udc_ambiq_disable(const struct device *dev)
 static void udc_ambiq_usb_isr(const struct device *dev)
 {
 	struct udc_ambiq_data *priv = udc_get_private(dev);
-	uint32_t int_status[3];
-
-	am_hal_usb_intr_status_get(priv->usb_handle, &int_status[0], &int_status[1],
-				   &int_status[2]);
-	am_hal_usb_interrupt_service(priv->usb_handle, int_status[0], int_status[1], int_status[2]);
+	am_hal_usb_handle_isr(priv->usb_handle);
 }
 
 static int usb_power_rails_set(const struct device *dev, bool on)
@@ -517,6 +487,68 @@ static int usb_power_rails_set(const struct device *dev, bool on)
 	return 0;
 }
 
+#if CONFIG_SOC_SERIES_APOLLO5X
+static int init_apollo5x(const struct udc_ambiq_data *priv)
+{
+	uint32_t am_ret = AM_HAL_STATUS_SUCCESS;
+	am_hal_clkmgr_board_info_t board;
+	am_hal_usb_phyclksrc_e phyclksrc;
+
+	/* Decide PHY clock source according to USB speed and board configuration*/
+	am_hal_clkmgr_board_info_get(&board);
+	if (priv->usb_speed == AM_HAL_USB_SPEED_FULL) {
+		phyclksrc = AM_HAL_USB_PHYCLKSRC_HFRC_24M;
+	} else if (board.sXtalHs.ui32XtalHsFreq == 48000000) {
+		phyclksrc = AM_HAL_USB_PHYCLKSRC_XTAL_HS_DIV2;
+	} else if (board.sXtalHs.ui32XtalHsFreq == 24000000) {
+		phyclksrc = AM_HAL_USB_PHYCLKSRC_XTAL_HS;
+	} else if (board.ui32ExtRefClkFreq == 48000000) {
+		phyclksrc = AM_HAL_USB_PHYCLKSRC_EXTREFCLK;
+	} else if (board.ui32ExtRefClkFreq == 24000000) {
+		phyclksrc = AM_HAL_USB_PHYCLKSRC_EXTREFCLK_DIV2;
+	} else {
+		phyclksrc = AM_HAL_USB_PHYCLKSRC_PLL;
+	}
+
+	if (phyclksrc == AM_HAL_USB_PHYCLKSRC_PLL) {
+		am_ret = am_hal_clkmgr_clock_config(AM_HAL_CLKMGR_CLK_ID_SYSPLL, 24000000, NULL);
+		if (am_ret != AM_HAL_STATUS_SUCCESS) {
+			LOG_WRN("Unable to configure SYSPLL for USB. Fallback to HFRC clock "
+				"source");
+			phyclksrc = AM_HAL_USB_PHYCLKSRC_HFRC_24M;
+		}
+	}
+
+	am_hal_usb_set_phy_clk_source(priv->usb_handle, phyclksrc);
+	am_hal_usb_phy_clock_enable(priv->usb_handle, true, priv->usb_speed);
+
+	return 0;
+}
+#endif
+
+#if CONFIG_UDC_AMBIQ_DEB_ENABLE
+static void init_double_buffers(const struct udc_ambiq_data *priv)
+{
+	uint32_t mask;
+
+	mask = CONFIG_UDC_AMBIQ_DEB_ENABLE & 0xFFFF;
+	while (mask) {
+		uint32_t ep = find_lsb_set(mask);
+
+		am_hal_usb_enable_ep_double_buffer(priv->usb_handle, ep, AM_HAL_USB_OUT_DIR, true);
+		mask &= ~(1U << (ep - 1));
+	}
+
+	mask = (CONFIG_UDC_AMBIQ_DEB_ENABLE >> 16) & 0xFFFF;
+	while (mask) {
+		uint32_t ep = find_lsb_set(mask);
+
+		am_hal_usb_enable_ep_double_buffer(priv->usb_handle, ep, AM_HAL_USB_IN_DIR, true);
+		mask &= ~(1U << (ep - 1));
+	}
+}
+#endif
+
 static int udc_ambiq_init(const struct device *dev)
 {
 	struct udc_ambiq_data *priv = udc_get_private(dev);
@@ -543,10 +575,31 @@ static int udc_ambiq_init(const struct device *dev)
 	am_hal_usb_hardware_unreset();
 	/* Release USB PHY reset */
 	am_hal_usb_disable_phy_reset_override();
+
+#if CONFIG_SOC_SERIES_APOLLO5X
+	ret = init_apollo5x(priv);
+	if (ret) {
+		return ret;
+	}
+#endif
+
+#if CONFIG_UDC_AMBIQ_DEB_ENABLE
+	init_double_buffers(priv);
+#endif
+
 	/* Set USB Speed */
 	am_hal_usb_set_dev_speed(priv->usb_handle, priv->usb_speed);
 	/* Enable USB interrupt */
 	am_hal_usb_intr_usb_enable(priv->usb_handle, USB_INTRUSB_Reset_Msk);
+	/* Configure DMA Modes */
+#if CONFIG_UDC_AMBIQ_DMA1_MODE
+	am_hal_usb_set_xfer_mode(priv->usb_handle, AM_HAL_USB_OUT_DMA_MODE_1);
+	am_hal_usb_set_xfer_mode(priv->usb_handle, AM_HAL_USB_IN_DMA_MODE_1);
+#elif CONFIG_UDC_AMBIQ_DMA0_MODE
+	am_hal_usb_set_xfer_mode(priv->usb_handle, AM_HAL_USB_OUT_DMA_MODE_0);
+	am_hal_usb_set_xfer_mode(priv->usb_handle, AM_HAL_USB_IN_DMA_MODE_0);
+#endif
+
 	/* Enable Control Endpoints */
 	if (udc_ep_enable_internal(dev, USB_CONTROL_EP_OUT, USB_EP_TYPE_CONTROL, EP0_MPS, 0)) {
 		LOG_ERR("Failed to enable control endpoint");
@@ -583,6 +636,10 @@ static int udc_ambiq_shutdown(const struct device *dev)
 	cfg->irq_disable_func(dev);
 	/* Assert USB PHY reset */
 	am_hal_usb_enable_phy_reset_override();
+#if CONFIG_SOC_SERIES_APOLLO5X
+	/* Release USB PHY Clock*/
+	am_hal_usb_phy_clock_enable(priv->usb_handle, false, priv->usb_speed);
+#endif
 	/* Disable the USB power rails */
 	ret = usb_power_rails_set(dev, false);
 	if (ret) {
@@ -609,40 +666,23 @@ static void udc_ambiq_unlock(const struct device *dev)
 
 static void ambiq_handle_evt_setup(const struct device *dev)
 {
+	struct usb_setup_packet *setup;
 	struct udc_ambiq_data *priv = udc_get_private(dev);
-	struct net_buf *buf;
-	int err;
 
-	/* Create network buffer for SETUP packet and pass into UDC framework */
-	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, sizeof(struct usb_setup_packet));
-	if (buf == NULL) {
-		LOG_ERR("Failed to allocate for setup");
-		return;
-	}
-	net_buf_add_mem(buf, priv->setup, sizeof(priv->setup));
-	udc_ep_buf_set_setup(buf);
-	LOG_HEXDUMP_DBG(buf->data, buf->len, "setup");
-
-	/* Update to next stage of control transfer */
-	udc_ctrl_update_stage(dev, buf);
-
-	if (udc_ctrl_stage_is_data_out(dev)) {
-		/*  Allocate and feed buffer for data OUT stage */
-		LOG_DBG("s:%p|feed for -out-", buf);
-		err = usbd_ctrl_feed_dout(dev, udc_data_stage_length(buf));
-		priv->ctrl_pending_in_ack = true;
-		if (err == -ENOMEM) {
-			udc_submit_ep_event(dev, buf, err);
-		}
-	} else if (udc_ctrl_stage_is_data_in(dev)) {
-		/* Submit event for data IN stage */
-		LOG_DBG("s:%p|feed for -in-status", buf);
-		udc_ctrl_submit_s_in_status(dev);
+	setup = (struct usb_setup_packet *)priv->setup;
+	if (USB_REQTYPE_GET_DIR(setup->bmRequestType) == USB_REQTYPE_DIR_TO_DEVICE &&
+	    setup->wLength) {
+		/* Status IN after Data OUT is automatically handled.
+		 * This should not be the case because it does not allow USB
+		 * stack to stall Status stage in case the data is invalid
+		 * (determined by handler).
+		 */
+		priv->ignore_status_in = true;
 	} else {
-		/* Submit event for no-data stage */
-		LOG_DBG("s:%p|feed >setup", buf);
-		udc_ctrl_submit_s_status(dev);
+		priv->ignore_status_in = false;
 	}
+
+	udc_setup_received(dev, priv->setup);
 }
 
 static inline void ambiq_handle_evt_dout(const struct device *dev, struct udc_ep_config *const cfg)
@@ -660,20 +700,7 @@ static inline void ambiq_handle_evt_dout(const struct device *dev, struct udc_ep
 	udc_ep_set_busy(cfg, false);
 
 	/* Handle transfer complete event */
-	if (cfg->addr == USB_CONTROL_EP_OUT) {
-		if (udc_ctrl_stage_is_status_out(dev)) {
-			udc_ctrl_update_stage(dev, buf);
-			udc_ctrl_submit_status(dev, buf);
-		} else {
-			udc_ctrl_update_stage(dev, buf);
-		}
-
-		if (udc_ctrl_stage_is_status_in(dev)) {
-			udc_ctrl_submit_s_out_status(dev, buf);
-		}
-	} else {
-		udc_submit_ep_event(dev, buf, 0);
-	}
+	udc_submit_ep_event(dev, buf, 0);
 }
 
 static void ambiq_handle_zlp_tx(const struct device *dev, struct udc_ep_config *const cfg)
@@ -683,10 +710,7 @@ static void ambiq_handle_zlp_tx(const struct device *dev, struct udc_ep_config *
 
 static void ambiq_handle_evt_din(const struct device *dev, struct udc_ep_config *const cfg)
 {
-	struct udc_ambiq_data *priv = udc_get_private(dev);
-	struct udc_data *data = dev->data;
 	struct net_buf *buf;
-	bool udc_ambiq_rx_status_in_completed = false;
 
 	/* Clear endpoint busy status */
 	udc_ep_set_busy(cfg, false);
@@ -710,47 +734,7 @@ static void ambiq_handle_evt_din(const struct device *dev, struct udc_ep_config 
 	LOG_DBG("DataIn ep 0x%02x len %u", cfg->addr, buf->size);
 
 	/* Handle transfer complete event */
-	if (cfg->addr == USB_CONTROL_EP_IN) {
-		if (udc_ctrl_stage_is_status_in(dev) || udc_ctrl_stage_is_no_data(dev)) {
-			if (data->caps.out_ack == 0) {
-				/* Status stage finished, notify upper layer */
-				udc_ctrl_submit_status(dev, buf);
-			}
-
-			if (udc_ctrl_stage_is_status_in(dev)) {
-				udc_ambiq_rx_status_in_completed = true;
-			}
-		}
-
-		if (priv->ctrl_setup_recv_at_status_in && (buf->len == 0)) {
-			priv->ctrl_setup_recv_at_status_in = false;
-			net_buf_unref(buf);
-			return;
-		}
-		priv->ctrl_setup_recv_at_status_in = false;
-		/* Update to next stage of control transfer */
-		udc_ctrl_update_stage(dev, buf);
-
-		if (((data->caps.out_ack == false) && udc_ctrl_stage_is_status_out(dev)) ||
-		    ((data->caps.out_ack == true) && (data->stage == CTRL_PIPE_STAGE_SETUP))) {
-			/*
-			 * IN transfer finished, release buffer,
-			 * control OUT buffer should be already fed.
-			 */
-			net_buf_unref(buf);
-		}
-
-		/*
-		 * Trigger deferred SETUP that was hold back if we are
-		 * waiting for DATA_OUT status stage to be completed
-		 */
-		if (udc_ambiq_rx_status_in_completed && priv->ctrl_pending_setup) {
-			priv->ctrl_pending_setup = false;
-			udc_ambiq_ep0_setup_callback(dev, priv->ctrl_pending_setup_buffer);
-		}
-	} else {
-		udc_submit_ep_event(dev, buf, 0);
-	}
+	udc_submit_ep_event(dev, buf, 0);
 }
 
 static void udc_event_xfer(const struct device *dev, struct udc_ep_config *const cfg)
@@ -761,6 +745,20 @@ static void udc_event_xfer(const struct device *dev, struct udc_ep_config *const
 	if (buf == NULL) {
 		LOG_ERR("No buffer for ep 0x%02x", cfg->addr);
 		return;
+	}
+
+	if (cfg->addr == USB_CONTROL_EP_IN) {
+		struct udc_buf_info *bi = udc_get_buf_info(buf);
+
+		if (bi->status) {
+			struct udc_ambiq_data *priv = udc_get_private(dev);
+
+			if (priv->ignore_status_in) {
+				buf = udc_buf_get(cfg);
+				udc_submit_ep_event(dev, buf, 0);
+				return;
+			}
+		}
 	}
 
 	if (USB_EP_DIR_IS_IN(cfg->addr)) {
@@ -912,7 +910,7 @@ static const struct udc_api udc_ambiq_api = {
 	}                                                                                          \
                                                                                                    \
 	static void udc_ambiq_ep_xfer_complete_callback_##n(                                       \
-		uint8_t ep_addr, uint16_t xfer_len, am_hal_usb_xfer_code_e code, void *param)      \
+		uint8_t ep_addr, uint32_t xfer_len, am_hal_usb_xfer_code_e code, void *param)      \
 	{                                                                                          \
 		udc_ambiq_ep_xfer_complete_callback(DEVICE_DT_INST_GET(n), ep_addr, xfer_len,      \
 						    code, param);                                  \
@@ -927,7 +925,8 @@ static const struct udc_api udc_ambiq_api = {
 		am_hal_usb_register_ep0_setup_received_callback(priv->usb_handle,                  \
 								udc_ambiq_ep0_setup_callback_##n); \
 		am_hal_usb_register_ep_xfer_complete_callback(                                     \
-			priv->usb_handle, udc_ambiq_ep_xfer_complete_callback_##n);                \
+			priv->usb_handle, (am_hal_usb_ep_xfer_complete_callback)                   \
+						  udc_ambiq_ep_xfer_complete_callback_##n);        \
 	}                                                                                          \
 	static void udc_ambiq_thread_##n(void *dev, void *arg1, void *arg2)                        \
 	{                                                                                          \

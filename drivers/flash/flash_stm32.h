@@ -41,12 +41,12 @@ struct flash_stm32_priv {
 #endif
 
 #if defined(CONFIG_SOC_SERIES_STM32H5X)
-/* FLASH register names differ for this serie */
+/* FLASH register names differ for this series */
 #define FLASH_NSSR_BSY FLASH_SR_BSY
 #define OPTR OPTCR
 #endif /* CONFIG_SOC_SERIES_STM32H5X */
 
-/* Register mapping for the stm32H7RS serie (single bank)*/
+/* Register mapping for the stm32H7RS series (single bank)*/
 #if defined(CONFIG_SOC_SERIES_STM32H7RSX)
 #define FLASH_NB_32BITWORD_IN_FLASHWORD 4 /* 128 bits */
 #define CR1 CR
@@ -61,6 +61,7 @@ struct flash_stm32_priv {
 #if defined(FLASH_NSSR_NSBSY) || defined(FLASH_NSSR_BSY) /* For mcu w. TZ in non-secure mode */
 #define FLASH_SECURITY_NS
 #define FLASH_STM32_SR		NSSR
+#define FLASH_STM32_CCR		FLASH_STM32_SR
 #elif defined(FLASH_SECSR_SECBSY)	/* For mcu w. TZ  in secured mode */
 #error Flash is not supported in secure mode
 #define FLASH_SECURITY_SEC
@@ -69,12 +70,15 @@ struct flash_stm32_priv {
 					 *  secured or non-secured mode
 					 */
 #define FLASH_STM32_SR		SR
+#if defined(CONFIG_SOC_SERIES_STM32C5X)
+#define FLASH_STM32_CCR		CCR
+#else /* CONFIG_SOC_SERIES_STM32C5X */
+#define FLASH_STM32_CCR		FLASH_STM32_SR
+#endif /* CONFIG_SOC_SERIES_STM32C5X */
 #endif
-
 
 #define FLASH_STM32_PRIV(dev) ((struct flash_stm32_priv *)((dev)->data))
 #define FLASH_STM32_REGS(dev) (FLASH_STM32_PRIV(dev)->regs)
-
 
 /* Redefinitions of flags and masks to harmonize stm32 series: */
 #if defined(CONFIG_SOC_SERIES_STM32U5X)
@@ -88,6 +92,18 @@ struct flash_stm32_priv {
 #define FLASH_STM32_NSPNB_POS FLASH_NSCR_PNB_Pos
 #define FLASH_STM32_NSPNB FLASH_NSCR_PNB
 #define FLASH_STM32_NSSTRT FLASH_NSCR_STRT
+#define FLASH_PAGE_SIZE_128_BITS FLASH_PAGE_SIZE
+#elif defined(CONFIG_SOC_SERIES_STM32U3X)
+#define FLASH_STM32_NSLOCK FLASH_CR_LOCK
+#define FLASH_STM32_DBANK FLASH_OPTR_DUALBANK
+#define FLASH_STM32_NSPG FLASH_CR_PG
+#define FLASH_STM32_NSBKER_MSK FLASH_CR_BKER_Msk
+#define FLASH_STM32_NSBKER FLASH_CR_BKER
+#define FLASH_STM32_NSPER FLASH_CR_PER
+#define FLASH_STM32_NSPNB_MSK FLASH_CR_PNB_Msk
+#define FLASH_STM32_NSPNB_POS FLASH_CR_PNB_Pos
+#define FLASH_STM32_NSPNB FLASH_CR_PNB
+#define FLASH_STM32_NSSTRT FLASH_CR_STRT
 #define FLASH_PAGE_SIZE_128_BITS FLASH_PAGE_SIZE
 #elif defined(CONFIG_SOC_SERIES_STM32H5X)
 #define FLASH_OPTR_SWAP_BANK FLASH_OPTCR_SWAP_BANK
@@ -131,7 +147,12 @@ struct flash_stm32_priv {
 #define FLASH_STM32_NSPNB_POS FLASH_NSCR1_PNB_Pos
 #define FLASH_STM32_NSPNB FLASH_NSCR1_PNB
 #define FLASH_STM32_NSSTRT FLASH_NSCR1_STRT
+/* STM32WBA6x has DUAL bank flash */
+#if defined(FLASH_OPTR_DUAL_BANK)
+#define FLASH_STM32_DBANK FLASH_OPTR_DUAL_BANK
+#endif /* FLASH_OPTR_DUAL_BANK */
 #endif /* CONFIG_SOC_SERIES_STM32U5X */
+
 #if defined(FLASH_OPTR_DBANK)
 #define FLASH_STM32_DBANK FLASH_OPTR_DBANK
 #endif /* FLASH_OPTR_DBANK */
@@ -142,6 +163,8 @@ struct flash_stm32_priv {
 #else
 #define FLASH_STM32_SR_BUSY	(FLASH_SR_BSY1)
 #endif /* defined(FLASH_FLAG_BSY2) */
+#elif defined(CONFIG_STM32_HAL2)
+#define FLASH_STM32_SR_BUSY	LL_FLASH_FLAG_BSY
 #else
 #define FLASH_STM32_SR_BUSY	(FLASH_FLAG_BSY)
 #endif
@@ -239,6 +262,9 @@ struct flash_stm32_priv {
 
 #endif /* !defined(CONFIG_SOC_SERIES_STM32G0X) */
 
+#if defined(CONFIG_SOC_SERIES_STM32C5X)
+#define FLASH_STM32_SR_ERRORS	LL_FLASH_FLAG_ERRORS_ALL
+#else /* CONFIG_SOC_SERIES_STM32C5X */
 #define FLASH_STM32_SR_ERRORS  (FLASH_STM32_SR_OPERR |			\
 				FLASH_STM32_SR_PGERR |			\
 				FLASH_STM32_SR_PROGERR |		\
@@ -250,6 +276,7 @@ struct flash_stm32_priv {
 				FLASH_STM32_SR_FASTERR |		\
 				FLASH_STM32_SR_RDERR |			\
 				FLASH_STM32_SR_PGPERR)
+#endif /* CONFIG_SOC_SERIES_STM32C5X */
 
 #define FLASH_STM32_RDP0 0xAA
 #define FLASH_STM32_RDP2 0xCC
@@ -324,12 +351,12 @@ int flash_stm32_block_erase_loop(const struct device *dev,
 
 int flash_stm32_wait_flash_idle(const struct device *dev);
 
-int flash_stm32_option_bytes_lock(const struct device *dev, bool enable);
-
 uint32_t flash_stm32_option_bytes_read(const struct device *dev);
 
 int flash_stm32_option_bytes_write(const struct device *dev, uint32_t mask,
 				   uint32_t value);
+
+int flash_stm32_cr_lock(const struct device *dev, bool enable);
 
 #ifdef CONFIG_SOC_SERIES_STM32WBX
 int flash_stm32_check_status(const struct device *dev);

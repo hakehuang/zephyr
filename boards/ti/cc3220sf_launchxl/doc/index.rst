@@ -32,7 +32,7 @@ Hardware
 
 The CC3220SF SoC has two MCUs:
 
-#. Applications MCU - an ARM |reg| Cortex |reg|-M4 Core at 80 MHz, with 256Kb RAM,
+#. Applications MCU - an ARM® Cortex®-M4 Core at 80 MHz, with 256Kb RAM,
    and access to external serial 4MB flash with bootloader and peripheral
    drivers in ROM.
 
@@ -57,6 +57,8 @@ accessible through the BoosterPack, are not currently supported.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 TI officially supports development on the CC3220SF using the TI
 `CC3220 SDK`_ on Windows and Linux using TI tools: Code Composer

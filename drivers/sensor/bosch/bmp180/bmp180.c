@@ -105,15 +105,6 @@ static int bmp180_attr_set(const struct device *dev, enum sensor_channel chan,
 {
 	int ret;
 
-#ifdef CONFIG_PM_DEVICE
-	enum pm_device_state state;
-
-	(void)pm_device_state_get(dev, &state);
-	if (state != PM_DEVICE_STATE_ACTIVE) {
-		return -EBUSY;
-	}
-#endif /* CONFIG_PM_DEVICE */
-
 	switch (attr) {
 #ifdef CONFIG_BMP180_OSR_RUNTIME
 	case SENSOR_ATTR_OVERSAMPLING:
@@ -137,9 +128,9 @@ static inline int bmp180_conv_ready(const struct device *dev, uint32_t time_wait
 	k_sleep(K_MSEC(time_wait_ms));
 
 	/*
-	 * for the first while read 'delay+1' ms which is the convension time
+	 * for the first while read 'delay+1' ms which is the conversion time
 	 * descripted in the data-sheet in case the register not yet ready wait again
-	 * and return error if retry exhaused
+	 * and return error if retry exhausted
 	 */
 	while (true) {
 		k_sleep(K_MSEC(1));
@@ -250,15 +241,6 @@ static int bmp180_sample_fetch(const struct device *dev,
 	int ret = 0;
 
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL);
-
-#ifdef CONFIG_PM_DEVICE
-	enum pm_device_state state;
-
-	(void)pm_device_state_get(dev, &state);
-	if (state != PM_DEVICE_STATE_ACTIVE) {
-		return -EBUSY;
-	}
-#endif /* CONFIG_PM_DEVICE */
 
 	pm_device_busy_set(dev);
 

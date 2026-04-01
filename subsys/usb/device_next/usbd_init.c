@@ -163,7 +163,7 @@ static int init_configuration_inst(struct usbd_context *const uds_ctx,
 			}
 
 			class_ep_bm = 0;
-			LOG_INF("interface %u alternate %u",
+			LOG_DBG("interface %u alternate %u",
 				ifd->bInterfaceNumber, ifd->bAlternateSetting);
 		}
 
@@ -175,7 +175,7 @@ static int init_configuration_inst(struct usbd_context *const uds_ctx,
 				return ret;
 			}
 
-			LOG_INF("\tep 0x%02x mps 0x%04x interface ep-bm 0x%08x",
+			LOG_DBG("\tep 0x%02x mps 0x%04x interface ep-bm 0x%08x",
 				ed->bEndpointAddress,
 				sys_le16_to_cpu(ed->wMaxPacketSize),
 				class_ep_bm);
@@ -191,7 +191,7 @@ static int init_configuration_inst(struct usbd_context *const uds_ctx,
 	*nif = tmp_nif;
 	c_nd->ep_active |= class_ep_bm;
 
-	LOG_INF("Instance iface-bm 0x%08x ep-bm 0x%08x",
+	LOG_DBG("Instance iface-bm 0x%08x ep-bm 0x%08x",
 		c_nd->iface_bm, c_nd->ep_active);
 
 	return 0;
@@ -228,7 +228,7 @@ static int init_configuration(struct usbd_context *const uds_ctx,
 			return ret;
 		}
 
-		LOG_INF("Init class node %p, descriptor length %zu",
+		LOG_DBG("Init class node %p, descriptor length %zu",
 			c_nd->c_data, usbd_class_desc_len(c_nd->c_data, speed));
 		cfg_len += usbd_class_desc_len(c_nd->c_data, speed);
 	}
@@ -281,18 +281,20 @@ int usbd_init_configurations(struct usbd_context *const uds_ctx)
 
 	usbd_init_update_fs_mps0(uds_ctx);
 
-	SYS_SLIST_FOR_EACH_CONTAINER(&uds_ctx->hs_configs, cfg_nd, node) {
-		int ret;
+	if (USBD_SUPPORTS_HIGH_SPEED) {
+		SYS_SLIST_FOR_EACH_CONTAINER(&uds_ctx->hs_configs, cfg_nd, node) {
+			int ret;
 
-		ret = init_configuration(uds_ctx, USBD_SPEED_HS, cfg_nd);
-		if (ret) {
-			LOG_ERR("Failed to init HS configuration %u",
-				usbd_config_get_value(cfg_nd));
-			return ret;
+			ret = init_configuration(uds_ctx, USBD_SPEED_HS, cfg_nd);
+			if (ret) {
+				LOG_ERR("Failed to init HS configuration %u",
+					usbd_config_get_value(cfg_nd));
+				return ret;
+			}
+
+			LOG_DBG("HS bNumConfigurations %u",
+				usbd_get_num_configs(uds_ctx, USBD_SPEED_HS));
 		}
-
-		LOG_INF("HS bNumConfigurations %u",
-			usbd_get_num_configs(uds_ctx, USBD_SPEED_HS));
 	}
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&uds_ctx->fs_configs, cfg_nd, node) {
@@ -305,7 +307,7 @@ int usbd_init_configurations(struct usbd_context *const uds_ctx)
 			return ret;
 		}
 
-		LOG_INF("FS bNumConfigurations %u",
+		LOG_DBG("FS bNumConfigurations %u",
 			usbd_get_num_configs(uds_ctx, USBD_SPEED_FS));
 	}
 

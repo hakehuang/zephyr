@@ -57,6 +57,8 @@ Supported Features
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Use the following configuration to run basic Zephyr applications and
 kernel tests on LS1046A RDB board. For example, with the :zephyr:code-sample:`synchronization` sample:
 
@@ -181,8 +183,7 @@ Debugging
 LS1046A RDB board includes one JTAG connector on board, connect it to
 CodeWarrior TAP for debugging.
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 References
 ==========

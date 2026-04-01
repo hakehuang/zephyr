@@ -6,9 +6,14 @@ zephyr_sources(
   dec.c
   hex.c
   rb.c
+  set.c
   timeutil.c
   bitarray.c
+  bitmask.c
   )
+
+zephyr_library_sources_ifdef(CONFIG_GETOPT getopt/getopt.c getopt/getopt_common.c)
+zephyr_library_sources_ifdef(CONFIG_GETOPT_LONG getopt/getopt_long.c)
 
 zephyr_sources_ifdef(CONFIG_ONOFF onoff.c)
 
@@ -28,3 +33,5 @@ zephyr_library_include_directories(
   ${ZEPHYR_BASE}/kernel/include
   ${ZEPHYR_BASE}/arch/${ARCH}/include
 )
+
+zephyr_sources_ifdef(CONFIG_LINKER_LAST_SECTION_ID last_section_id.c)

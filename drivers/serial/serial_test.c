@@ -31,6 +31,7 @@ struct serial_vnd_data {
 	void *callback_data;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	uart_irq_callback_user_data_t irq_isr;
+	void *irq_isr_user_data;
 	bool irq_rx_enabled;
 	bool irq_tx_enabled;
 #endif
@@ -80,7 +81,7 @@ static void irq_process(const struct device *dev)
 			LOG_ERR("no isr registered");
 			break;
 		}
-		data->irq_isr(dev, NULL);
+		data->irq_isr(dev, data->irq_isr_user_data);
 	};
 }
 
@@ -136,15 +137,18 @@ static int irq_tx_ready(const struct device *dev)
 	return available;
 }
 
+static int irq_is_pending(const struct device *dev)
+{
+	struct serial_vnd_data *data = dev->data;
+
+	return (data->irq_rx_enabled && !ring_buf_is_empty(data->read_queue)) ||
+	       (data->irq_tx_enabled && ring_buf_space_get(data->written) > 0) ? 1 : 0;
+}
+
 static void irq_callback_set(const struct device *dev, uart_irq_callback_user_data_t cb,
 			     void *user_data)
 {
 	struct serial_vnd_data *data = dev->data;
-
-	/* Not implemented. Ok because `user_data` is always NULL in the current
-	 * implementation of core UART API.
-	 */
-	__ASSERT_NO_MSG(user_data == NULL);
 
 #if defined(CONFIG_UART_EXCLUSIVE_API_CALLBACKS) && defined(CONFIG_UART_ASYNC_API)
 	if (data->read_buf) {
@@ -155,7 +159,13 @@ static void irq_callback_set(const struct device *dev, uart_irq_callback_user_da
 #endif
 
 	data->irq_isr = cb;
+	data->irq_isr_user_data = user_data;
 	LOG_DBG("callback set");
+}
+
+static int irq_update(const struct device *dev)
+{
+	return 1;
 }
 
 static int fifo_fill(const struct device *dev, const uint8_t *tx_data, int size)
@@ -436,12 +446,14 @@ static DEVICE_API(uart, serial_vnd_api) = {
 #endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_callback_set = irq_callback_set,
+	.irq_update = irq_update,
 	.irq_rx_enable = irq_rx_enable,
 	.irq_rx_disable = irq_rx_disable,
 	.irq_rx_ready = irq_rx_ready,
 	.irq_tx_enable = irq_tx_enable,
 	.irq_tx_disable = irq_tx_disable,
 	.irq_tx_ready = irq_tx_ready,
+	.irq_is_pending = irq_is_pending,
 	.fifo_read = fifo_read,
 	.fifo_fill = fifo_fill,
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */

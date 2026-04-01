@@ -36,8 +36,6 @@ information on how to build for specific revisions of the board).
 
 Applications that intend to use BLE must specify hardware revision at build time.
 
-Currently only BLE is supported on this board, WiFi is not supported.
-
 Fetch Binary Blobs
 ******************
 
@@ -47,8 +45,6 @@ that run the command:
 .. code-block:: console
 
    west blobs fetch hal_infineon
-
-.. note:: Only Bluetooth functionality is currently supported.
 
 Resources sharing
 =================
@@ -66,7 +62,9 @@ two cores. This is done in 3 ways:
   to avoid potential concurrent access issues.
 
 Building and Flashing
-*************************
+*********************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``arduino_portenta_h7`` board should be built per core target,
 using either ``arduino_portenta_h7_m7`` or ``arduino_portenta_h7_m4`` as the target.

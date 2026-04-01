@@ -6,10 +6,13 @@
 
 #include <arm/armv7-m.dtsi>
 #include <zephyr/dt-bindings/clock/silabs/siwx91x-clock.h>
+#include <zephyr/dt-bindings/memory-attr/memory-attr-arm.h>
 #include <freq.h>
 
 / {
 	chosen {
+		silabs,sleeptimer = &sysrtc0;
+		zephyr,sram = &sram0;
 		zephyr,entropy = &rng0;
 		zephyr,flash = &flash0;
 		zephyr,flash-controller = &flashctrl0;
@@ -22,22 +25,77 @@
 		cpu0: cpu@0 {
 			compatible = "arm,cortex-m4f";
 			reg = <0>;
+			cpu-power-states = <&pstate_ps4_standby &pstate_ps4_sleep>;
+		};
+
+		power-states {
+			pstate_ps4_standby: ps4_standby {
+				compatible = "zephyr,power-state";
+				power-state-name = "runtime-idle";
+			};
+
+			pstate_ps4_sleep: ps4_sleep {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-idle";
+				min-residency-us = <100000>;
+				exit-latency-us = <3000>;
+			};
 		};
 	};
 
-	sram0: memory@0 {
+	/* The first 1KB of SRAM is reserved for the NWP (Network Processor).
+	 * It also protects against null pointer exceptions.
+	 */
+	nwp_reserved: memory@0 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x00000000 DT_SIZE_K(1)>;
+		zephyr,memory-region = "NWP_RESERVED_RAM";
+	};
+
+	sram0: memory@400 {
 		compatible = "mmio-sram";
-		reg = <0x00000000 DT_SIZE_K(191)>;
+		/* siwx91x has 671kB of SRAM shared between the Cortex-M4
+		 * (Zephyr) and the NWP (Network Processor). 3 memory
+		 * configurations are
+		 * possible:
+		 *  - 195kB
+		 *  - 255kB
+		 *  - 319kB
+		 * Less memory is allocated to Zephyr, more memory is allocated
+		 * to NWP, better are the WiFi and BLE performances.
+		 */
+		reg = <0x00000400 DT_SIZE_K(319)>;
 	};
 
-	bt_hci0: bt_hci {
-		compatible = "silabs,siwx91x-bt-hci";
-		status = "disabled";
+	sram_dma1: memory-dma@24061c00 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x24061c00 DT_SIZE_K(1)>;
+		zephyr,memory-region = "dma1";
+		zephyr,memory-attr = <DT_MEM_ARM(ATTR_MPU_RAM_NOCACHE)>;
 	};
 
-	wifi0: wifi {
-		compatible = "silabs,siwx91x-wifi";
-		status = "disabled";
+	nwp: nwp {
+		compatible = "silabs,siwx91x-nwp";
+		stack-size = <10240>;
+		interrupt-parent = <&nvic>;
+		interrupts = <30 0>, <74 0>;
+		interrupt-names = "nwp_stack", "nwp_irq";
+		antenna-selection = "ext-gpios";
+		support-1p8v;
+		enable-xtal-correction;
+		qspi-80mhz-clk;
+		clock-frequency = <120000000>;
+		status = "okay";
+
+		bt_hci0: bt_hci {
+			compatible = "silabs,siwx91x-bt-hci";
+			status = "disabled";
+		};
+
+		wifi0: wifi {
+			compatible = "silabs,siwx91x-wifi";
+			status = "disabled";
+		};
 	};
 
 	soc {
@@ -62,11 +120,29 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			flash0: flash@8202000 {
+			flash0: flash@8000000 {
 				compatible = "soc-nv-flash";
 				write-block-size = <1>;
 				erase-block-size = <4096>;
+				#address-cells = <1>;
+				#size-cells = <1>;
 			};
+		};
+
+		memc: memory-controller@12040000 {
+			compatible = "silabs,siwx91x-qspi-memory";
+			reg = <0x12040000 0x200>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			status = "disabled";
+		};
+
+		siwx91x_soc_pd: siwx91x-soc-pd {
+			compatible = "silabs,siwx91x-power-domain";
+			#power-domain-cells = <0>;
+			zephyr,disabling-power-states = <&pstate_ps4_sleep>;
+			zephyr,pm-device-runtime-auto;
+			status = "okay";
 		};
 
 		ulpuart: uart@24041800 {
@@ -76,6 +152,8 @@
 			reg-shift = <2>;
 			clocks = <&clock0 SIWX91X_CLK_ULP_UART>;
 			current-speed = <115200>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
 			status = "disabled";
 		};
 
@@ -86,6 +164,8 @@
 			reg-shift = <2>;
 			clocks = <&clock0 SIWX91X_CLK_UART0>;
 			current-speed = <115200>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
 			status = "disabled";
 		};
 
@@ -96,12 +176,15 @@
 			reg-shift = <2>;
 			clocks = <&clock0 SIWX91X_CLK_UART1>;
 			current-speed = <115200>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
 			status = "disabled";
 		};
 
 		rng0: rng@45090000 {
 			compatible = "silabs,siwx91x-rng";
 			reg = <0x45090000 0x8>;
+			clocks = <&clock0 SIWX91X_CLK_RNG>;
 		};
 
 		egpio0: egpio@46130000 {
@@ -114,6 +197,8 @@
 
 			#address-cells = <1>;
 			#size-cells = <0>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
 
 			gpioa: gpio@0 {
 				compatible = "silabs,siwx91x-gpio-port";
@@ -122,9 +207,8 @@
 				#gpio-cells = <2>;
 				ngpios = <16>;
 				gpio-reserved-ranges = <0 6>;
-				silabs,pads = [
-					ff ff ff ff  ff ff 01 02  03 04 05 06  07 ff ff 08
-				];
+				silabs,pads = [ff ff ff ff ff ff 01 02 03 04 05 06 07 ff ff 08];
+				zephyr,pm-device-runtime-auto;
 				status = "okay";
 			};
 
@@ -134,9 +218,8 @@
 				gpio-controller;
 				#gpio-cells = <2>;
 				ngpios = <16>;
-				silabs,pads = [
-					ff ff ff ff  ff ff ff ff  ff 00 00 00  00 00 00 09
-				];
+				silabs,pads = [ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 09];
+				zephyr,pm-device-runtime-auto;
 				status = "okay";
 			};
 
@@ -146,9 +229,8 @@
 				gpio-controller;
 				#gpio-cells = <2>;
 				ngpios = <16>;
-				silabs,pads = [
-					09 09 09 ff  ff ff ff ff  ff ff ff ff  ff ff 0a 0b
-				];
+				silabs,pads = [09 09 09 ff ff ff ff ff ff ff ff ff ff ff 0a 0b];
+				zephyr,pm-device-runtime-auto;
 				status = "okay";
 			};
 
@@ -158,22 +240,23 @@
 				gpio-controller;
 				#gpio-cells = <2>;
 				ngpios = <10>;
-				silabs,pads = [
-					0c 0d 0e 0f  10 11 12 13  14 15 ff ff  ff ff ff ff
-				];
+				silabs,pads = [0c 0d 0e 0f 10 11 12 13 14 15 ff ff ff ff ff ff];
+				zephyr,pm-device-runtime-auto;
 				status = "okay";
 			};
 		};
 
 		egpio1: egpio@2404c000 {
 			compatible = "silabs,siwx91x-gpio";
-			reg = <0x2404C000 0x1260>;
+			reg = <0x2404c000 0x1260>;
 			interrupts = <18 0>;
 			interrupt-names = "ULP";
 			silabs,ulp;
 
 			#address-cells = <1>;
 			#size-cells = <0>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
 
 			ulpgpio: ulpgpio@0 {
 				compatible = "silabs,siwx91x-gpio-port";
@@ -182,9 +265,8 @@
 				#gpio-cells = <2>;
 				ngpios = <12>;
 				gpio-reserved-ranges = <3 1>;
-				silabs,pads = [
-					16 17 18 19  1a 1b 1c 1d  1e 1f 20 21  ff ff ff ff
-				];
+				silabs,pads = [16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 ff ff ff ff];
+				zephyr,pm-device-runtime-auto;
 				status = "okay";
 			};
 		};
@@ -235,31 +317,50 @@
 			status = "disabled";
 		};
 
-		dma0: dma@44030000 {
-			compatible = "silabs,siwx91x-dma";
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <0x44030000 0x82C>;
-			interrupts = <33 0>;
-			interrupt-names = "dma0";
-			clocks = <&clock0 SIWX91X_CLK_DMA0>;
-			silabs,sram-desc-addr = <0x2fc00>;
-			#dma-cells = < 1>;
-			dma-channels = <32>;
-			status = "disabled";
-		};
-
 		ulpdma: dma@24078000 {
 			compatible = "silabs,siwx91x-dma";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x24078000 0x82C>;
+			reg = <0x24078000 0x82c>;
 			interrupts = <10 0>;
 			interrupt-names = "ulpdma";
 			clocks = <&clock0 SIWX91X_CLK_ULP_DMA>;
-			silabs,sram-desc-addr = <0x24061c00>;
-			#dma-cells = < 1>;
+			silabs,sram-region = <&sram_dma1>;
+			#dma-cells = <1>;
 			dma-channels = <12>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
+			status = "disabled";
+		};
+
+		dma0: dma@44030000 {
+			compatible = "silabs,siwx91x-dma";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x44030000 0x82c>;
+			interrupts = <33 0>;
+			interrupt-names = "dma0";
+			clocks = <&clock0 SIWX91X_CLK_DMA0>;
+			#dma-cells = <1>;
+			dma-channels = <32>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
+			status = "disabled";
+		};
+
+		gpdma: gpdma@21080000 {
+			compatible = "silabs,gpdma";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x21080000 0x1720>;
+			interrupts = <31 0>;
+			interrupt-names = "gpdma";
+			clocks = <&clock0 SIWX91X_CLK_GPDMA0>;
+			silabs,channel-reg-base = <0x21081004>;
+			silabs,dma-channel-count = <8>;
+			#dma-cells = <2>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
 			status = "disabled";
 		};
 
@@ -267,12 +368,23 @@
 			compatible = "silabs,siwx91x-pwm";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x47070000 0x14C>;
+			reg = <0x47070000 0x14c>;
 			interrupts = <48 0>;
 			interrupt-names = "pwm";
 			clocks = <&clock0 SIWX91X_CLK_PWM>;
 			#pwm-cells = <2>;
-			silabs,ch_prescaler = <64 64 64 64>;
+			silabs,ch-prescaler = <64 64 64 64>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
+			status = "disabled";
+		};
+
+		rtc0: rtc@24048200 {
+			compatible = "silabs,siwx91x-rtc";
+			reg = <0x24048200 0x40>;
+			interrupts = <28 0>;
+			interrupt-names = "rtc";
+			clocks = <&clock0 SIWX91X_CLK_RTC>;
 			status = "disabled";
 		};
 
@@ -280,7 +392,7 @@
 			compatible = "silabs,siwx91x-wdt";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x24048300 0x1C>;
+			reg = <0x24048300 0x1c>;
 			interrupts = <20 0>;
 			interrupt-names = "watchdog";
 			clocks = <&clock0 SIWX91X_CLK_WATCHDOG>;
@@ -288,12 +400,69 @@
 		};
 
 		sysrtc0: sysrtc@24048c00 {
-			compatible = "silabs,gecko-stimer";
+			compatible = "silabs,sysrtc";
 			reg = <0x24048c00 0x78>;
 			interrupts = <22 0>;
 			interrupt-names = "sysrtc";
 			clock-frequency = <DT_FREQ_K(32)>;
 			prescaler = <1>;
+			status = "disabled";
+		};
+
+		spi0: spi@45030000 {
+			compatible = "silabs,gspi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x45030000 0xbc>;
+			interrupts = <46 0>;
+			interrupt-names = "gspi";
+			clocks = <&clock0 SIWX91X_CLK_GSPI>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
+			status = "disabled";
+		};
+
+		i2s0: i2s@47050000 {
+			compatible = "silabs,siwx91x-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x47050000 0x200>;
+			interrupts = <64 0>;
+			interrupt-names = "i2s0";
+			silabs,channel-group = <0>;
+			silabs,max-channel-count = <2>;
+			clocks = <&clock0 SIWX91X_CLK_I2S0>, <&clock0 SIWX91X_CLK_STATIC_I2S0>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
+			status = "disabled";
+		};
+
+		ulpi2s: i2s@24040400 {
+			compatible = "silabs,siwx91x-i2s";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x24040400 0x200>;
+			interrupts = <14 0>;
+			interrupt-names = "ulpi2s";
+			silabs,channel-group = <0>;
+			silabs,max-channel-count = <1>;
+			clocks = <&clock0 SIWX91X_CLK_ULP_I2S>,
+				 <&clock0 SIWX91X_CLK_STATIC_ULP_I2S>;
+			power-domains = <&siwx91x_soc_pd>;
+			zephyr,pm-device-runtime-auto;
+			status = "disabled";
+		};
+
+		adc0: adc@24043800 {
+			compatible = "silabs,siwx91x-adc";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x24043800 0x214>;
+			interrupts = <11 0>;
+			interrupt-names = "adc0";
+			silabs,adc-sampling-rate = <100000>;
+			clocks = <&clock0 SIWX91X_CLK_ADC>;
+			#io-channel-cells = <1>;
 			status = "disabled";
 		};
 	};

@@ -121,6 +121,8 @@ remaining are not used.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application`
 and :ref:`application_run` for more details).
 
@@ -187,8 +189,7 @@ should see the following message in the terminal:
    ***** Booting Zephyr OS zephyr-v2.2.0 *****
    Hello World! lpcxpresso55s36
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _LPC55S36 SoC Website:
    https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/lpc5500-cortex-m33/lpc553x-s3x-advanced-analog-armcortex-m33-based-mcu-family:LPC553x

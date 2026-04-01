@@ -21,7 +21,7 @@
 
 		cpu0: cpu@0 {
 			device_type = "cpu";
-			compatible = "arm,cortex-r5";
+			compatible = "arm,cortex-r5f";
 			reg = <0>;
 		};
 	};
@@ -150,6 +150,17 @@
 		interrupt-parent = <&vim>;
 		reg-shift = <2>;
 		status = "disabled";
+	};
+
+	mbox1: mailbox@31f81000 {
+		compatible = "ti,omap-mailbox";
+		reg = <0x31f81000 0x200>;
+		/* TODO: Use interrupt router to map this */
+		interrupts = <0 256 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
+		interrupt-parent = <&vim>;
+		usr-id = <2>;
+		#mbox-cells = <1>;
+		status = "okay";
 	};
 
 	systick_timer: timer@24c0000 {

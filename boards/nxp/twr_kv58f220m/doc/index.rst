@@ -63,6 +63,8 @@ the jumpers ``J2`` and ``J9``. A trigger option also must be enabled in Kconfig
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
 
@@ -140,8 +142,7 @@ should see the following message in the terminal:
    ***** Booting Zephyr OS v1.14.0-xxx-gxxxxxxxxxxxx *****
    Hello World! twr_kv58f220m
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _TWR-KV58F220M Website:
    https://www.nxp.com/TWR-KV58F220M

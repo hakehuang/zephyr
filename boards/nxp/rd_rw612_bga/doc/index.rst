@@ -94,6 +94,8 @@ achieved by running the following command:
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
 
@@ -203,8 +205,7 @@ Remove resistors:
 
 Then, build for the board target ``rd_rw612_bga//ethernet``.
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 Resources
 *********

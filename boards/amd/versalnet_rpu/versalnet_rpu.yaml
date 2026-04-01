@@ -8,3 +8,7 @@ testing:
     - net
     - bluetooth
 vendor: amd
+supported:
+  - sdhc
+  - mbox
+  - flash

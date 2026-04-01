@@ -23,6 +23,7 @@
 #include <zephyr/sys/util.h>
 #include <inttypes.h>
 #include <zephyr/linker/linker-defs.h>
+#include <zephyr/cache.h>
 
 #ifdef Z_LIBC_PARTITION_EXISTS
 K_APPMEM_PARTITION_DEFINE(z_libc_partition);
@@ -344,19 +345,31 @@ static struct k_object *dynamic_object_create(enum k_objects otype, size_t align
 			return NULL;
 		}
 
+#ifdef CONFIG_DYNAMIC_OBJECTS_FORCE_STACK_CACHED
+		/* With kernel coherence enabled, it is possible that the stack
+		 * has been allocated on uncached area. This has an implications on
+		 * performance as memory access is not cached.
+		 * This simply nudges the indicated stack pointer to be inside
+		 * cached area such that the thread object will have its stack
+		 * inside cached area.
+		 */
+		if (sys_cache_is_ptr_uncached(dyn->data)) {
+			dyn->data = sys_cache_cached_ptr_get(dyn->data);
+		}
+#endif /* CONFIG_DYNAMIC_OBJECTS_FORCE_STACK_CACHED */
+
 #ifdef CONFIG_GEN_PRIV_STACKS
 		struct z_stack_data *stack_data = (struct z_stack_data *)
 			((uint8_t *)dyn->data + adjusted_size - sizeof(*stack_data));
-		stack_data->priv = (uint8_t *)dyn->data;
-		stack_data->size = adjusted_size;
-		dyn->kobj.data.stack_data = stack_data;
 #if defined(CONFIG_ARM_MPU) || defined(CONFIG_ARC_MPU) || defined(CONFIG_RISCV_PMP)
-		dyn->kobj.name = (void *)ROUND_UP(
-			  ((uint8_t *)dyn->data + CONFIG_PRIVILEGED_STACK_SIZE),
+		stack_data->priv = (void *)ROUND_UP(((uint8_t *)dyn->data + size),
 			  Z_THREAD_STACK_OBJ_ALIGN(size));
 #else
-		dyn->kobj.name = dyn->data;
+		stack_data->priv = (uint8_t *)dyn->data;
 #endif /* CONFIG_ARM_MPU || CONFIG_ARC_MPU || CONFIG_RISCV_PMP */
+		stack_data->size = adjusted_size;
+		dyn->kobj.data.stack_data = stack_data;
+		dyn->kobj.name = dyn->data;
 #else
 		dyn->kobj.name = dyn->data;
 		dyn->kobj.data.stack_size = adjusted_size;
@@ -364,7 +377,7 @@ static struct k_object *dynamic_object_create(enum k_objects otype, size_t align
 	} else {
 		dyn->data = z_thread_aligned_alloc(align, obj_size_get(otype) + size);
 		if (dyn->data == NULL) {
-			k_free(dyn->data);
+			k_free(dyn);
 			return NULL;
 		}
 		dyn->kobj.name = dyn->data;
@@ -479,7 +492,27 @@ void k_object_free(void *obj)
 	k_spin_unlock(&objfree_lock, key);
 
 	if (dyn != NULL) {
-		k_free(dyn->data);
+#ifdef CONFIG_DYNAMIC_OBJECTS_FORCE_STACK_CACHED
+		/* We may have nudged the pointer to point to the cached area
+		 * in dynamic_object_create() when we first created the thread
+		 * stack object. So we need to restore the uncached one before
+		 * freeing it.
+		 */
+		if (dyn->kobj.type == K_OBJ_THREAD_STACK_ELEMENT) {
+			uint8_t *stack;
+
+			if (sys_cache_is_ptr_cached(dyn->data)) {
+				stack = sys_cache_uncached_ptr_get(dyn->data);
+			} else {
+				stack = dyn->data;
+			}
+
+			k_free(stack);
+		} else
+#endif /* CONFIG_DYNAMIC_OBJECTS_FORCE_STACK_CACHED */
+		{
+			k_free(dyn->data);
+		}
 		k_free(dyn);
 	}
 }
@@ -520,6 +553,33 @@ void k_object_wordlist_foreach(_wordlist_cb_func_t func, void *context)
 	k_spin_unlock(&lists_lock, key);
 }
 #endif /* CONFIG_DYNAMIC_OBJECTS */
+
+/* In the earlier linker-passes before we have the real generated
+ * implementation of the lookup functions, we need some weak dummies.
+ * Being __weak, they will be replaced by the generated implementations in
+ * the later linker passes.
+ */
+#ifdef CONFIG_DYNAMIC_OBJECTS
+Z_GENERIC_SECTION(.kobject_data.text.dummies)
+__weak struct k_object *z_object_gperf_find(const void *obj)
+{
+	return NULL;
+}
+Z_GENERIC_SECTION(.kobject_data.text.dummies)
+__weak void z_object_gperf_wordlist_foreach(_wordlist_cb_func_t func, void *context)
+{
+}
+#else
+Z_GENERIC_SECTION(.kobject_data.text.dummies)
+__weak struct k_object *k_object_find(const void *obj)
+{
+	return NULL;
+}
+Z_GENERIC_SECTION(.kobject_data.text.dummies)
+__weak void k_object_wordlist_foreach(_wordlist_cb_func_t func, void *context)
+{
+}
+#endif
 
 static unsigned int thread_index_get(struct k_thread *thread)
 {
@@ -564,11 +624,6 @@ static void unref_check(struct k_object *ko, uintptr_t index)
 	 * specifically needs to happen depends on the object type.
 	 */
 	switch (ko->type) {
-#ifdef CONFIG_PIPES
-	case K_OBJ_PIPE:
-		k_pipe_cleanup((struct k_pipe *)ko->name);
-		break;
-#endif /* CONFIG_PIPES */
 	case K_OBJ_MSGQ:
 		k_msgq_cleanup((struct k_msgq *)ko->name);
 		break;
@@ -761,6 +816,11 @@ int k_object_validate(struct k_object *ko, enum k_objects otype,
 	}
 
 	return 0;
+}
+
+int z_impl_k_object_access_check(const void *object)
+{
+	return k_object_validate(k_object_find(object), K_OBJ_ANY, _OBJ_INIT_ANY);
 }
 
 void k_object_init(const void *obj)

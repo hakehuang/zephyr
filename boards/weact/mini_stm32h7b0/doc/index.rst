@@ -20,7 +20,7 @@ Key Features
 
    - Camera (8 bit) connector
    - ST7735 TFT-LCD 160 x 80 pixels (RGB565 3-SPI)
-   - microSD |trade| card
+   - microSD™ card
    - USB Type-C Connector
    - SWD header for external debugger
    - 2x 40-pin GPIO connector
@@ -110,6 +110,8 @@ Virtual COM port interface. Default communication settings are 115200 8N1.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 The MiniSTM32H7B0 Core board facilitates firmware flashing via the USB DFU
 bootloader. This method simplifies the process of updating images, although

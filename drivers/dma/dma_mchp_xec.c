@@ -327,7 +327,7 @@ static int check_blocks(struct dma_xec_channel *chdata, struct dma_block_config 
  *	chan dev_addr = dest_address
  *
  * Peripheral to Memory:
- *	chan direction = Dev2Mem. chan.contronl b[8]=1
+ *	chan direction = Dev2Mem. chan.control b[8]=1
  *	chan mem_addr = dest_address
  *	chan mem_addr_end = chan mem_addr + block_size
  *	chan dev_addr = source_address
@@ -689,7 +689,7 @@ static int dmac_xec_pm_action(const struct device *dev,
  * Callback flags in struct dma_config
  * completion_callback_en
  *	0 = invoke at completion of all blocks
- *	1 = invoke at completin of each block
+ *	1 = invoke at completion of each block
  * error_callback_dis
  *	0 = invoke on all errors
  *	1 = disabled, do not invoke on errors
@@ -833,7 +833,7 @@ static int dma_xec_init(const struct device *dev)
 		.irq_connect = dma_xec_irq_connect##i,					\
 	};										\
 	PM_DEVICE_DT_DEFINE(i, dmac_xec_pm_action);					\
-	DEVICE_DT_INST_DEFINE(i, &dma_xec_init,						\
+	DEVICE_DT_INST_DEFINE(i, dma_xec_init,						\
 		PM_DEVICE_DT_GET(i),							\
 		&dma_xec_data##i, &dma_xec_cfg##i,					\
 		PRE_KERNEL_1, CONFIG_DMA_INIT_PRIORITY,					\

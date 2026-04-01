@@ -101,6 +101,16 @@ Supported Features
    Zephyr.  Therefore, the mimxrt1170_evk board may have additional features
    already supported, which can also be re-used on this mimxrt1160_evk board:
 
+Shields for Supported Features
+==============================
+
+Some features in the table above are tested with Zephyr shields.  These shields
+are tested on this board:
+
+- :ref:`rk055hdmipi4m`, :ref:`rk055hdmipi4ma0` and :ref:`g1120b0mipi` - support
+  the MIPI-DSI display interface.
+- :ref:`nxp_btb44_ov5640` - supports the MIPI-CSI video/camera interface.
+
 Connections and I/Os
 ====================
 
@@ -190,6 +200,8 @@ remaining are not used.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
 
@@ -206,15 +218,6 @@ The secondary core can be debugged normally in single core builds
 (where the target is ``mimxrt1160_evk/mimxrt1166/cm4``). For dual core builds, the
 secondary core should be placed into a loop, then a debugger can be attached
 (see `AN13264`_, section 4.2.3 for more information)
-
-Configuring a Debug Probe
-=========================
-
-A debug probe is used for both flashing and debugging the board. This board is
-configured by default to use the :ref:`opensda-daplink-onboard-debug-probe`,
-however the :ref:`pyocd-debug-host-tools` do not yet support programming the
-external flashes on this board so you must reconfigure the board for one of the
-following debug probes instead.
 
 Launching Images Targeting M4 Core
 ==================================
@@ -235,26 +238,34 @@ so:
 If desired, this behavior can be disabled by building with
 ``-DSB_CONFIG_SECOND_CORE_MCUX_LAUNCHER=n``
 
-Using J-Link
-------------
+Configuring a Debug Probe
+=========================
 
-Install the :ref:`jlink-debug-host-tools` and make sure they are in your search
-path.
-
-There are two options: the onboard debug circuit can be updated with Segger
-J-Link firmware, or :ref:`jlink-external-debug-probe` can be attached to the
-EVK. See `Using J-Link with MIMXRT1160-EVK or MIMXRT1170-EVK`_ for more details.
+A debug probe is used for both flashing and debugging the board. The on-board
+debugger :ref:`opensda-daplink-onboard-debug-probe`
+works with the LinkServer runner, or can be reprogrammed with JLink firmware.
 
 Using LinkServer
 ----------------
 
 Install the :ref:`linkserver-debug-host-tools` and make sure they are in your
-search path.  LinkServer works with the CMSIS-DAP firmware include in LinkServer
-install. Please follow the ``LPCScrypt\docs\Debug_Probe_Firmware_Programming.pdf``
-for more details.
+search path. LinkServer works with the default CMSIS-DAP firmware included in
+the on-board debugger.
 
-Linkserver is the default runner. You may also se the ``-r linkserver`` option
-with West to use the LinkServer runner.
+Using J-Link
+------------
+
+Install the :ref:`jlink-debug-host-tools` and make sure they are in your search path.
+
+The on-board debug circuit can be updated with Segger J-Link firmware,
+or :ref:`jlink-external-debug-probe` can be attached to the
+EVK. See `Using J-Link with MIMXRT1160-EVK or MIMXRT1170-EVK`_ for more details.
+
+Use the ``-r jlink`` option with West to use the jlink runner.
+
+.. code-block:: console
+
+   west flash -r jlink
 
 Configuring a Console
 =====================
@@ -313,8 +324,7 @@ should see the following message in the terminal:
    ***** Booting Zephyr OS v2.4.0-xxxx-xxxxxxxxxxxxx *****
    Hello World! mimxrt1160_evk
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _MIMXRT1160-EVK Website:
    https://www.nxp.com/design/development-boards/i-mx-evaluation-and-development-boards/i-mx-rt1160-evaluation-kit:MIMXRT1160-EVK

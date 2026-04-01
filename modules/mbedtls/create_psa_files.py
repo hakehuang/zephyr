@@ -1,6 +1,7 @@
 #!/bin/python3
 
 # Copyright (c) 2024 Nordic Semiconductor ASA
+# Copyright (c) Atmosic 2025
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -11,11 +12,14 @@ from typing import List
 
 SCRIPT_PATH = os.path.dirname(__file__)
 INPUT_REL_PATH = os.path.join("..", "..", "..", "modules", "crypto", "mbedtls",
-                              "include", "psa", "crypto_config.h")
+                              "tf-psa-crypto", "include", "psa", "crypto_config.h")
 INPUT_FILE = os.path.normpath(os.path.join(SCRIPT_PATH, INPUT_REL_PATH))
 
 KCONFIG_PATH=os.path.join(SCRIPT_PATH, "Kconfig.psa.auto")
 HEADER_PATH=os.path.join(SCRIPT_PATH, "configs", "config-psa.h")
+
+if sys.platform == "win32":
+    INPUT_REL_PATH = INPUT_REL_PATH.replace("\\", "/")
 
 KCONFIG_HEADER="""\
 # Copyright (c) 2024 Nordic Semiconductor ASA

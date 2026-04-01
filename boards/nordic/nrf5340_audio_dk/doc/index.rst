@@ -61,6 +61,8 @@ for a complete list of nRF5340 Audio DK board hardware features.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Flashing
 ========
 
@@ -79,7 +81,7 @@ applications as usual (:ref:`build_an_application` and
 
    .. code-block:: console
 
-      west flash -H -r nrfutil --skip-rebuild
+      west flash -H -r nrfutil --no-rebuild
 
 .. note::
 

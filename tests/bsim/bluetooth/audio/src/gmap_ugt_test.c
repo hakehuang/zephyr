@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <zephyr/autoconf.h>
+#include <zephyr/bluetooth/assigned_numbers.h>
 #include <zephyr/bluetooth/audio/audio.h>
 #include <zephyr/bluetooth/audio/bap.h>
 #include <zephyr/bluetooth/audio/bap_lc3_preset.h>
@@ -90,6 +91,7 @@ static void unicast_stream_started_cb(struct bt_bap_stream *stream)
 	test_stream->valid_rx_cnt = 0U;
 	test_stream->seq_num = 0U;
 	test_stream->tx_cnt = 0U;
+	UNSET_FLAG(test_stream->flag_audio_received);
 
 	printk("Started stream %p\n", stream);
 
@@ -395,11 +397,16 @@ static void discover_gmas(struct bt_conn *conn)
 
 static void wait_for_data(void)
 {
-	if (expect_rx) {
-		printk("Waiting for data\n");
-		WAIT_FOR_FLAG(flag_audio_received);
-		printk("Data received\n");
+	printk("Waiting for data\n");
+
+	ARRAY_FOR_EACH_PTR(unicast_streams, test_stream) {
+		if (bap_stream_rx_can_recv(&test_stream->stream.bap_stream) &&
+		    audio_test_stream_is_streaming(test_stream)) {
+			WAIT_FOR_FLAG(test_stream->flag_audio_received);
+		}
 	}
+
+	printk("Data received\n");
 	/* let initiator know we have received what we wanted */
 	backchannel_sync_send(GMAP_UGG_DEV_ID);
 }
@@ -455,8 +462,7 @@ static void test_main(void)
 			.rank = csis_rank,
 			.lockable = true,
 			/* Using the CSIP_SET_MEMBER test sample SIRK */
-			.sirk = { 0xcd, 0xcc, 0x72, 0xdd, 0x86, 0x8c, 0xcd, 0xce,
-				  0x22, 0xfd, 0xa1, 0x21, 0x09, 0x7d, 0x7d, 0x45 },
+			.sirk = TEST_SAMPLE_SIRK,
 		};
 
 		err = bt_cap_acceptor_register(&csip_set_member_param, &csip_set_member);

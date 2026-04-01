@@ -5,26 +5,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string.h>
 #include <errno.h>
+#include <stdint.h>
+#include <string.h>
 
-#include <zephyr/kernel.h>
-#include <zephyr/sys/byteorder.h>
-#include <zephyr/sys/check.h>
-
+#include <zephyr/autoconf.h>
 #include <zephyr/bluetooth/bluetooth.h>
-#include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/crypto.h>
-
-#include "psa/crypto.h"
+#include <zephyr/bluetooth/hci.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/byteorder.h>
+#include <psa/crypto.h>
+#include <psa/crypto_struct.h>
+#include <psa/crypto_types.h>
+#include <psa/crypto_values.h>
 
 #include "common/bt_str.h"
-
 #include "hci_core.h"
 
 #define LOG_LEVEL CONFIG_BT_HCI_CORE_LOG_LEVEL
-#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_host_crypto);
 
 int bt_crypto_init(void)
@@ -53,7 +54,7 @@ int bt_rand(void *buf, size_t len)
 #else /* !CONFIG_BT_HOST_CRYPTO_PRNG */
 int bt_rand(void *buf, size_t len)
 {
-	CHECKIF(buf == NULL || len == 0) {
+	if (buf == NULL || len == 0) {
 		return -EINVAL;
 	}
 
@@ -70,7 +71,7 @@ int bt_encrypt_le(const uint8_t key[16], const uint8_t plaintext[16],
 	size_t out_len;
 	uint8_t tmp[16];
 
-	CHECKIF(key == NULL || plaintext == NULL || enc_data == NULL) {
+	if (key == NULL || plaintext == NULL || enc_data == NULL) {
 		return -EINVAL;
 	}
 
@@ -121,7 +122,7 @@ int bt_encrypt_be(const uint8_t key[16], const uint8_t plaintext[16],
 	psa_status_t status, destroy_status;
 	size_t out_len;
 
-	CHECKIF(key == NULL || plaintext == NULL || enc_data == NULL) {
+	if (key == NULL || plaintext == NULL || enc_data == NULL) {
 		return -EINVAL;
 	}
 

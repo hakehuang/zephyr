@@ -34,7 +34,7 @@ The ST25DV Discovery kit provides the following hardware components:
   - ST link mini USB
   - User micro USB
   - USB micro or mini connector for board powering
-  - Demonstration edition (optional add-on module) with Bluetooth Low Energy module,
+  - Demonstration edition (optional add-on module) with Bluetooth® Low Energy module,
     Wi-Fi ® module and JTAG 20 pin connector
 
 It exists in two variants, MB1283 and MB1285.
@@ -80,6 +80,8 @@ Default communication settings are 115200 8N1.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``st25dv_mb1283_disco`` board configuration can be built and
 flashed in the usual way (see :ref:`build_an_application` and

@@ -4,7 +4,7 @@ Overview
 ********
 
 The YD-STM32H750VB development board is a complete demonstration and development
-platform for Arm |reg| Cortex |reg|-M7 core-based STM32H750VBT6 microcontroller, with
+platform for Arm® Cortex®-M7 core-based STM32H750VBT6 microcontroller, with
 128Kbytes of Flash memory and 1 Mbytes of SRAM.
 
 More information about STM32H750 can be found here:
@@ -41,6 +41,8 @@ is driven by the PLL clock at 480MHz. PLL clock is feed by a 25MHz high speed ex
 
 Flashing
 ========
+
+.. zephyr:board-supported-runners::
 
 There are 2 main entry points for flashing STM32H750VB SoCs, one using the ROM
 bootloader, and another by using the SWD debug port (which requires additional

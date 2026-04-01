@@ -7,7 +7,7 @@
 
 #include <soc/rtc_cntl_reg.h>
 #include <hal/xt_wdt_hal.h>
-#include <rom/ets_sys.h>
+#include <esp_attr.h>
 
 #include <string.h>
 #include <zephyr/drivers/watchdog.h>
@@ -85,7 +85,7 @@ static int esp32_xt_wdt_install_timeout(const struct device *dev,
 	return 0;
 }
 
-static void esp32_xt_wdt_isr(void *arg)
+static void IRAM_ATTR esp32_xt_wdt_isr(void *arg)
 {
 	const struct device *dev = (const struct device *)arg;
 	const struct esp32_xt_wdt_config *cfg = dev->config;
@@ -123,7 +123,7 @@ static int esp32_xt_wdt_init(const struct device *dev)
 	xt_wdt_hal_enable_backup_clk(&data->hal, ESP32_RTC_SLOW_CLK_SRC_RC_SLOW_FREQ/1000);
 
 	flags = ESP_PRIO_TO_FLAGS(cfg->irq_priority) | ESP_INT_FLAGS_CHECK(cfg->irq_flags) |
-		ESP_INTR_FLAG_SHARED;
+		ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_IRAM;
 	err = esp_intr_alloc(cfg->irq_source, flags, (intr_handler_t)esp32_xt_wdt_isr, (void *)dev,
 			     NULL);
 	if (err) {
@@ -168,9 +168,9 @@ DEVICE_DT_DEFINE(DT_NODELABEL(xt_wdt),
 	defined(CONFIG_SOC_SERIES_ESP32C3))
 #error "XT WDT is not supported"
 #else
-BUILD_ASSERT((DT_PROP(DT_INST(0, espressif_esp32_rtc), slow_clk_src) ==
+BUILD_ASSERT((DT_PROP(DT_INST(0, espressif_esp32_clock), slow_clk_src) ==
 	      ESP32_RTC_SLOW_CLK_SRC_XTAL32K) ||
-		     (DT_PROP(DT_INST(0, espressif_esp32_rtc), slow_clk_src) ==
+		     (DT_PROP(DT_INST(0, espressif_esp32_clock), slow_clk_src) ==
 		      ESP32_RTC_SLOW_CLK_32K_EXT_OSC),
 	     "XT WDT is only supported with XTAL32K or 32K_EXT_OSC as slow clock source");
 #endif

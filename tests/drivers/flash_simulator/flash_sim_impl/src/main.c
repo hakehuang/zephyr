@@ -7,6 +7,7 @@
 #include <zephyr/ztest.h>
 #include <zephyr/drivers/flash.h>
 #include <zephyr/device.h>
+#include <zephyr/storage/flash_map.h>
 
 /* Warning: The test has been written for testing boards with single
  * instance of Flash Simulator device only.
@@ -18,7 +19,7 @@
 #else
 #define SOC_NV_FLASH_NODE DT_CHILD(DT_INST(0, zephyr_sim_flash), flash_sim_0)
 #endif /* CONFIG_ARCH_POSIX */
-#define FLASH_SIMULATOR_BASE_OFFSET DT_REG_ADDR(SOC_NV_FLASH_NODE)
+#define FLASH_SIMULATOR_BASE_OFFSET PARTITION_NODE_OFFSET(SOC_NV_FLASH_NODE)
 #define FLASH_SIMULATOR_ERASE_UNIT DT_PROP(SOC_NV_FLASH_NODE, erase_block_size)
 #define FLASH_SIMULATOR_PROG_UNIT DT_PROP(SOC_NV_FLASH_NODE, write_block_size)
 #define FLASH_SIMULATOR_FLASH_SIZE DT_REG_SIZE(SOC_NV_FLASH_NODE)
@@ -75,7 +76,7 @@ static void test_check_pattern32(off_t start, uint32_t (*pattern_gen)(void),
 		zassert_equal(val32, r_val32,
 			     "flash word at offset 0x%x has value 0x%08x, " \
 			     "expected 0x%08x",
-			     start + off, r_val32, val32);
+			     (uint32_t)(start + off), r_val32, val32);
 	}
 }
 
@@ -142,7 +143,7 @@ ZTEST(flash_sim_api, test_read)
 		zassert_equal(FLASH_SIMULATOR_ERASE_VALUE,
 			     test_read_buf[i],
 			     "sim flash byte at offset 0x%x has value 0x%08x",
-			     i, test_read_buf[i]);
+			     (int)i, test_read_buf[i]);
 	}
 }
 
@@ -163,7 +164,7 @@ static void test_write_read(void)
 				 &val32, sizeof(val32));
 		zassert_equal(0, rc,
 			      "flash_write (%d) should succeed at off 0x%x", rc,
-			       FLASH_SIMULATOR_BASE_OFFSET + off);
+			       FLASH_SIMULATOR_BASE_OFFSET + (int)off);
 		val32++;
 	}
 
@@ -177,7 +178,7 @@ static void test_write_read(void)
 		zassert_equal(val32, r_val32,
 			"flash byte at offset 0x%x has value 0x%08x, expected" \
 			" 0x%08x",
-			off, r_val32, val32);
+			(int)off, r_val32, val32);
 		val32++;
 	}
 }
@@ -452,6 +453,36 @@ ZTEST(flash_sim_api, test_get_erase_value)
 		      FLASH_SIMULATOR_ERASE_VALUE);
 }
 
+ZTEST(flash_sim_api, test_erase_capability)
+{
+	/* Verify that the runtime device capability matches the build configuration.
+	 * This is the test that was missing and resulted in issue #100352 not being caught:
+	 * the driver was incorrectly setting no_explicit_erase for all instances based
+	 * on a global Kconfig rather than per-instance properties.
+	 */
+	const struct flash_parameters *fp = flash_get_parameters(flash_dev);
+	int erase_cap;
+
+	zassert_not_null(fp, "flash_get_parameters() returned NULL");
+
+	erase_cap = flash_params_get_erase_cap(fp);
+
+#if defined(CONFIG_FLASH_SIMULATOR_EXPLICIT_ERASE)
+	/* Erase-type (classic Flash) device: must report explicit erase required */
+	zassert_false(fp->caps.no_explicit_erase,
+		      "Device is configured as explicit-erase but caps.no_explicit_erase=true");
+	zassert_equal(FLASH_ERASE_C_EXPLICIT, erase_cap,
+		      "Expected FLASH_ERASE_C_EXPLICIT (0x%x), got 0x%x",
+		      FLASH_ERASE_C_EXPLICIT, erase_cap);
+#else
+	/* RAM-like device: must report no explicit erase required */
+	zassert_true(fp->caps.no_explicit_erase,
+		     "Device is configured as RAM-like but caps.no_explicit_erase=false");
+	zassert_equal(0, erase_cap,
+		      "Expected erase capability 0 for RAM-like device, got 0x%x", erase_cap);
+#endif
+}
+
 ZTEST(flash_sim_api, test_flash_fill)
 {
 	off_t i;
@@ -487,10 +518,10 @@ ZTEST(flash_sim_api, test_flash_fill)
 		memset(buf, FLASH_SIMULATOR_ERASE_VALUE, sizeof(buf));
 		rc = flash_read(flash_dev, FLASH_SIMULATOR_BASE_OFFSET + i,
 				buf, chunk);
-		zassert_equal(0, rc, "flash_read should succeed at offset %d", i);
+		zassert_equal(0, rc, "flash_read should succeed at offset %d", (int)i);
 		do {
 			zassert_equal((uint8_t)buf[i & (sizeof(buf) - 1)], 0x55,
-				      "Unexpected value at offset %d\n", i);
+				      "Unexpected value at offset %d\n", (int)i);
 			++i;
 			--size;
 			--chunk;

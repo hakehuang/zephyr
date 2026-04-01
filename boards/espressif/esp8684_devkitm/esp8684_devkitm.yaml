@@ -6,11 +6,14 @@ toolchain:
   - zephyr
 supported:
   - adc
+  - dma
   - gpio
   - watchdog
   - uart
   - counter
   - entropy
+  - i2c
   - pwm
   - spi
+  - netif:wifi
 vendor: espressif

@@ -16,6 +16,12 @@ supported:
   - counter
   - entropy
   - i2c
+  - i2s
+  - netif:openthread
+  - netif:wifi
+  - crypto
+  - retained_mem
+
 testing:
   ignore_tags:
     - bluetooth

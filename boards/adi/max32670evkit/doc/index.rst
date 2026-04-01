@@ -30,7 +30,7 @@ Hardware
         - Ultra-Low 0.9V to 1.1V VCORE Supply Voltage
         - Internal LDO Operation from 1.7V to 3.6V SingleSupply
 
-    - Wide Operating Temperature: -40°C to +105°C
+    - Wide Operating Temperature: -40 °C to +105 °C
 
   - Flexible Clocking Schemes
 
@@ -147,6 +147,8 @@ Connections and IOs
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Flashing
 ========

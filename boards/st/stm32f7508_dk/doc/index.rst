@@ -39,7 +39,7 @@ Hardware
 The STM32F7508-DK Discovery kit provides the following hardware components:
 
 - STM32F750N8H6 in BGA216 package
-- ARM |reg| 32-bit Cortex |reg| -M7 CPU with FPU
+- ARM® 32-bit Cortex®-M7 CPU with FPU
 - 216 MHz max CPU frequency
 - 64 KB Flash
 - 320+16+4 KB SRAM
@@ -132,6 +132,8 @@ settings are 115200 8N1.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 STM32F7508-DK Discovery kit includes an ST-LINK/V2 embedded debug tool interface.
 

@@ -33,7 +33,7 @@ Hardware
 The Nucleo F302R8 provides the following hardware components:
 
 - STM32F302R8T6 in QFP64 package
-- ARM |reg| 32-bit Cortex |reg| -M4 CPU with FPU
+- ARM® 32-bit Cortex®-M4 CPU with FPU
 - 72 MHz max CPU frequency
 - VDD from 2.0 V to 3.6 V
 - 64 KB Flash
@@ -113,6 +113,8 @@ to UART2.  Default settings are 115200 8N1.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 The Nucleo F302R8 board includes an ST-LINK/V2-1 embedded debug tool interface.
 

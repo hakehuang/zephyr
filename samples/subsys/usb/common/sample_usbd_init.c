@@ -13,8 +13,6 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(usbd_sample_config);
 
-#define ZEPHYR_PROJECT_USB_VID		0x2fe3
-
 /* By default, do not register the USB DFU class DFU mode instance. */
 static const char *const blocklist[] = {
 	"dfu_dfu",
@@ -29,7 +27,7 @@ static const char *const blocklist[] = {
  */
 USBD_DEVICE_DEFINE(sample_usbd,
 		   DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
-		   ZEPHYR_PROJECT_USB_VID, CONFIG_SAMPLE_USBD_PID);
+		   CONFIG_SAMPLE_USBD_VID, CONFIG_SAMPLE_USBD_PID);
 /* doc device instantiation end */
 
 /* doc string instantiation start */
@@ -60,6 +58,7 @@ USBD_CONFIGURATION_DEFINE(sample_hs_config,
 			  CONFIG_SAMPLE_USBD_MAX_POWER, &hs_cfg_desc);
 /* doc configuration instantiation end */
 
+#if CONFIG_SAMPLE_USBD_20_EXTENSION_DESC
 /*
  * This does not yet provide valuable information, but rather serves as an
  * example, and will be improved in the future.
@@ -72,6 +71,7 @@ static const struct usb_bos_capability_lpm bos_cap_lpm = {
 };
 
 USBD_DESC_BOS_DEFINE(sample_usbext, sizeof(bos_cap_lpm), &bos_cap_lpm);
+#endif
 
 static void sample_fix_code_triple(struct usbd_context *uds_ctx,
 				   const enum usbd_speed speed)
@@ -81,7 +81,8 @@ static void sample_fix_code_triple(struct usbd_context *uds_ctx,
 	    IS_ENABLED(CONFIG_USBD_CDC_ECM_CLASS) ||
 	    IS_ENABLED(CONFIG_USBD_CDC_NCM_CLASS) ||
 	    IS_ENABLED(CONFIG_USBD_MIDI2_CLASS) ||
-	    IS_ENABLED(CONFIG_USBD_AUDIO2_CLASS)) {
+	    IS_ENABLED(CONFIG_USBD_AUDIO2_CLASS) ||
+	    IS_ENABLED(CONFIG_USBD_VIDEO_CLASS)) {
 		/*
 		 * Class with multiple interfaces have an Interface
 		 * Association Descriptor available, use an appropriate triple
@@ -126,7 +127,8 @@ struct usbd_context *sample_usbd_setup_device(usbd_msg_cb_t msg_cb)
 	}
 	/* doc add string descriptor end */
 
-	if (usbd_caps_speed(&sample_usbd) == USBD_SPEED_HS) {
+	if (USBD_SUPPORTS_HIGH_SPEED &&
+	    usbd_caps_speed(&sample_usbd) == USBD_SPEED_HS) {
 		err = usbd_add_configuration(&sample_usbd, USBD_SPEED_HS,
 					     &sample_hs_config);
 		if (err) {
@@ -174,16 +176,16 @@ struct usbd_context *sample_usbd_setup_device(usbd_msg_cb_t msg_cb)
 		/* doc device init-and-msg end */
 	}
 
-	if (IS_ENABLED(CONFIG_SAMPLE_USBD_20_EXTENSION_DESC)) {
-		(void)usbd_device_set_bcd_usb(&sample_usbd, USBD_SPEED_FS, 0x0201);
-		(void)usbd_device_set_bcd_usb(&sample_usbd, USBD_SPEED_HS, 0x0201);
+#if CONFIG_SAMPLE_USBD_20_EXTENSION_DESC
+	(void)usbd_device_set_bcd_usb(&sample_usbd, USBD_SPEED_FS, 0x0201);
+	(void)usbd_device_set_bcd_usb(&sample_usbd, USBD_SPEED_HS, 0x0201);
 
-		err = usbd_add_descriptor(&sample_usbd, &sample_usbext);
-		if (err) {
-			LOG_ERR("Failed to add USB 2.0 Extension Descriptor");
-			return NULL;
-		}
+	err = usbd_add_descriptor(&sample_usbd, &sample_usbext);
+	if (err) {
+		LOG_ERR("Failed to add USB 2.0 Extension Descriptor");
+		return NULL;
 	}
+#endif
 
 	return &sample_usbd;
 }

@@ -40,7 +40,7 @@ Supported Features
 System Clock
 ============
 
-The KE17Z9 SoC is configured to run at 48 MHz using the FIRC.
+The KE17Z9 SoC is configured to run at 72 MHz using the LPFLL.
 
 Serial Port
 ===========
@@ -49,6 +49,8 @@ The KE17Z9 SoC has three LPUARTs. UART2 is configured for the console.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
@@ -139,8 +141,7 @@ should see the following message in the terminal:
    *** Booting Zephyr OS build v3.6.0-xxxx-gxxxxxxxxxxxx ***
    Hello World! frdm_ke17z512/mke17z9
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _FRDM-KE17Z512 Website:
    https://www.nxp.com/design/design-center/development-boards-and-designs/general-purpose-mcus/frdm-development-board-for-96-mhz-ke17z-ke13z-ke12z-with-512-kb-flash-mcus:FRDM-KE17Z512

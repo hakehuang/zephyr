@@ -24,7 +24,7 @@ Hardware
     - 16KB Unified Cache with ECC
     - Resource Protection Unit (RPU) and MemoryProtection Unit (MPU)
     - Dual- or Single-Supply Operation, 1.7V to 3.6V
-    - Wide Operating Temperature: -40°C to +105°C
+    - Wide Operating Temperature: -40 °C to +105 °C
 
   - Flexible Clocking Schemes
 
@@ -279,11 +279,9 @@ The I2C ports can independently pulled up to V_AUX (3.3V default) through JP4 (I
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 The IC can be reset by pushbutton SW1.
-
-
-Programming and Debugging
-*************************
 
 Flashing
 ========

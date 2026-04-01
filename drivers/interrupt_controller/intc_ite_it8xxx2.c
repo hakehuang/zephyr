@@ -6,6 +6,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/arch/cpu.h>
+#include <zephyr/arch/riscv/irq.h>
 #include <zephyr/init.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(intc_it8xxx2, LOG_LEVEL_DBG);
@@ -200,7 +201,7 @@ bool __soc_ram_code ite_intc_no_irq(void)
 	return (IVECT == IVECT_OFFSET_WITH_IRQ);
 }
 
-uint8_t __soc_ram_code get_irq(void *arg)
+unsigned long __soc_ram_code __soc_handle_irq(unsigned long arg)
 {
 	ARG_UNUSED(arg);
 
@@ -266,8 +267,8 @@ void soc_interrupt_init(void)
 		wdt_regs->EWDKEYR = 0;
 
 		/* Spin and wait for reboot */
-		while (1)
-			;
+		while (1) {
+		}
 	} else {
 		/* Disable ETWD hardware reset */
 		gctrl_regs->GCTRL_ETWDUARTCR &= ~IT8XXX2_GCTRL_ETWD_HW_RST_EN;

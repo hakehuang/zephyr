@@ -19,9 +19,9 @@ LOG_MODULE_REGISTER(llext, CONFIG_LLEXT_LOG_LEVEL);
 
 #include "llext_priv.h"
 
-static sys_slist_t _llext_list = SYS_SLIST_STATIC_INIT(&_llext_list);
+sys_slist_t llext_list = SYS_SLIST_STATIC_INIT(&llext_list);
 
-static struct k_mutex llext_lock = Z_MUTEX_INITIALIZER(llext_lock);
+K_MUTEX_DEFINE(llext_lock);
 
 int llext_section_shndx(const struct llext_loader *ldr, const struct llext *ext,
 			const char *sect_name)
@@ -39,8 +39,8 @@ int llext_section_shndx(const struct llext_loader *ldr, const struct llext *ext,
 	return -ENOENT;
 }
 
-int llext_get_section_header(struct llext_loader *ldr, struct llext *ext, const char *search_name,
-			     elf_shdr_t *shdr)
+int llext_get_section_header(const struct llext_loader *ldr, const struct llext *ext,
+			     const char *search_name, elf_shdr_t *shdr)
 {
 	int ret;
 
@@ -90,10 +90,10 @@ struct llext *llext_by_name(const char *name)
 {
 	k_mutex_lock(&llext_lock, K_FOREVER);
 
-	for (sys_snode_t *node = sys_slist_peek_head(&_llext_list);
+	for (sys_snode_t *node = sys_slist_peek_head(&llext_list);
 	     node != NULL;
 	     node = sys_slist_peek_next(node)) {
-		struct llext *ext = CONTAINER_OF(node, struct llext, _llext_list);
+		struct llext *ext = CONTAINER_OF(node, struct llext, llext_list);
 
 		if (strncmp(ext->name, name, LLEXT_MAX_NAME_LEN) == 0) {
 			k_mutex_unlock(&llext_lock);
@@ -112,10 +112,10 @@ int llext_iterate(int (*fn)(struct llext *ext, void *arg), void *arg)
 
 	k_mutex_lock(&llext_lock, K_FOREVER);
 
-	for (node = sys_slist_peek_head(&_llext_list);
+	for (node = sys_slist_peek_head(&llext_list);
 	     node;
 	     node = sys_slist_peek_next(node)) {
-		struct llext *ext = CONTAINER_OF(node, struct llext, _llext_list);
+		struct llext *ext = CONTAINER_OF(node, struct llext, llext_list);
 
 		ret = fn(ext, arg);
 		if (ret) {
@@ -179,7 +179,7 @@ int llext_load(struct llext_loader *ldr, const char *name, struct llext **ext,
 		goto out;
 	}
 
-	*ext = llext_alloc(sizeof(struct llext));
+	*ext = llext_alloc_metadata(sizeof(struct llext));
 	if (*ext == NULL) {
 		LOG_ERR("Not enough memory for extension metadata");
 		ret = -ENOMEM;
@@ -188,7 +188,7 @@ int llext_load(struct llext_loader *ldr, const char *name, struct llext **ext,
 
 	ret = do_llext_load(ldr, *ext, ldr_parm);
 	if (ret < 0) {
-		llext_free(*ext);
+		llext_free_metadata(*ext);
 		*ext = NULL;
 		goto out;
 	}
@@ -198,7 +198,7 @@ int llext_load(struct llext_loader *ldr, const char *name, struct llext **ext,
 	(*ext)->name[LLEXT_MAX_NAME_LEN] = '\0';
 	(*ext)->use_count++;
 
-	sys_slist_append(&_llext_list, &(*ext)->_llext_list);
+	sys_slist_append(&llext_list, &(*ext)->llext_list);
 	LOG_INF("Loaded extension %s", (*ext)->name);
 
 out:
@@ -230,7 +230,7 @@ int llext_unload(struct llext **ext)
 	}
 
 	/* FIXME: protect the global list */
-	sys_slist_find_and_remove(&_llext_list, &tmp->_llext_list);
+	sys_slist_find_and_remove(&llext_list, &tmp->llext_list);
 
 	llext_dependency_remove_all(tmp);
 
@@ -238,13 +238,13 @@ int llext_unload(struct llext **ext)
 	k_mutex_unlock(&llext_lock);
 
 	if (tmp->sect_hdrs_on_heap) {
-		llext_free(tmp->sect_hdrs);
+		llext_free_metadata(tmp->sect_hdrs);
 	}
 
 	llext_free_regions(tmp);
-	llext_free(tmp->sym_tab.syms);
-	llext_free(tmp->exp_tab.syms);
-	llext_free(tmp);
+	llext_free_metadata(tmp->sym_tab.syms);
+	llext_free_metadata(tmp->exp_tab.syms);
+	llext_free_metadata(tmp);
 
 	return 0;
 }

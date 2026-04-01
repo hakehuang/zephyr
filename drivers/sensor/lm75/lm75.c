@@ -115,14 +115,11 @@ static void lm75_sensor_value_to_temp(const struct sensor_value *val, int16_t *t
 
 static void lm75_temp_to_sensor_value(int16_t temp, struct sensor_value *val)
 {
-	/* shift right by 7, multiply by 10 to get 0.1° and divide by 2 to get °C */
-	temp = (temp / 128) * 10 / 2;
-
 	/* Integer part in degrees Celsius */
-	val->val1 = temp / 10;
+	val->val1 = (temp / 256);
 
 	/* Fractional part in micro degrees Celsius */
-	val->val2 = (temp - val->val1 * 10) * 100000U;
+	val->val2 = ((temp - (val->val1 * 256)) * 1000000) / 256;
 }
 
 static int lm75_attr_set(const struct device *dev, enum sensor_channel chan,
@@ -270,14 +267,7 @@ static inline int lm75_fetch_temp(const struct device *dev)
 
 static int lm75_sample_fetch(const struct device *dev, enum sensor_channel chan)
 {
-	enum pm_device_state pm_state;
 	int ret;
-
-	(void)pm_device_state_get(dev, &pm_state);
-	if (pm_state != PM_DEVICE_STATE_ACTIVE) {
-		ret = -EIO;
-		return ret;
-	}
 
 	switch (chan) {
 	case SENSOR_CHAN_ALL:

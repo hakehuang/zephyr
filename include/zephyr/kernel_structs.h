@@ -161,8 +161,7 @@ struct _cpu {
 	struct _ready_q ready_q;
 #endif
 
-#if (CONFIG_NUM_METAIRQ_PRIORITIES > 0) &&                                                         \
-	(CONFIG_NUM_COOP_PRIORITIES > CONFIG_NUM_METAIRQ_PRIORITIES)
+#if (CONFIG_NUM_METAIRQ_PRIORITIES > 0)
 	/* Coop thread preempted by current metairq, or NULL */
 	struct k_thread *metairq_preempted;
 #endif
@@ -194,6 +193,10 @@ struct _cpu {
 
 #ifdef CONFIG_OBJ_CORE_SYSTEM
 	struct k_obj_core  obj_core;
+#endif
+
+#ifdef CONFIG_SCHED_IPI_SUPPORTED
+	sys_dlist_t ipi_workq;
 #endif
 
 	/* Per CPU architecture specifics */
@@ -256,6 +259,8 @@ __attribute_const__ struct k_thread *z_smp_current_get(void);
 #define _current_cpu (&_kernel.cpus[0])
 #define _current _kernel.cpus[0].current
 #endif
+
+#define CPU_ID ((CONFIG_MP_MAX_NUM_CPUS == 1) ? 0 : _current_cpu->id)
 
 /* This is always invoked from a context where preemption is disabled */
 #define z_current_thread_set(thread) ({ _current_cpu->current = (thread); })

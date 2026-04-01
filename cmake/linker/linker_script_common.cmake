@@ -221,6 +221,11 @@ function(create_section)
   else()
     set(parent ${SECTION_SYSTEM})
   endif()
+  if(SECTION_TYPE STREQUAL "LINKER_SCRIPT_FOOTER")
+    set(SECTION_VMA) # pretend that we have no VMA, so the section ends up in
+                     # the general heap of sections directly below the system
+    set(parent ${SECTION_SYSTEM})
+  endif()
 
   set_property(GLOBAL PROPERTY SECTION_${SECTION_NAME}_PARENT ${parent})
   add_section(OBJECT ${parent} SECTION ${SECTION_NAME} ADDRESS ${SECTION_ADDRESS} VMA ${SECTION_VMA})
@@ -261,6 +266,13 @@ function(add_region)
 
   set_property(GLOBAL PROPERTY ${ADD_REGION_REGION}_PARENT ${ADD_REGION_OBJECT})
   set_property(GLOBAL APPEND PROPERTY ${ADD_REGION_OBJECT}_REGIONS ${ADD_REGION_REGION})
+
+  # Build lookup: <system>_REGION_BY_NAME_<NAME> -> <region object>
+  # (Used by armlink to grab FLASH without scanning all regions.)
+  get_property(_r_name GLOBAL PROPERTY ${ADD_REGION_REGION}_NAME)
+  if(_r_name STREQUAL "FLASH")
+    set_property(GLOBAL PROPERTY ${ADD_REGION_OBJECT}_REGION_BY_NAME_${_r_name} ${ADD_REGION_REGION})
+  endif()
 endfunction()
 
 # add_group OBJECT o GROUP g adds group g to object o

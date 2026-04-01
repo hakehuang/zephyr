@@ -114,6 +114,16 @@ ZTEST(threads_lifecycle, test_essential_thread_abort)
 	zassert_true(fatal_error_signaled, "fatal error was not signaled");
 }
 
+/**
+ * @brief Abort an essential thread from itself
+ *
+ * @details The kernel shall raise a fatal system error if an essential thread
+ *          aborts, implement k_sys_fatal_error_handler to handle this error.
+ *
+ * @ingroup kernel_thread_tests
+ *
+ * @see #K_ESSENTIAL(x)
+ */
 ZTEST(threads_lifecycle, test_essential_thread_abort_self)
 {
 	/* This test case needs to be able to handle a k_panic() call
@@ -125,7 +135,7 @@ ZTEST(threads_lifecycle, test_essential_thread_abort_self)
 	 * But run it for everyone else to catch regressions in the
 	 * code we are actually trying to test.
 	 */
-	if (IS_ENABLED(CONFIG_RISCV) || IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_SPARC)) {
+	if (IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_SPARC)) {
 		ztest_test_skip();
 	}
 

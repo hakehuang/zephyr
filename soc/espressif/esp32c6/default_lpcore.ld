@@ -13,7 +13,7 @@
 /* Ensure the end where the shared memory starts is aligned to 8 bytes
    if updating this also update the same in ulp_lp_core_memory_shared.c
  */
-#define ALIGNED_COPROC_MEM ALIGN_DOWN(ULP_COPROC_RESERVE_MEM, 0x8)
+#define ALIGNED_COPROC_MEM ALIGN_DOWN(ESP32_ULP_COPROC_RESERVE_MEM, 0x8)
 
 #define RODATA_REGION      ram
 #define RAMABLE_REGION     ram
@@ -24,9 +24,9 @@ _aligned_coproc_mem = ALIGNED_COPROC_MEM;
 _vector_table_org = LPSRAM_IRAM_START;
 _vector_table_len = 0x80;
 _ram_org = _vector_table_org + _vector_table_len;
-_ram_len = _aligned_coproc_mem - _vector_table_len - ULP_SHARED_MEM;
-_shared_mem_org = _ram_org + _ram_len;
-_shared_mem_len = ULP_SHARED_MEM;
+_ram_len = _aligned_coproc_mem - _vector_table_len - ESP32_ULP_SHARED_MEM_SIZE;
+_shared_mem_org = ESP32_ULP_SHARED_MEM_ADDR;
+_shared_mem_len = ESP32_ULP_SHARED_MEM_SIZE;
 
 ENTRY(reset_vector)
 
@@ -54,6 +54,8 @@ SECTIONS
         __text_region_start = ABSOLUTE(.);
         *(.text)
         *(.text*)
+        *(.iram1)
+        *(.iram1.*)
         __text_region_end = ABSOLUTE(.);
     } >ram
 
@@ -104,11 +106,13 @@ SECTIONS
 
     .bss ALIGN(4) :
     {
+        __bss_start = .;
         *(.bss)
         *(.bss*)
         *(.sbss)
         *(.sbss*)
         PROVIDE(end = .);
+        __bss_end = .;
         _heap_sentry = .;
     } >ram
 
@@ -117,6 +121,9 @@ SECTIONS
     __stack_top = ORIGIN(ram) + LENGTH(ram);
 
 #include <zephyr/linker/debug-sections.ld>
+
+    /DISCARD/ : { *(.note.GNU-stack) }
+
     SECTION_PROLOGUE(.riscv.attributes, 0,)
     {
     KEEP(*(.riscv.attributes))
@@ -124,7 +131,7 @@ SECTIONS
     }
 
     . = ORIGIN(shared_mem_ram);
-    .shared_mem (ALIGN(4)) :
+    .shared_mem (NOLOAD) :
     {
         KEEP(*(.shared_mem))
     } > shared_mem_ram

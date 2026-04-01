@@ -61,6 +61,8 @@ Only USB device function is supported in Zephyr at the moment.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
 
@@ -126,8 +128,7 @@ should see the following message in the terminal:
    ***** Booting Zephyr OS v2.7.0 *****
    Hello World! rddrone-fmuk66
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _RDDRONE-FMUK66 Website:
 

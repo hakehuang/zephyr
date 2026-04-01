@@ -12,8 +12,8 @@ on:
       - v*-branch
       - collab-*
   schedule:
-    # Run at 17:00 UTC on every Saturday
-    - cron: '0 17 * * 6'
+    # Run at 02:00 UTC on every Sunday
+    - cron: '0 2 * * 0'
 
 permissions:
   contents: read
@@ -32,7 +32,7 @@ jobs:
       fullrun: ${{ steps.output-services.outputs.fullrun }}
     env:
       MATRIX_SIZE: 10
-      PUSH_MATRIX_SIZE: 20
+      PUSH_MATRIX_SIZE: 25
       WEEKLY_MATRIX_SIZE: 200
       BSIM_OUT_PATH: /opt/bsim/
       BSIM_COMPONENTS_PATH: /opt/bsim/components
@@ -42,7 +42,7 @@ jobs:
     steps:
       - name: Checkout
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -51,7 +51,7 @@ jobs:
 
       - name: Set up Python
         if: github.event_name == 'pull_request'
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
           cache: pip
@@ -65,10 +65,10 @@ jobs:
 
       - name: Setup Zephyr project
         if: github.event_name == 'pull_request'
-        uses: zephyrproject-rtos/action-zephyr-setup@f7b70269a8eb01f70c8e710891e4c94972a2f6b4 # v1.0.6
+        uses: zephyrproject-rtos/action-zephyr-setup@360ff9b36e58499d9eb28015cdcde7ca03a5b04d # v1.0.12
         with:
           app-path: zephyr
-          toolchains: all
+          enable-ccache: false
 
       - name: Environment Setup
         working-directory: zephyr
@@ -89,7 +89,7 @@ jobs:
         run: |
           export ZEPHYR_BASE=${PWD}
           export ZEPHYR_TOOLCHAIN_VARIANT=zephyr
-          python3 ./scripts/ci/test_plan.py -c origin/${BASE_REF}.. --no-detailed-test-id --pull-request -t $TESTS_PER_BUILDER
+          python3 ./scripts/ci/test_plan.py -c origin/${BASE_REF}.. --pull-request -t $TESTS_PER_BUILDER
           if [ -s .testplan ]; then
             cat .testplan >> $GITHUB_ENV
           else
@@ -127,7 +127,7 @@ jobs:
     needs: twister-build-prep
     if: needs.twister-build-prep.outputs.size != 0
     container:
-      image: ghcr.io/zephyrproject-rtos/ci-repo-cache:v0.27.4.20241026
+      image: ghcr.io/zephyrproject-rtos/ci-repo-cache:v0.29.1.20260327
       options: '--entrypoint /bin/bash'
     strategy:
       fail-fast: false
@@ -142,13 +142,13 @@ jobs:
       CCACHE_IGNOREOPTIONS: '-specs=* --specs=*'
       BSIM_OUT_PATH: /opt/bsim/
       BSIM_COMPONENTS_PATH: /opt/bsim/components
-      TWISTER_COMMON: ' --test-config tests/test_config_ci.yaml --no-detailed-test-id --force-color --inline-logs -v -N -M --retry-failed 3 --timeout-multiplier 2 '
-      WEEKLY_OPTIONS: ' -M --build-only --all --show-footprint --report-filtered'
-      PR_OPTIONS: ' --clobber-output --integration'
-      PUSH_OPTIONS: ' --clobber-output -M --show-footprint --report-filtered'
+      TWISTER_COMMON: ' --test-config tests/test_config_ci.yaml --force-color --inline-logs -v -N -M --retry-failed 3 --timeout-multiplier 2 '
+      WEEKLY_OPTIONS: ' -M --build-only --all --show-footprint --report-filtered -j 32'
+      PR_OPTIONS: ' --clobber-output --integration -j 16'
+      PUSH_OPTIONS: ' --clobber-output -M --show-footprint --report-filtered -j 16'
       COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
       BASE_REF: ${{ github.base_ref }}
-      LLVM_TOOLCHAIN_PATH: /usr/lib/llvm-16
+      LLVM_TOOLCHAIN_PATH: /usr/lib/llvm-20
     steps:
       - name: Print cloud service information
         run: |
@@ -171,7 +171,7 @@ jobs:
           git remote set-url origin ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
 
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -192,7 +192,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
           west init -l . || true
-          west config manifest.group-filter -- +ci,+optional
+          west config manifest.group-filter -- +ci,+optional,+testing
           west config --global update.narrow true
           west update --path-cache /repo-cache/zephyrproject 2>&1 1> west.update.log || west update --path-cache /repo-cache/zephyrproject 2>&1 1> west.update.log || ( rm -rf ../modules ../bootloader ../tools && west update --path-cache /repo-cache/zephyrproject)
           west forall -c 'git reset --hard HEAD'
@@ -209,6 +209,11 @@ jobs:
           echo "github.ref: ${{ github.ref }}"
           echo "github.base_ref: ${{ github.base_ref }}"
           echo "github.ref_name: ${{ github.ref_name }}"
+
+      - name: Install Python packages
+        run: |
+          pip install -r scripts/requirements-actions.txt --require-hashes
+          west packages pip --install
 
       - name: Set up ccache
         run: |
@@ -248,7 +253,7 @@ jobs:
           rm -f testplan.json
           export ZEPHYR_BASE=${PWD}
           export ZEPHYR_TOOLCHAIN_VARIANT=zephyr
-          python3 ./scripts/ci/test_plan.py -c origin/${BASE_REF}.. --pull-request --no-detailed-test-id
+          python3 ./scripts/ci/test_plan.py -c origin/${BASE_REF}.. --pull-request
           ./scripts/twister --subset ${{matrix.subset}}/${{ strategy.job-total }} --load-tests testplan.json ${TWISTER_COMMON} ${PR_OPTIONS}
           if [ "${{matrix.subset}}" = "1" -a ${{needs.twister-build-prep.outputs.fullrun}} = 'True' ]; then
             ./scripts/zephyr_module.py --twister-out module_tests.args
@@ -278,7 +283,7 @@ jobs:
 
       - name: Upload Unit Test Results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: Unit Test Results (Subset ${{ matrix.subset }})
           if-no-files-found: ignore
@@ -300,7 +305,7 @@ jobs:
 
       - if: matrix.subset == 1 && github.event_name == 'push'
         name: Upload the list of Python packages
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: Frozen PIP package set
           path: |
@@ -310,7 +315,7 @@ jobs:
     name: "Publish Unit Tests Results"
     needs:
       - twister-build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       checks: write # to create the check run entry with Twister test results
     # the build-and-test job might be skipped, we don't need to run this job then
@@ -318,14 +323,14 @@ jobs:
 
     steps:
       - name: Check out source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
           cache: pip
@@ -336,18 +341,18 @@ jobs:
           pip install -r scripts/requirements-actions.txt --require-hashes
 
       - name: Download Artifacts
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           path: artifacts
 
       - name: Merge Test Results
         run: |
-          junitparser merge artifacts/*/*/twister.xml junit.xml
+          junitparser merge --glob 'artifacts/*/twister.xml' 'artifacts/*/*/twister.xml' junit.xml
           junit2html junit.xml junit.html
 
       - name: Upload Unit Test Results
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: Unit Test Results
           if-no-files-found: ignore
@@ -355,8 +360,14 @@ jobs:
             junit.html
             junit.xml
 
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && (github.event_name == 'push') }}
+        uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Publish Unit Test Results
-        uses: EnricoMi/publish-unit-test-result-action@170bf24d20d201b842d7a52403b73ed297e6645b # v2.18.0
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2.22.0
         with:
           check_name: Unit Test Results
           files: "**/twister.xml"
@@ -373,7 +384,7 @@ jobs:
 
       - name: Upload Twister Analysis Results
         if: needs.twister-build.result == 'failure'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: Twister Analysis Results
           if-no-files-found: ignore

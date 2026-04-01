@@ -41,7 +41,16 @@ enum bt_hfp_ag_indicator {
 #define BT_HFP_AG_CODEC_MSBC    0x02
 #define BT_HFP_AG_CODEC_LC3_SWB 0x03
 
+/**
+ * @struct bt_hfp_ag
+ * @brief HFP AG structure
+ */
 struct bt_hfp_ag;
+
+/**
+ * @struct bt_hfp_ag_call
+ * @brief HFP AG call structure
+ */
 struct bt_hfp_ag_call;
 
 /** @typedef bt_hfp_ag_query_subscriber_func_t
@@ -75,6 +84,37 @@ typedef int (*bt_hfp_ag_query_subscriber_func_t)(struct bt_hfp_ag *ag, char *num
 enum hfp_ag_hf_indicators {
 	HFP_AG_ENHANCED_SAFETY_IND = 1, /* Enhanced Safety */
 	HFP_AG_BATTERY_LEVEL_IND = 2,   /* Remaining level of Battery */
+};
+
+/* The status of the call */
+enum __packed bt_hfp_ag_call_status {
+	BT_HFP_AG_CALL_STATUS_ACTIVE = 0,       /* Call is active */
+	BT_HFP_AG_CALL_STATUS_HELD = 1,         /* Call is on hold */
+	BT_HFP_AG_CALL_STATUS_DIALING = 2,      /* Outgoing call is being dialed */
+	BT_HFP_AG_CALL_STATUS_ALERTING = 3,     /* Outgoing call is being alerted */
+	BT_HFP_AG_CALL_STATUS_INCOMING = 4,     /* Incoming call is came */
+	BT_HFP_AG_CALL_STATUS_WAITING = 5,      /* Incoming call is waiting */
+	BT_HFP_AG_CALL_STATUS_INCOMING_HELD = 6 /* Call held by Response and Hold */
+};
+
+/* The direction of the call */
+enum __packed bt_hfp_ag_call_dir {
+	BT_HFP_AG_CALL_DIR_OUTGOING = 0, /* It is a outgoing call */
+	BT_HFP_AG_CALL_DIR_INCOMING = 1, /* It is a incoming call */
+};
+
+/** @brief The ongoing call
+ *
+ *  @param number Phone number terminated with '\0' of the call.
+ *  @param type Specify the format of the phone number.
+ *  @param dir Call direction.
+ *  @param status The status of the call.
+ */
+struct bt_hfp_ag_ongoing_call {
+	char number[CONFIG_BT_HFP_AG_PHONE_NUMBER_MAX_LEN + 1];
+	uint8_t type;
+	enum bt_hfp_ag_call_dir dir;
+	enum bt_hfp_ag_call_status status;
 };
 
 /** @brief HFP profile AG application callback */
@@ -111,10 +151,65 @@ struct bt_hfp_ag_cb {
 	 *  If this callback is provided it will be called whenever the
 	 *  SCO/eSCO connection gets disconnected.
 	 *
-	 *  @param ag HFP AG object.
-	 *  @param sco_conn SCO/eSCO Connection object.
+	 *  @param conn SCO/eSCO Connection object.
+	 *  @param reason BT_HCI_ERR_* reason for the disconnection.
 	 */
-	void (*sco_disconnected)(struct bt_hfp_ag *ag);
+	void (*sco_disconnected)(struct bt_conn *sco_conn, uint8_t reason);
+
+	/** Get indicator values callback
+	 *
+	 *  If this callback is provided it will be called whenever the AG needs to provide current
+	 *  indicator values to the HF.
+	 *  This typically occurs when the HF sends `AT+CIND?` command to query the current status
+	 *  of AG indicators.
+	 *
+	 *  The application should populate the indicator values through the provided pointers. All
+	 *  indicator values should be set according to the current status of the AG.
+	 *
+	 *  @param ag HFP AG object.
+	 *  @param service Pointer to store service availability indicator value.
+	 *                 0 = service is not available, 1 = service is available.
+	 *  @param strength Pointer to store signal strength indicator value.
+	 *                Range: 0-5 (0 = no signal, 5 = maximum signal).
+	 *  @param roam Pointer to store roaming status indicator value.
+	 *              0 = not roaming, 1 = roaming.
+	 *  @param battery Pointer to store battery level indicator value.
+	 *                 Range: 0-5 (0 = battery exhausted, 5 = battery full).
+	 *
+	 *  @note The AG is in SLC establishment phase. The AG callback `connected()` is not
+	 *        notified at this time.
+	 *
+	 *  @note If the callback is not provided by the application or the returned error is no
+	 *        zero, the value of these all indicators will be set to 0 by default. And the
+	 *        specific can be set and notified by calling the dedicated function. Such as
+	 *        `service availability indicator value` can be set by calling the function
+	 *        `bt_hfp_ag_service_availability()`. The `signal strength value` can be set
+	 *        by calling `bt_hfp_ag_signal_strength()`, and so on.
+	 *
+	 *  @return 0 in case of success or negative value in case of error.
+	 */
+	int (*get_indicator_value)(struct bt_hfp_ag *ag, uint8_t *service, uint8_t *strength,
+				   uint8_t *roam, uint8_t *battery);
+
+	/** Get ongoing call information Callback
+	 *
+	 *  If this callback is provided it will be called whenever the AT command `AT+CIND?` is
+	 *  received from HF has been sent.
+	 *  After the callback notified, the ongoing calls should be set via function
+	 *  `bt_hfp_ag_ongoing_calls()` within the timeout
+	 *  @kconfig{CONFIG_BT_HFP_AG_GET_ONGOING_CALL_TIMEOUT}.
+	 *
+	 *  @param ag HFP AG object.
+	 *
+	 *  @note The AG is in SLC establishment phase. The AG callback `connected()` is not
+	 *        notified at this time.
+	 *
+	 *  @return 0 in case of success. The response `+CIND` will be sent after the function
+	 *          `bt_hfp_ag_ongoing_calls()` called or after the time exceeds
+	 *          @kconfig{CONFIG_BT_HFP_AG_GET_ONGOING_CALL_TIMEOUT}. Or negative value in case
+	 *          of error. The response `+CIND` will be replied immediately.
+	 */
+	int (*get_ongoing_call)(struct bt_hfp_ag *ag);
 
 	/** HF memory dialing request Callback
 	 *
@@ -145,6 +240,30 @@ struct bt_hfp_ag_cb {
 	 *  @return 0 in case of success or negative value in case of error.
 	 */
 	int (*number_call)(struct bt_hfp_ag *ag, const char *number);
+
+	/** HF last number redial request Callback
+	 *
+	 *  If this callback is provided it will be called whenever a
+	 *  last number redial request is received from HF via `AT+BLDN` command.
+	 *  When the callback is triggered, the application needs to provide
+	 *  the last dialed phone number.
+	 *  If the callback is invalid, the last number redial from HF
+	 *  cannot be supported.
+	 *
+	 *  The application should:
+	 *  1. Retrieve the last dialed phone number from its call history
+	 *  2. Copy the phone number to the provided buffer
+	 *
+	 *  @param ag HFP AG object.
+	 *  @param number Buffer to store the last dialed phone number.
+	 *                The buffer size is @kconfig{BT_HFP_AG_PHONE_NUMBER_MAX_LEN} + 1,
+	 *                and should be null-terminated.
+	 *
+	 *  @return 0 in case of success or negative value in case of error.
+	 *          If successful, the AG will proceed with the call setup procedure.
+	 *          If error, an ERROR response will be sent to HF.
+	 */
+	int (*redial)(struct bt_hfp_ag *ag, char number[CONFIG_BT_HFP_AG_PHONE_NUMBER_MAX_LEN + 1]);
 
 	/** HF outgoing Callback
 	 *
@@ -790,6 +909,19 @@ int bt_hfp_ag_service_availability(struct bt_hfp_ag *ag, bool available);
  *  @return 0 in case of success or negative value in case of error.
  */
 int bt_hfp_ag_hf_indicator(struct bt_hfp_ag *ag, enum hfp_ag_hf_indicators indicator, bool enable);
+
+/** @brief Set the ongoing calls
+ *
+ *  It is used to set the ongoing calls when AT command `AT+CIND?` is received.
+ *
+ *  @param ag HFP AG object.
+ *  @param calls Ongoing calls.
+ *  @param count Ongoing call count.
+ *
+ *  @return 0 in case of success or negative value in case of error.
+ */
+int bt_hfp_ag_ongoing_calls(struct bt_hfp_ag *ag, struct bt_hfp_ag_ongoing_call *calls,
+			    size_t count);
 
 #ifdef __cplusplus
 }

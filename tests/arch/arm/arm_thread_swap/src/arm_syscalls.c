@@ -21,8 +21,10 @@
 #define PRIORITY 0
 #define DB_VAL   0xDEADBEEF
 
+extern void z_yield_testing_only(void);
+
 static struct k_thread user_thread;
-static K_THREAD_STACK_DEFINE(user_thread_stack, 1024);
+static K_THREAD_STACK_DEFINE(user_thread_stack, 1024 + CONFIG_TEST_EXTRA_STACK_SIZE);
 
 #include <zephyr/internal/syscall_handler.h>
 #include "test_syscalls.h"
@@ -90,7 +92,7 @@ void arm_isr_handler(const void *args)
 
 		/* Trigger thread yield() manually */
 		(void)irq_lock();
-		z_move_thread_to_end_of_prio_q(_current);
+		z_yield_testing_only();
 		SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
 		irq_unlock(0);
 
@@ -143,7 +145,10 @@ static void user_thread_entry(void *p1, void *p2, void *p3)
 	barrier_isync_fence_full();
 #endif
 }
-
+/**
+ * @brief Test ARM thread swap mechanism
+ * @ingroup kernel_arch_sched_tests
+ */
 ZTEST(arm_thread_swap, test_arm_syscalls)
 {
 	int i = 0;
@@ -288,6 +293,3 @@ ZTEST(arm_thread_swap, test_arm_syscalls)
 }
 
 #endif /* CONFIG_USERSPACE */
-/**
- * @}
- */

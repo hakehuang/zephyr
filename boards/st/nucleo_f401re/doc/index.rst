@@ -30,7 +30,7 @@ Hardware
 Nucleo F401RE provides the following hardware components:
 
 - STM32F401RET6 in LQFP64 package
-- ARM |reg| 32-bit Cortex |reg|-M4 CPU with FPU
+- ARM® 32-bit Cortex®-M4 CPU with FPU
 - 84 MHz max CPU frequency
 - VDD from 1.7 V to 3.6 V
 - 512 KB Flash
@@ -56,7 +56,7 @@ More information about STM32F401RE can be found here:
 Supported Features
 ==================
 
-.. zephyr:board-supported-hw:
+.. zephyr:board-supported-hw::
 
 Pin Mapping
 ===========
@@ -109,6 +109,8 @@ Nucleo F401RE board has up to 3 I2Cs. The default I2C mapping for Zephyr is:
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Nucleo F401RE board includes an ST-LINK/V2-1 embedded debug tool interface.
 

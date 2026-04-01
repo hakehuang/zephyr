@@ -1,7 +1,7 @@
 /* Copyright (c) 2024 Silicon Laboratories Inc.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Poor man driver for 917 clocks. 917 includes High Performace (HP) clock
+ * Poor man driver for 917 clocks. 917 includes High Performance (HP) clock
  * (@46000000), Ultra Lower Power (ULP) clock (@24041400) and ULP VBAT (@24048000)
  *
  */
@@ -13,12 +13,14 @@
 #include "rsi_rom_ulpss_clk.h"
 #include "rsi_rom_clks.h"
 #include "rsi_sysrtc.h"
+#include "rsi_pll.h"
 #include "clock_update.h"
 #include "sl_si91x_clock_manager.h"
 
-#define DT_DRV_COMPAT silabs_siwx91x_clock
 #define DT_DRV_COMPAT          silabs_siwx91x_clock
 #define LF_FSM_CLOCK_FREQUENCY 32768
+#define XTAL_FREQUENCY         40000000
+#define INTF_PLL_FREQUENCY     160000000
 
 LOG_MODULE_REGISTER(siwx91x_clock, CONFIG_CLOCK_CONTROL_LOG_LEVEL);
 
@@ -77,6 +79,43 @@ static int siwx91x_clock_on(const struct device *dev, clock_control_subsys_t sys
 		 */
 		rsi_sysrtc_clk_set(RSI_SYSRTC_CLK_32kHz_Xtal, 0);
 		break;
+	case SIWX91X_CLK_GSPI:
+		RSI_PS_M4ssPeriPowerUp(M4SS_PWRGATE_ULP_EFUSE_PERI);
+		RSI_CLK_GspiClkConfig(M4CLK, GSPI_INTF_PLL_CLK);
+		break;
+	case SIWX91X_CLK_QSPI:
+		RSI_CLK_Qspi2ClkConfig(M4CLK, QSPI_INTFPLLCLK, 0, 0, 1);
+		break;
+	case SIWX91X_CLK_RTC:
+		/* Already done in sl_calendar_init()*/
+		RSI_PS_NpssPeriPowerUp(SLPSS_PWRGATE_ULP_MCURTC | SLPSS_PWRGATE_ULP_TIMEPERIOD);
+		break;
+	case SIWX91X_CLK_I2S0:
+		RSI_PS_M4ssPeriPowerUp(M4SS_PWRGATE_ULP_EFUSE_PERI);
+		break;
+	case SIWX91X_CLK_STATIC_I2S0:
+		MISC_CFG_MISC_CTRL1 |= (1 << 23);
+		RSI_CLK_PeripheralClkEnable(M4CLK, I2SM_CLK, ENABLE_STATIC_CLK);
+		break;
+	case SIWX91X_CLK_ULP_I2S:
+		RSI_PS_UlpssPeriPowerUp(ULPSS_PWRGATE_ULP_I2S);
+		break;
+	case SIWX91X_CLK_STATIC_ULP_I2S:
+		ULPCLK->ULP_I2S_CLK_GEN_REG_b.ULP_I2S_MASTER_SLAVE_MODE_b = 1;
+		RSI_ULPSS_PeripheralEnable(ULPCLK, ULP_I2S_CLK, ENABLE_STATIC_CLK);
+		break;
+	case SIWX91X_CLK_ADC:
+		/* Warning, DAC also use these clocks */
+		RSI_IPMU_PowerGateSet(AUXADC_PG_ENB);
+		RSI_PS_UlpssPeriPowerUp(ULPSS_PWRGATE_ULP_AUX);
+		RSI_ULPSS_AuxClkConfig(ULPCLK, ENABLE_STATIC_CLK, ULP_AUX_REF_CLK);
+		break;
+	case SIWX91X_CLK_GPDMA0:
+		RSI_CLK_PeripheralClkEnable(M4CLK, RPDMA_CLK, ENABLE_STATIC_CLK);
+		break;
+	case SIWX91X_CLK_RNG:
+		RSI_CLK_PeripheralClkEnable1(M4CLK, HWRNG_PCLK_ENABLE);
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -106,6 +145,19 @@ static int siwx91x_clock_off(const struct device *dev, clock_control_subsys_t sy
 	case SIWX91X_CLK_DMA0:
 		RSI_CLK_PeripheralClkDisable(M4CLK, UDMA_CLK);
 		break;
+	case SIWX91X_CLK_STATIC_I2S0:
+		RSI_CLK_PeripheralClkDisable(M4CLK, I2SM_CLK);
+		break;
+	case SIWX91X_CLK_STATIC_ULP_I2S:
+		RSI_ULPSS_PeripheralDisable(ULPCLK, ULP_I2S_CLK);
+		break;
+	case SIWX91X_CLK_ADC:
+		/* Warning, DAC also use these clocks */
+		RSI_PS_UlpssPeriPowerDown(ULPSS_PWRGATE_ULP_AUX);
+		RSI_ULPSS_PeripheralDisable(ULPCLK, ULP_AUX_CLK);
+		RSI_IPMU_PowerGateClr(AUXADC_PG_ENB);
+		break;
+	case SIWX91X_CLK_RNG:
 	case SIWX91X_CLK_ULP_UART:
 	case SIWX91X_CLK_I2C0:
 	case SIWX91X_CLK_I2C1:
@@ -141,6 +193,37 @@ static int siwx91x_clock_get_rate(const struct device *dev, clock_control_subsys
 	case SIWX91X_CLK_WATCHDOG:
 		*rate = LF_FSM_CLOCK_FREQUENCY;
 		return 0;
+	case SIWX91X_CLK_GSPI:
+		*rate = INTF_PLL_FREQUENCY;
+		return 0;
+	default:
+		/* For now, no other driver need clock rate */
+		return -EINVAL;
+	}
+}
+
+static int siwx91x_clock_set_rate(const struct device *dev, clock_control_subsys_t sys,
+				  clock_control_subsys_rate_t raw_rate)
+{
+	uintptr_t clockid = (uintptr_t)sys;
+	uint32_t rate = *(uint32_t *)raw_rate;
+	int ret;
+
+	ARG_UNUSED(dev);
+
+	switch (clockid) {
+	case SIWX91X_CLK_I2S0:
+		RSI_CLK_SetI2sPllFreq(M4CLK, rate, XTAL_FREQUENCY);
+		RSI_CLK_I2sClkConfig(M4CLK, I2S_PLLCLK, 0);
+		return 0;
+	case SIWX91X_CLK_ULP_I2S:
+		ret = RSI_ULPSS_UlpI2sClkConfig(ULPCLK,
+						ULPCLK->ULP_I2S_CLK_GEN_REG_b.ULP_I2S_CLK_SEL_b,
+						RSI_CLK_GetBaseClock(ULPSS_I2S) * 2 / rate);
+		if (ret) {
+			return -EIO;
+		}
+		return 0;
 	default:
 		/* For now, no other driver need clock rate */
 		return -EINVAL;
@@ -164,12 +247,17 @@ static int siwx91x_clock_init(const struct device *dev)
 {
 	SystemCoreClockUpdate();
 
+	sl_si91x_clock_manager_init();
+
 	/* Use SoC PLL at configured frequency as core clock */
-	sl_si91x_clock_manager_m4_set_core_clk(M4_SOCPLLCLK, CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC);
+	sl_si91x_clock_manager_m4_set_core_clk(M4_SOCPLLCLK,
+					       DT_PROP(DT_PATH(cpus, cpu_0), clock_frequency));
 
 	/* Use interface PLL at configured frequency as peripheral clock */
-	sl_si91x_clock_manager_set_pll_freq(INFT_PLL, CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC,
-					    PLL_REF_CLK_VAL_XTAL);
+	sl_si91x_clock_manager_set_pll_freq(INFT_PLL, INTF_PLL_FREQUENCY, PLL_REF_CLK_VAL_XTAL);
+
+	/* Change the QSPI clock source to INTF_PLL */
+	RSI_CLK_QspiClkConfig(M4CLK, QSPI_INTFPLLCLK, 0, 0, 1);
 
 	/* FIXME: Currently the clock consumer use clocks without power on them.
 	 * This should be fixed in drivers. Meanwhile, get the list of required
@@ -194,6 +282,7 @@ static DEVICE_API(clock_control, siwx91x_clock_api) = {
 	.on = siwx91x_clock_on,
 	.off = siwx91x_clock_off,
 	.get_rate = siwx91x_clock_get_rate,
+	.set_rate = siwx91x_clock_set_rate,
 	.get_status = siwx91x_clock_get_status,
 };
 

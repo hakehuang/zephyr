@@ -81,6 +81,8 @@ For more details please refer to `STM32 Nucleo-64 board User Manual`_.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Nucleo C071RB board includes an ST-LINK/V2-1 embedded debug tool interface.
 
 Applications for the ``nucleo_c071rb`` board can be built and
@@ -92,6 +94,13 @@ Flashing
 
 The board is configured to be flashed using west `STM32CubeProgrammer`_ runner,
 so its :ref:`installation <stm32cubeprog-flash-host-tools>` is required.
+
+Alternatively, an external JLink can also be used to flash the board using
+the ``--runner`` (or ``-r``) option:
+
+.. code-block:: console
+
+   $ west flash --runner jlink
 
 Flashing an application to Nucleo C071RB
 ----------------------------------------

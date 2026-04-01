@@ -73,6 +73,7 @@ these references:
 - `i.MX RT1170 Datasheet`_
 - `i.MX RT1170 Reference Manual`_
 - `MIMXRT1170-EVK Website`_
+- `MIMXRT1170-EVKB Board Hardware User's Guide`_
 - `MIMXRT1170-EVK Board Hardware User's Guide`_
 
 External Memory
@@ -105,6 +106,20 @@ family of MCUs.  This board is a focus for NXP's Full Platform Support for
 Zephyr, to better enable the entire RT11xx family.
 
 .. zephyr:board-supported-hw::
+
+Shields for Supported Features
+==============================
+
+Some features in the table above are tested with Zephyr shields.  These shields
+are tested on this board:
+
+- :ref:`rk055hdmipi4m`, :ref:`rk055hdmipi4ma0` and :ref:`g1120b0mipi` - support
+  the MIPI-DSI display interface.
+- :ref:`nxp_btb44_ov5640` - supports the MIPI-CSI video/camera interface.
+- :ref:`nxp_m2_wifi_bt` - EVK RevB version is tested with this shield to attach any M.2 module
+  with BT HCI UART interface and Wi-Fi SDIO interface. The shield binds the required NXP
+  HCI driver or SDIO driver to perform firmware-load and other setup configurations
+  for NXP SoC IW416/IW612/IW610.
 
 Connections and I/Os
 ====================
@@ -247,6 +262,8 @@ that run the command:
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 Build and flash applications as usual (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
 
@@ -293,17 +310,6 @@ reprogrammed with JLink firmware.
 - MIMXRT1170-EVKB: :ref:`mcu-link-cmsis-onboard-debug-probe`
 - MIMXRT1170-EVK:  :ref:`opensda-daplink-onboard-debug-probe`
 
-Using J-Link
-------------
-
-JLink is the default runner for this board.  Install the
-:ref:`jlink-debug-host-tools` and make sure they are in your search path.
-
-There are two options: the onboard debug circuit can be updated with Segger
-J-Link firmware, or :ref:`jlink-external-debug-probe` can be attached to the
-EVK. See `Using J-Link with MIMXRT1170-EVKB`_ or
-`Using J-Link with MIMXRT1160-EVK or MIMXRT1170-EVK`_ for more details.
-
 Using LinkServer
 ----------------
 
@@ -311,11 +317,21 @@ Install the :ref:`linkserver-debug-host-tools` and make sure they are in your
 search path.  LinkServer works with the default CMSIS-DAP firmware included in
 the on-board debugger.
 
-Use the ``-r linkserver`` option with West to use the LinkServer runner.
+Using J-Link
+------------
+
+Install the :ref:`jlink-debug-host-tools` and make sure they are in your search path.
+
+There are two options: the onboard debug circuit can be updated with Segger
+J-Link firmware, or :ref:`jlink-external-debug-probe` can be attached to the
+EVK. See `Using J-Link with MIMXRT1170-EVKB`_ or
+`Using J-Link with MIMXRT1160-EVK or MIMXRT1170-EVK`_ for more details.
+
+Use the ``-r jlink`` option with West to use the jlink runner.
 
 .. code-block:: console
 
-   west flash -r linkserver
+   west flash -r jlink
 
 Alternatively, pyOCD can be used to flash and debug the board by using the
 ``-r pyocd`` option with West. pyOCD is installed when you complete the
@@ -393,14 +409,16 @@ Current default of ethernet driver is to use 100M Ethernet instance ENET.
 To use the 1G Ethernet instance ENET1G, include the overlay to west build with
 the option ``-DEXTRA_DTC_OVERLAY_FILE=nxp,enet1g.overlay`` instead.
 
-.. include:: ../../common/board-footer.rst
-   :start-after: nxp-board-footer
+.. include:: ../../common/board-footer.rst.inc
 
 .. _MIMXRT1170-EVK Website:
    https://www.nxp.com/design/development-boards/i-mx-evaluation-and-development-boards/i-mx-rt1170-evaluation-kit:MIMXRT1170-EVK
 
 .. _MIMXRT1170-EVK Board Hardware User's Guide:
    https://www.nxp.com/webapp/Download?colCode=MIMXRT1170EVKHUG
+
+.. _MIMXRT1170-EVKB Board Hardware User's Guide:
+   https://www.nxp.com/webapp/Download?colCode=MIMXRT1170EVKBHUG
 
 .. _i.MX RT1170 Website:
    https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/i-mx-rt-crossover-mcus/i-mx-rt1170-crossover-mcu-family-first-ghz-mcu-with-arm-cortex-m7-and-cortex-m4-cores:i.MX-RT1170

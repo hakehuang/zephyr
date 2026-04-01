@@ -27,7 +27,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #include "eth.h"
 
-#define MAX_TX_FAILURE 100
+#define MAX_TX_FAILURE K_MSEC(100)
 
 #define ETH_LITEX_SLOT_SIZE 0x0800
 
@@ -35,13 +35,13 @@ struct eth_litex_dev_data {
 	struct net_if *iface;
 	uint8_t mac_addr[6];
 	uint8_t txslot;
-	struct k_mutex tx_mutex;
+	struct k_sem sem_tx_ready;
 };
 
 struct eth_litex_config {
 	const struct device *phy_dev;
 	void (*config_func)(const struct device *dev);
-	bool random_mac_address;
+	struct net_eth_mac_config mcfg;
 	uint32_t rx_slot_addr;
 	uint32_t rx_length_addr;
 	uint32_t rx_ev_pending_addr;
@@ -63,17 +63,11 @@ static int eth_initialize(const struct device *dev)
 	const struct eth_litex_config *config = dev->config;
 	struct eth_litex_dev_data *context = dev->data;
 
-	k_mutex_init(&context->tx_mutex);
+	k_sem_init(&context->sem_tx_ready, 1, 1);
 
 	config->config_func(dev);
 
-	/* TX event is disabled because it isn't used by this driver */
-	litex_write8(0, config->tx_ev_enable_addr);
-
-	if (config->random_mac_address) {
-		/* generate random MAC address */
-		gen_random_mac(context->mac_addr, 0x10, 0xe2, 0xd5);
-	}
+	(void)net_eth_mac_load(&config->mcfg, context->mac_addr);
 
 	return 0;
 }
@@ -83,9 +77,7 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	uint16_t len;
 	struct eth_litex_dev_data *context = dev->data;
 	const struct eth_litex_config *config = dev->config;
-	int attempts = 0;
-
-	k_mutex_lock(&context->tx_mutex, K_FOREVER);
+	int ret;
 
 	/* get data from packet and send it */
 	len = net_pkt_get_len(pkt);
@@ -97,26 +89,18 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	litex_write16(len, config->tx_length_addr);
 
 	/* wait for the device to be ready to transmit */
-	while (litex_read8(config->tx_ready_addr) == 0) {
-		if (attempts++ == MAX_TX_FAILURE) {
-			goto error;
-		}
-		k_sleep(K_MSEC(1));
-	}
-
+	ret = k_sem_take(&context->sem_tx_ready, MAX_TX_FAILURE);
+	if (ret < 0) {
+		LOG_ERR("TX fifo failed");
+		return -EIO;
+	};
 	/* start transmitting */
 	litex_write8(1, config->tx_start_addr);
 
 	/* change slot */
 	context->txslot = (context->txslot + 1) % config->tx_buf_n;
 
-	k_mutex_unlock(&context->tx_mutex);
-
 	return 0;
-error:
-	k_mutex_unlock(&context->tx_mutex);
-	LOG_ERR("TX fifo failed");
-	return -EIO;
 }
 
 static void eth_rx(const struct device *port)
@@ -140,10 +124,10 @@ static void eth_rx(const struct device *port)
 	rxslot = litex_read8(config->rx_slot_addr);
 
 	/* obtain rx buffer */
-	pkt = net_pkt_rx_alloc_with_buffer(context->iface, len, AF_UNSPEC, 0,
+	pkt = net_pkt_rx_alloc_with_buffer(context->iface, len, NET_AF_UNSPEC, 0,
 					   K_NO_WAIT);
 	if (pkt == NULL) {
-		LOG_ERR("Failed to obtain RX buffer");
+		LOG_ERR("Failed to obtain RX buffer of length %u", len);
 		return;
 	}
 
@@ -166,12 +150,13 @@ static void eth_rx(const struct device *port)
 
 static void eth_irq_handler(const struct device *port)
 {
+	struct eth_litex_dev_data *context = port->data;
 	const struct eth_litex_config *config = port->config;
 	/* check sram reader events (tx) */
 	if (litex_read8(config->tx_ev_pending_addr) & BIT(0)) {
-		/* TX event is not enabled nor used by this driver; ack just
-		 * in case if some rogue TX event appeared
-		 */
+		k_sem_give(&context->sem_tx_ready);
+
+		/* ack reader irq */
 		litex_write8(BIT(0), config->tx_ev_pending_addr);
 	}
 
@@ -188,25 +173,28 @@ static int eth_set_config(const struct device *dev, enum ethernet_config_type ty
 			  const struct ethernet_config *config)
 {
 	struct eth_litex_dev_data *context = dev->data;
-	int ret = -ENOTSUP;
 
 	switch (type) {
 	case ETHERNET_CONFIG_TYPE_MAC_ADDRESS:
 		memcpy(context->mac_addr, config->mac_address.addr, sizeof(context->mac_addr));
-		ret = net_if_set_link_addr(context->iface, context->mac_addr,
-					   sizeof(context->mac_addr), NET_LINK_ETHERNET);
-		break;
+		return 0;
 	default:
 		break;
 	}
 
-	return ret;
+	return -ENOTSUP;
 }
 
 static int eth_start(const struct device *dev)
 {
+	struct eth_litex_dev_data *context = dev->data;
 	const struct eth_litex_config *config = dev->config;
 
+	if (litex_read8(config->tx_ready_addr)) {
+		k_sem_give(&context->sem_tx_ready);
+	}
+
+	litex_write8(1, config->tx_ev_enable_addr);
 	litex_write8(1, config->rx_ev_enable_addr);
 
 	litex_write8(BIT(0), config->tx_ev_pending_addr);
@@ -219,6 +207,7 @@ static int eth_stop(const struct device *dev)
 {
 	const struct eth_litex_config *config = dev->config;
 
+	litex_write8(0, config->tx_ev_enable_addr);
 	litex_write8(0, config->rx_ev_enable_addr);
 
 	return 0;
@@ -254,9 +243,7 @@ static void eth_iface_init(struct net_if *iface)
 	struct eth_litex_dev_data *context = port->data;
 
 	/* set interface */
-	if (context->iface == NULL) {
-		context->iface = iface;
-	}
+	context->iface = iface;
 
 	/* initialize ethernet L2 */
 	ethernet_init(iface);
@@ -290,7 +277,7 @@ static enum ethernet_hw_caps eth_caps(const struct device *dev)
 #ifdef CONFIG_NET_VLAN
 		ETHERNET_HW_VLAN |
 #endif
-		ETHERNET_LINK_10BASE_T | ETHERNET_LINK_100BASE_T | ETHERNET_LINK_1000BASE_T;
+		ETHERNET_LINK_10BASE | ETHERNET_LINK_100BASE | ETHERNET_LINK_1000BASE;
 }
 
 static const struct ethernet_api eth_api = {
@@ -326,13 +313,12 @@ static const struct ethernet_api eth_api = {
 		irq_enable(DT_INST_IRQN(n));                                                       \
 	}                                                                                          \
                                                                                                    \
-	static struct eth_litex_dev_data eth_data##n = {                                           \
-		.mac_addr = DT_INST_PROP(n, local_mac_address)};                                   \
+	static struct eth_litex_dev_data eth_data##n;                                              \
                                                                                                    \
 	static const struct eth_litex_config eth_config##n = {                                     \
 		.phy_dev = DEVICE_DT_GET_OR_NULL(DT_INST_PHANDLE(n, phy_handle)),                  \
 		.config_func = eth_irq_config##n,                                                  \
-		.random_mac_address = DT_INST_PROP(n, zephyr_random_mac_address),                  \
+		.mcfg = NET_ETH_MAC_DT_INST_CONFIG_INIT(n),                                        \
 		.rx_slot_addr = DT_INST_REG_ADDR_BY_NAME(n, rx_slot),                              \
 		.rx_length_addr = DT_INST_REG_ADDR_BY_NAME(n, rx_length),                          \
 		.rx_ev_pending_addr = DT_INST_REG_ADDR_BY_NAME(n, rx_ev_pending),                  \

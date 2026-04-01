@@ -45,7 +45,7 @@ static int hs400x_read_sample(const struct device *dev, uint16_t *t_sample, uint
 	*t_sample = sys_get_be16(&rx_buf[2]);
 
 	/*
-	 * The sensor sends a checkum after each measurement. See datasheet "CRC Checksum
+	 * The sensor sends a checksum after each measurement. See datasheet "CRC Checksum
 	 * Calculation" section for more details on checking the checksum.
 	 */
 #if CONFIG_HS400X_CRC
@@ -147,13 +147,13 @@ static void hs400x_all_measurements_stop(const struct device *dev)
 	 * Stop previous periodic measurement.
 	 * If a periodic measurement is not running, HS400x device replies with NACK.
 	 */
-	i2c_write_dt(&cfg->bus, &periodic_measurement_stop, 1);
+	(void)i2c_write_dt(&cfg->bus, &periodic_measurement_stop, 1);
 
 	/*
 	 * Clear previous no-hold measurement.
 	 * If a measurement is not complete, HS400x device replies with NACK.
 	 */
-	i2c_read_dt(&cfg->bus, dummy, 2);
+	(void)i2c_read_dt(&cfg->bus, dummy, 2);
 }
 
 static int hs400x_init(const struct device *dev)

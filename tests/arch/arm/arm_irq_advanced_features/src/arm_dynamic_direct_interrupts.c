@@ -10,7 +10,11 @@
 #include <zephyr/sys/barrier.h>
 
 /* Offset for the Direct interrupt used in this test. */
-#define DIRECT_ISR_OFFSET (CONFIG_NUM_IRQS - 1)
+#ifdef CONFIG_2ND_LVL_ISR_TBL_OFFSET
+#define DIRECT_ISR_OFFSET (CONFIG_2ND_LVL_ISR_TBL_OFFSET - 1)
+#else
+#define DIRECT_ISR_OFFSET (CONFIG_TEST_DIRECT_IRQ_MAX - 1)
+#endif
 
 static volatile int test_flag;
 
@@ -28,6 +32,10 @@ void arm_direct_isr_handler_1(const void *args)
 	test_flag = 2;
 }
 
+/**
+ * @brief Test the ARM Dynamic Direct Interrupts functionality.
+ * @ingroup kernel_arch_interrupt_tests
+ */
 ZTEST(arm_irq_advanced_features, test_arm_dynamic_direct_interrupts)
 {
 	int post_flag = 0;
@@ -81,6 +89,3 @@ ZTEST(arm_irq_advanced_features, test_arm_dynamic_direct_interrupts)
 	post_flag = test_flag;
 	zassert_true(post_flag == 2, "Test flag not set by ISR1\n");
 }
-/**
- * @}
- */

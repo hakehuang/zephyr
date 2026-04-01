@@ -62,7 +62,7 @@ Hardware
     - TRNG
     - Secure Nonvolatile Key Storage and AES-128/192/256
     - Secure Boot to Protect IP/Firmware
-    - Wide, -40°C to +85°C Operating Temperature
+    - Wide, -40 °C to +85 °C Operating Temperature
 
 - External devices connected to the MAX32680 EVKIT:
 
@@ -286,6 +286,8 @@ Connections and IOs
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Flashing
 ========

@@ -35,7 +35,7 @@ Hardware
 Nucleo F446ZE provides the following hardware components:
 
 - STM32F446ZET6 in LQFP144 package
-- ARM |reg| 32-bit Cortex |reg|-M4 CPU with FPU
+- ARM® 32-bit Cortex®-M4 CPU with FPU
 - Adaptive real-time accelerator (ART Accelerator)
 - 180 MHz max CPU frequency
 - VDD from 1.7 V to 3.6 V
@@ -149,6 +149,8 @@ The TX/RX wires are connected with pins 25/27 of CN9 connector.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Nucleo F446ZE board includes an ST-LINK/V2-1 embedded debug tool interface.
 

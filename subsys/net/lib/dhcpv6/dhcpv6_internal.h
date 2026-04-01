@@ -16,9 +16,9 @@
 #include <zephyr/net/dhcpv6.h>
 
 #define DHCPV6_DUID_TYPE_SIZE 2
-#define DHVPV6_DUID_LL_HW_TYPE_SIZE 2
+#define DHCPV6_DUID_LL_HW_TYPE_SIZE 2
 #define DHCPV6_DUID_LL_HEADER_SIZE (DHCPV6_DUID_TYPE_SIZE + \
-				    DHVPV6_DUID_LL_HW_TYPE_SIZE)
+				    DHCPV6_DUID_LL_HW_TYPE_SIZE)
 
 #define DHCPV6_MSG_TYPE_SIZE 1
 #define DHCPV6_HEADER_SIZE (DHCPV6_MSG_TYPE_SIZE + DHCPV6_TID_SIZE)
@@ -92,7 +92,7 @@ struct dhcpv6_msg_hdr {
 struct dhcpv6_iaaddr {
 	uint32_t preferred_lifetime;
 	uint32_t valid_lifetime;
-	struct in6_addr addr;
+	struct net_in6_addr addr;
 	uint16_t status;
 };
 
@@ -107,7 +107,7 @@ struct dhcpv6_ia_na {
 struct dhcpv6_iaprefix {
 	uint32_t preferred_lifetime;
 	uint32_t valid_lifetime;
-	struct in6_addr prefix;
+	struct net_in6_addr prefix;
 	uint8_t prefix_len;
 	uint16_t status;
 };

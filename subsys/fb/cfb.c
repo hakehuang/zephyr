@@ -67,18 +67,88 @@ struct char_framebuffer {
 
 static struct char_framebuffer char_fb;
 
-static inline uint8_t *get_glyph_ptr(const struct cfb_font *fptr, uint8_t c)
+static inline const uint8_t *get_glyph_ptr(const struct cfb_font *fptr, uint8_t c)
 {
+	if (c < fptr->first_char || c > fptr->last_char) {
+		return NULL;
+	}
+
 	return (uint8_t *)fptr->data +
 	       (c - fptr->first_char) *
 	       (fptr->width * fptr->height / 8U);
 }
 
-static inline uint8_t get_glyph_byte(uint8_t *glyph_ptr, const struct cfb_font *fptr,
-				     uint8_t x, uint8_t y)
+static inline bool is_tofu_border_pixel(const struct cfb_font *fptr, uint8_t px, uint8_t py)
 {
+	if (px >= fptr->width || py >= fptr->height) {
+		return false;
+	}
+
+	const uint8_t min_dim = MIN(fptr->width, fptr->height);
+	const uint8_t max_margin = (min_dim > 2U) ? (min_dim - 2U) / 2U : 0U;
+	const uint8_t margin = MIN(min_dim / 10U, max_margin);
+	const uint8_t left = margin;
+	const uint8_t top = margin;
+	const uint8_t right = fptr->width - margin;
+	const uint8_t bottom = fptr->height - margin;
+	const uint8_t max_stroke_x = (right > (left + 1U)) ? (right - left - 1U) / 2U : 1U;
+	const uint8_t max_stroke_y = (bottom > (top + 1U)) ? (bottom - top - 1U) / 2U : 1U;
+	const uint8_t stroke = MIN(MAX(MIN(right - left, bottom - top) / 10U, 1U),
+				       MIN(max_stroke_x, max_stroke_y));
+	const bool inside_box = (px >= left) && (px < right) && (py >= top) && (py < bottom);
+	const bool on_left_or_right_edge = (px < (left + stroke)) || (px >= (right - stroke));
+	const bool on_top_or_bottom_edge = (py < (top + stroke)) || (py >= (bottom - stroke));
+
+	return inside_box && (on_left_or_right_edge || on_top_or_bottom_edge);
+}
+
+static inline uint8_t get_tofu_glyph_byte(const struct cfb_font *fptr, uint8_t x, uint8_t y,
+					  bool vtiled)
+{
+	const bool font_is_msbfirst = ((fptr->caps & CFB_FONT_MSB_FIRST) != 0);
+	uint8_t byte = 0;
+
 	if (fptr->caps & CFB_FONT_MONO_VPACKED) {
-		return glyph_ptr[(x * fptr->height + y) / 8];
+		const uint16_t tile = vtiled ? y : (y / 8U);
+		const uint16_t base_y = tile * 8U;
+
+		for (uint8_t bit = 0U; bit < 8U; bit++) {
+			const uint16_t py = base_y + bit;
+
+			if (py >= fptr->height) {
+				break;
+			}
+
+			if (is_tofu_border_pixel(fptr, x, (uint8_t)py)) {
+				byte |= font_is_msbfirst ? BIT(7U - bit) : BIT(bit);
+			}
+		}
+	} else if (fptr->caps & CFB_FONT_MONO_HPACKED) {
+		if (is_tofu_border_pixel(fptr, x, y)) {
+			const uint8_t bit = y % 8U;
+
+			byte |= font_is_msbfirst ? BIT(7U - bit) : BIT(bit);
+		}
+	} else {
+		LOG_WRN("Unknown font type");
+	}
+
+	return byte;
+}
+
+static inline uint8_t get_glyph_byte(const uint8_t *glyph_ptr, const struct cfb_font *fptr,
+				     uint8_t x, uint8_t y, bool vtiled)
+{
+	if (!glyph_ptr) {
+		return get_tofu_glyph_byte(fptr, x, y, vtiled);
+	}
+
+	if (fptr->caps & CFB_FONT_MONO_VPACKED) {
+		if (vtiled) {
+			return glyph_ptr[x * (fptr->height / 8U) + y];
+		} else {
+			return glyph_ptr[(x * fptr->height + y) / 8];
+		}
 	} else if (fptr->caps & CFB_FONT_MONO_HPACKED) {
 		return glyph_ptr[y * (fptr->width) + x];
 	}
@@ -96,19 +166,10 @@ static uint8_t draw_char_vtmono(const struct char_framebuffer *fb,
 				bool draw_bg)
 {
 	const struct cfb_font *fptr = &(fb->fonts[fb->font_idx]);
+	const uint8_t *glyph_ptr = get_glyph_ptr(fptr, c);
 	const bool font_is_msbfirst = ((fptr->caps & CFB_FONT_MSB_FIRST) != 0);
 	const bool need_reverse =
 		(((fb->screen_info & SCREEN_INFO_MONO_MSB_FIRST) != 0) != font_is_msbfirst);
-	uint8_t *glyph_ptr;
-
-	if (c < fptr->first_char || c > fptr->last_char) {
-		c = ' ';
-	}
-
-	glyph_ptr = get_glyph_ptr(fptr, c);
-	if (!glyph_ptr) {
-		return 0;
-	}
 
 	for (size_t g_x = 0; g_x < fptr->width; g_x++) {
 		const int16_t fb_x = x + g_x;
@@ -121,7 +182,7 @@ static uint8_t draw_char_vtmono(const struct char_framebuffer *fb,
 
 			const int16_t fb_y = y + g_y;
 			const size_t fb_index = (fb_y / 8U) * fb->x_res + fb_x;
-			const size_t offset = y % 8;
+			const size_t offset = ((y % 8) + 8) % 8;
 			const uint8_t bottom_lines = ((offset + fptr->height) % 8);
 			uint8_t bg_mask;
 			uint8_t byte;
@@ -140,10 +201,11 @@ static uint8_t draw_char_vtmono(const struct char_framebuffer *fb,
 				 * So, we process assume that nothing is drawn above.
 				 */
 				byte = 0;
-				next_byte = get_glyph_byte(glyph_ptr, fptr, g_x, g_y / 8);
+				next_byte = get_glyph_byte(glyph_ptr, fptr, g_x, g_y / 8, true);
 			} else {
-				byte = get_glyph_byte(glyph_ptr, fptr, g_x, g_y / 8);
-				next_byte = get_glyph_byte(glyph_ptr, fptr, g_x, (g_y + 8) / 8);
+				byte = get_glyph_byte(glyph_ptr, fptr, g_x, g_y / 8, true);
+				next_byte =
+					get_glyph_byte(glyph_ptr, fptr, g_x, (g_y + 8) / 8, true);
 			}
 
 			if (font_is_msbfirst) {
@@ -218,18 +280,9 @@ static uint8_t draw_char_htmono(const struct char_framebuffer *fb,
 				bool draw_bg)
 {
 	const struct cfb_font *fptr = &(fb->fonts[fb->font_idx]);
+	const uint8_t *glyph_ptr = get_glyph_ptr(fptr, c);
 	const bool font_is_msbfirst = (fptr->caps & CFB_FONT_MSB_FIRST) != 0;
 	const bool display_is_msbfirst = (fb->screen_info & SCREEN_INFO_MONO_MSB_FIRST) != 0;
-	uint8_t *glyph_ptr;
-
-	if (c < fptr->first_char || c > fptr->last_char) {
-		c = ' ';
-	}
-
-	glyph_ptr = get_glyph_ptr(fptr, c);
-	if (!glyph_ptr) {
-		return 0;
-	}
 
 	for (size_t g_y = 0; g_y < fptr->height; g_y++) {
 		const int16_t fb_y = y + g_y;
@@ -242,11 +295,10 @@ static uint8_t draw_char_htmono(const struct char_framebuffer *fb,
 			uint8_t pixel_value;
 
 			if (fb_x < 0 || fb->x_res <= fb_x || fb_y < 0 || fb->y_res <= fb_y) {
-				g_y++;
 				continue;
 			}
 
-			byte = get_glyph_byte(glyph_ptr, fptr, g_x, g_y);
+			byte = get_glyph_byte(glyph_ptr, fptr, g_x, g_y, false);
 			if (font_is_msbfirst) {
 				byte = byte_reverse(byte);
 			}
@@ -268,8 +320,16 @@ static uint8_t draw_char_htmono(const struct char_framebuffer *fb,
 static inline void draw_point(struct char_framebuffer *fb, int16_t x, int16_t y)
 {
 	const bool need_reverse = ((fb->screen_info & SCREEN_INFO_MONO_MSB_FIRST) != 0);
-	const size_t index = ((y / 8) * fb->x_res);
-	uint8_t m = BIT(y % 8);
+	size_t index;
+	uint8_t m;
+
+	if ((fb->screen_info & SCREEN_INFO_MONO_VTILED) != 0) {
+		index = (x + (y / 8) * fb->x_res);
+		m = BIT(y % 8);
+	} else {
+		index = ((x / 8) + y * (fb->x_res / 8));
+		m = BIT(x % 8);
+	}
 
 	if (x < 0 || x >= fb->x_res) {
 		return;
@@ -283,7 +343,7 @@ static inline void draw_point(struct char_framebuffer *fb, int16_t x, int16_t y)
 		m = byte_reverse(m);
 	}
 
-	fb->buf[index + x] |= m;
+	fb->buf[index] |= m;
 }
 
 static void draw_line(struct char_framebuffer *fb, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
@@ -381,46 +441,81 @@ int cfb_draw_rect(const struct device *dev, const struct cfb_position *start,
 	return 0;
 }
 
+int cfb_draw_circle(const struct device *dev, const struct cfb_position *center, uint16_t radius)
+{
+	struct char_framebuffer *fb = &char_fb;
+	uint16_t x = 0;
+	int16_t y = -radius;
+	int16_t p = -radius;
+
+	/* Using the Midpoint Circle Algorithm */
+	while (x < -y) {
+		if (p > 0) {
+			p += 2 * (x + ++y) + 1;
+		} else {
+			p += 2 * x + 1;
+		}
+
+		draw_point(fb, center->x + x, center->y + y);
+		draw_point(fb, center->x - x, center->y + y);
+		draw_point(fb, center->x + x, center->y - y);
+		draw_point(fb, center->x - x, center->y - y);
+		draw_point(fb, center->x + y, center->y + x);
+		draw_point(fb, center->x + y, center->y - x);
+		draw_point(fb, center->x - y, center->y + x);
+		draw_point(fb, center->x - y, center->y - x);
+
+		x++;
+	}
+
+	return 0;
+}
+
 int cfb_draw_text(const struct device *dev, const char *const str, int16_t x, int16_t y)
 {
 	return draw_text(dev, str, x, y, false);
 }
 
-int cfb_print(const struct device *dev, const char *const str, uint16_t x, uint16_t y)
+int cfb_print(const struct device *dev, const char *const str, int16_t x, int16_t y)
 {
 	return draw_text(dev, str, x, y, true);
 }
 
-int cfb_invert_area(const struct device *dev, uint16_t x, uint16_t y,
+int cfb_invert_area(const struct device *dev, int16_t x, int16_t y,
 		    uint16_t width, uint16_t height)
 {
 	const struct char_framebuffer *fb = &char_fb;
 	const bool need_reverse = ((fb->screen_info & SCREEN_INFO_MONO_MSB_FIRST) != 0);
 
-	if (x >= fb->x_res || y >= fb->y_res) {
-		LOG_ERR("Coordinates outside of framebuffer");
-
-		return -EINVAL;
+	if ((x + width) < 0 || x >= fb->x_res) {
+		return 0;
 	}
 
+	if ((y + height) < 0 || y >= fb->y_res) {
+		return 0;
+	}
+
+	if (x < 0) {
+		width += x;
+		x = 0;
+	}
+
+	if (y < 0) {
+		height += y;
+		y = 0;
+	}
+
+	if (width > (fb->x_res - x)) {
+		width = fb->x_res - x;
+	}
+
+	if (height > (fb->y_res - y)) {
+		height = fb->y_res - y;
+	}
+
+
 	if ((fb->screen_info & SCREEN_INFO_MONO_VTILED)) {
-		if (x > fb->x_res) {
-			x = fb->x_res;
-		}
-
-		if (y > fb->y_res) {
-			y = fb->y_res;
-		}
-
-		if (x + width > fb->x_res) {
-			width = fb->x_res - x;
-		}
-
-		if (y + height > fb->y_res) {
-			height = fb->y_res - y;
-		}
-
-		for (size_t i = x; i < x + width; i++) {
+		for (size_t i = x; i < (x + width); i++) {
 			for (size_t j = y; j < (y + height); j++) {
 				/*
 				 * Process inversion in the y direction
@@ -470,12 +565,37 @@ int cfb_invert_area(const struct device *dev, uint16_t x, uint16_t y,
 				}
 			}
 		}
+	} else {
+		const size_t bytes_per_row = fb->x_res / 8U;
 
-		return 0;
+		for (uint16_t j = y; j < (y + height); j++) {
+			const uint16_t start_byte = x / 8U;
+			const uint16_t end_byte = (x + width - 1U) / 8U;
+
+			for (uint16_t b = start_byte; b <= end_byte; b++) {
+				const size_t index = j * bytes_per_row + b;
+				const uint8_t bit_start = (b == start_byte) ? (x % 8U) : 0U;
+				const uint8_t bit_end =
+					(b == end_byte) ? ((x + width - 1U) % 8U) : 7U;
+				uint8_t m;
+
+				if (bit_end >= bit_start) {
+					m = BIT_MASK(bit_end - bit_start + 1U) << bit_start;
+				} else {
+					m = 0U;
+				}
+
+				if (need_reverse) {
+					m = byte_reverse(m);
+				}
+
+				/* invert byte with computed mask */
+				fb->buf[index] ^= m;
+			}
+		}
 	}
 
-	LOG_ERR("Unsupported framebuffer configuration");
-	return -EINVAL;
+	return 0;
 }
 
 static int cfb_invert(const struct char_framebuffer *fb)
@@ -532,7 +652,7 @@ int cfb_framebuffer_finalize(const struct device *dev)
 		.pitch = fb->x_res,
 	};
 
-	if ((fb->pixel_format == PIXEL_FORMAT_MONO10) == fb->inverted) {
+	if ((fb->pixel_format == PIXEL_FORMAT_MONO10) != fb->inverted) {
 		cfb_invert(fb);
 		err = api->write(dev, 0, 0, &desc, fb->buf);
 		cfb_invert(fb);

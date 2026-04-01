@@ -70,6 +70,8 @@ the XIAO, the DAC is available on pin 0.
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 The XIAO ships the BOSSA compatible UF2 bootloader.  The bootloader can be
 entered by shorting the RST and GND pads twice.
 
@@ -125,11 +127,6 @@ References
 
 .. target-notes::
 
-.. _Seeeduino XIAO wiki:
-    https://wiki.seeedstudio.com/Seeeduino-XIAO/
-
-.. _pinouts:
-    https://wiki.seeedstudio.com/Seeeduino-XIAO/#hardware-overview
-
-.. _schematic:
-    https://wiki.seeedstudio.com/Seeeduino-XIAO/#resourses
+.. _`Seeeduino XIAO wiki`: https://wiki.seeedstudio.com/Seeeduino-XIAO/
+.. _`pinouts`: https://wiki.seeedstudio.com/Seeeduino-XIAO/#hardware-overview
+.. _`schematic`: https://wiki.seeedstudio.com/Seeeduino-XIAO/#resources

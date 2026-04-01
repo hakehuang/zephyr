@@ -11,8 +11,8 @@
 #include "mesh/blob.h"
 
 #define SLOT1_PARTITION		slot1_partition
-#define SLOT1_PARTITION_ID	FIXED_PARTITION_ID(SLOT1_PARTITION)
-#define SLOT1_PARTITION_SIZE	FIXED_PARTITION_SIZE(SLOT1_PARTITION)
+#define SLOT1_PARTITION_ID	PARTITION_ID(SLOT1_PARTITION)
+#define SLOT1_PARTITION_SIZE	PARTITION_SIZE(SLOT1_PARTITION)
 /* Chunk size is set to value that is not multiple of 4, to verify that chunks are written correctly
  * even if they are not aligned with word length used in flash
  */
@@ -123,7 +123,7 @@ ZTEST(blob_io_flash, test_chunk_read)
 
 			err = blob_flash_stream.io.rd(&blob_flash_stream.io, &xfer, &block, &chunk);
 			zassert_equal(err, 0, "BLOB I/O read failed with err=%d off=%d len=%d",
-				      err, block.offset + chunk.offset, chunk.size);
+				      err, (int)(block.offset + chunk.offset), (int)chunk.size);
 
 			zassert_mem_equal(&chunk_data, &test_data[tests_data_offset], chunk.size,
 					  "Incorrect data written into flash");

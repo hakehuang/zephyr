@@ -66,6 +66,11 @@ int usbd_device_set_bcd_usb(struct usbd_context *const uds_ctx,
 	}
 
 	desc = get_device_descriptor(uds_ctx, speed);
+	if (desc == NULL) {
+		ret = -EINVAL;
+		goto set_bcd_exit;
+	}
+
 	desc->bcdUSB = sys_cpu_to_le16(bcd);
 
 set_bcd_exit:
@@ -89,8 +94,10 @@ int usbd_device_set_vid(struct usbd_context *const uds_ctx,
 	fs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_FS);
 	fs_desc->idVendor = sys_cpu_to_le16(vid);
 
-	hs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_HS);
-	hs_desc->idVendor = sys_cpu_to_le16(vid);
+	if (USBD_SUPPORTS_HIGH_SPEED) {
+		hs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_HS);
+		hs_desc->idVendor = sys_cpu_to_le16(vid);
+	}
 
 set_vid_exit:
 	usbd_device_unlock(uds_ctx);
@@ -113,8 +120,10 @@ int usbd_device_set_pid(struct usbd_context *const uds_ctx,
 	fs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_FS);
 	fs_desc->idProduct = sys_cpu_to_le16(pid);
 
-	hs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_HS);
-	hs_desc->idProduct = sys_cpu_to_le16(pid);
+	if (USBD_SUPPORTS_HIGH_SPEED) {
+		hs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_HS);
+		hs_desc->idProduct = sys_cpu_to_le16(pid);
+	}
 
 set_pid_exit:
 	usbd_device_unlock(uds_ctx);
@@ -137,8 +146,10 @@ int usbd_device_set_bcd_device(struct usbd_context *const uds_ctx,
 	fs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_FS);
 	fs_desc->bcdDevice = sys_cpu_to_le16(bcd);
 
-	hs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_HS);
-	hs_desc->bcdDevice = sys_cpu_to_le16(bcd);
+	if (USBD_SUPPORTS_HIGH_SPEED) {
+		hs_desc = get_device_descriptor(uds_ctx, USBD_SPEED_HS);
+		hs_desc->bcdDevice = sys_cpu_to_le16(bcd);
+	}
 
 set_bcd_device_exit:
 	usbd_device_unlock(uds_ctx);
@@ -161,6 +172,11 @@ int usbd_device_set_code_triple(struct usbd_context *const uds_ctx,
 	}
 
 	desc = get_device_descriptor(uds_ctx, speed);
+	if (desc == NULL) {
+		ret = -EINVAL;
+		goto set_code_triple_exit;
+	}
+
 	desc->bDeviceClass = base_class;
 	desc->bDeviceSubClass = subclass;
 	desc->bDeviceProtocol = protocol;
@@ -252,8 +268,40 @@ init_exit:
 	return ret;
 }
 
+static int usbd_preallocate(struct usbd_context *const uds_ctx)
+{
+	/* SETUP buffer allocation must not fail. Ensure SETUP buffer is always
+	 * available by pre-allocating it. USB stack effectively resubmits the
+	 * same buffer after each control transfer. This ensures that SETUP
+	 * stage can always be received regardless of UDC memory usage.
+	 *
+	 * Preallocation happens in usbd_enable() because bMaxPacketSize0 must
+	 * be known at allocation time. The buffer is kept until usbd_shutdown()
+	 * to not reallocate it on udc_disable()/udc_enable() cycles.
+	 */
+	if (uds_ctx->setup_buf == NULL) {
+		uds_ctx->setup_buf = udc_ctrl_setup_alloc(uds_ctx->dev);
+	}
+
+	if (uds_ctx->setup_buf == NULL) {
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void usbd_free_preallocated(struct usbd_context *const uds_ctx)
+{
+	/* Release reference to pre-allocated setup buffer */
+	if (uds_ctx->setup_buf != NULL) {
+		net_buf_unref(uds_ctx->setup_buf);
+		uds_ctx->setup_buf = NULL;
+	}
+}
+
 int usbd_enable(struct usbd_context *const uds_ctx)
 {
+	bool ep0_empty;
 	int ret;
 
 	k_sched_lock();
@@ -271,13 +319,27 @@ int usbd_enable(struct usbd_context *const uds_ctx)
 		goto enable_exit;
 	}
 
+	/* UDC drivers can keep enqueued control buffers across disable/enable
+	 * cycle. Enqueue SETUP buffer only if there are no queued buffers.
+	 * This check has to be done before udc_enable(), because only before
+	 * enable the driver won't complete any queued buffer.
+	 */
+	ep0_empty = udc_ep_queue_is_empty(uds_ctx->dev, USB_CONTROL_EP_OUT);
+
 	ret = udc_enable(uds_ctx->dev);
 	if (ret != 0) {
 		LOG_ERR("Failed to enable controller");
 		goto enable_exit;
 	}
 
-	ret = usbd_init_control_pipe(uds_ctx);
+	ret = usbd_preallocate(uds_ctx);
+	if (ret != 0) {
+		LOG_ERR("Buffer preallocation failed");
+		udc_disable(uds_ctx->dev);
+		goto enable_exit;
+	}
+
+	ret = usbd_init_control_pipe(uds_ctx, ep0_empty);
 	if (ret != 0) {
 		udc_disable(uds_ctx->dev);
 		goto enable_exit;
@@ -326,11 +388,17 @@ int usbd_shutdown(struct usbd_context *const uds_ctx)
 
 	usbd_device_lock(uds_ctx);
 
-	/* TODO: control request dequeue ? */
 	ret = usbd_device_shutdown_core(uds_ctx);
 	if (ret) {
 		LOG_ERR("Failed to shutdown USB device");
 	}
+
+	ret = udc_purge_queues(uds_ctx->dev);
+	if (ret) {
+		LOG_ERR("Failed to purge endpoint queues");
+	}
+
+	usbd_free_preallocated(uds_ctx);
 
 	uds_ctx->status.initialized = false;
 	usbd_device_unlock(uds_ctx);
@@ -363,6 +431,10 @@ int usbd_device_register_vreq(struct usbd_context *const uds_ctx,
 			      struct usbd_vreq_node *const vreq_nd)
 {
 	int ret = 0;
+
+	if (!IS_ENABLED(CONFIG_USBD_VREQ_SUPPORT)) {
+		return -ENOTSUP;
+	}
 
 	usbd_device_lock(uds_ctx);
 

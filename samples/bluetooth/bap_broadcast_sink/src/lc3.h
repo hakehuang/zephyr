@@ -13,8 +13,6 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
-#include <string.h>
 
 #include <zephyr/autoconf.h>
 #include <zephyr/bluetooth/audio/audio.h>
@@ -25,6 +23,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/net_buf.h>
 #include <zephyr/shell/shell.h>
+#include <zephyr/sys/clock.h>
 #include <zephyr/sys/ring_buffer.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
@@ -40,13 +39,6 @@
 #define LC3_MAX_NUM_SAMPLES_MONO                                                                   \
 	((LC3_MAX_FRAME_DURATION_US * LC3_MAX_SAMPLE_RATE_HZ) / USEC_PER_SEC)
 #define LC3_MAX_NUM_SAMPLES_STEREO (LC3_MAX_NUM_SAMPLES_MONO * 2U)
-
-/**
- * @brief Returns the number of active streams using an LC3 codec
- *
- * @return the number of active streams using an LC3 codec
- */
-size_t lc3_get_rx_streaming_cnt(void);
 
 /**
  * @brief Enables LC3 for a stream

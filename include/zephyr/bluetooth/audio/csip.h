@@ -33,6 +33,7 @@
 
 #include <zephyr/autoconf.h>
 #include <zephyr/bluetooth/addr.h>
+#include <zephyr/bluetooth/assigned_numbers.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gap.h>
@@ -93,7 +94,10 @@ extern "C" {
  */
 #define BT_CSIP_DATA_RSI(_rsi) BT_DATA(BT_DATA_CSIS_RSI, _rsi, BT_CSIP_RSI_SIZE)
 
-/** @brief Opaque Coordinated Set Identification Service instance. */
+/**
+ * @struct bt_csip_set_member_svc_inst
+ * @brief Opaque Coordinated Set Identification Service instance.
+ */
 struct bt_csip_set_member_svc_inst;
 
 /** Callback structure for the Coordinated Set Identification Service */
@@ -230,21 +234,14 @@ int bt_csip_set_member_sirk(struct bt_csip_set_member_svc_inst *svc_inst,
 			    const uint8_t sirk[BT_CSIP_SIRK_SIZE]);
 
 /**
- * @brief Get the SIRK of a service instance
- *
- * @param[in]  svc_inst  Pointer to the registered Coordinated Set Identification Service.
- * @param[out] sirk      Array to store the SIRK in.
- */
-int bt_csip_set_member_get_sirk(struct bt_csip_set_member_svc_inst *svc_inst,
-				uint8_t sirk[BT_CSIP_SIRK_SIZE]);
-
-/**
  * @brief Set a new size and rank for a service instance
  *
  * This function can be used to dynamically change the size and rank of a service instance.
  * It is important to note that a set cannot have multiple devices with the same rank in a set,
  * and it is up to the caller of this function to ensure that.
  * Similarly, it is important that the size is updated on all devices in the set at the same time.
+ * The rank of a device cannot be modified on its own, and a new rank can only be set if the @p size
+ * is different from the current set size.
  *
  * If @kconfig{CONFIG_BT_CSIP_SET_MEMBER_SIZE_NOTIFIABLE} is enabled, this will also send a
  * notification to all connected or bonded clients.
@@ -255,7 +252,7 @@ int bt_csip_set_member_get_sirk(struct bt_csip_set_member_svc_inst *svc_inst,
  *
  * @retval -EINVAL @p svc_inst is NULL, @p size is less than 1, @p rank is less than 1 or higher
  *                 than @p size for a lockable @p svc_inst.
- * @retval -EALREADY @p size and @p rank are already the provided values.
+ * @retval -EALREADY @p size is already set.
  * @retval 0 Success.
  */
 int bt_csip_set_member_set_size_and_rank(struct bt_csip_set_member_svc_inst *svc_inst, uint8_t size,

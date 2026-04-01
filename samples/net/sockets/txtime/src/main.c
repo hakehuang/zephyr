@@ -22,6 +22,9 @@ LOG_MODULE_REGISTER(net_txtime_sample, LOG_LEVEL_DBG);
 #include <zephyr/net/ethernet.h>
 #include <zephyr/net/ethernet_mgmt.h>
 
+#include <zephyr/posix/sys/socket.h>
+#include <zephyr/posix/unistd.h>
+
 #include "net_sample_common.h"
 
 #define APP_BANNER "Run SO_TXTIME client"
@@ -71,7 +74,7 @@ static void quit(void)
 }
 
 static void event_handler(struct net_mgmt_event_callback *cb,
-			  uint32_t mgmt_event, struct net_if *iface)
+			  uint64_t mgmt_event, struct net_if *iface)
 {
 	static bool dhcpv4_done;
 

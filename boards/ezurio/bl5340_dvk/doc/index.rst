@@ -191,6 +191,8 @@ Security components
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 The BL5340's application core supports the Armv8-M Security Extension.
 Applications built for the ``bl5340_dvk/nrf5340/cpuapp`` board by default
 boot in the Secure state.
@@ -200,8 +202,8 @@ Extension. The IDAU may configure bus accesses by the network core to
 have Secure attribute set; the latter allows to build and run Secure
 only applications on the BL5340 module.
 
-Building Secure/Non-Secure Zephyr applications with Arm |reg| TrustZone |reg|
-=============================================================================
+Building Secure/Non-Secure Zephyr applications with Arm® TrustZone®
+===================================================================
 
 Applications on the BL5340 module may contain a Secure and a Non-Secure
 firmware image for the application core. The Secure image can be built
@@ -291,7 +293,7 @@ applications as usual (:ref:`build_an_application` and
 
    .. code-block:: console
 
-      west flash -H -r nrfjprog --skip-rebuild
+      west flash -H -r nrfjprog --no-rebuild
 
 .. note::
 

@@ -66,7 +66,7 @@ LOG_MODULE_REGISTER(spi_cadence, CONFIG_SPI_LOG_LEVEL);
 #define SPI_INT_MF  BIT(1)
 #define SPI_INT_ROF BIT(0)
 
-#define SPI_INT_DEFAULT (SPI_INT_RNE | SPI_INT_TNF | SPI_INT_ROF | SPI_INT_TUF)
+#define SPI_INT_DEFAULT (SPI_INT_TNF | SPI_INT_ROF | SPI_INT_TUF)
 
 /* SPI enable register bit offset */
 #define SPI_SPI_ENABLE_SPIE BIT(0)
@@ -108,9 +108,6 @@ struct spi_cdns_cfg {
 	uint32_t clock_frequency;
 	uint32_t ext_clock;
 	irq_config_func_t irq_config;
-#ifdef CONFIG_PINCTRL
-	const struct pinctrl_dev_config *pcfg;
-#endif
 	uint8_t fifo_width;
 	uint16_t rx_fifo_depth;
 	uint16_t tx_fifo_depth;
@@ -221,33 +218,6 @@ static inline void spi_cdns_cs_control(const struct device *dev, bool on)
 	}
 }
 
-static void spi_cdns_config_clock_freq(const struct device *dev, uint32_t spi_freq)
-{
-	const struct spi_cdns_cfg *cfg = dev->config;
-	uint32_t ctrl_reg, baud_rate_div;
-	uint32_t clock_freq;
-
-	clock_freq = cfg->clock_frequency;
-
-	ctrl_reg = sys_read32(SPI_REG(dev, SPI_CONF));
-
-	/*
-	 * Set the clock frequency
-	 * first valid value is 0 (/2)
-	 */
-	baud_rate_div = SPI_MBRD_MIN;
-	while ((baud_rate_div < SPI_MBRD_MAX) && (clock_freq / (2 << baud_rate_div)) > spi_freq) {
-		baud_rate_div++;
-	}
-
-	ctrl_reg &= ~SPI_CONF_MBRD_MASK;
-	ctrl_reg |= baud_rate_div << SPI_CONF_MBRD_OFFSET;
-
-	LOG_DBG("%s: spi baud rate %uHz", dev->name, clock_freq / (2 << baud_rate_div));
-
-	sys_write32(ctrl_reg, SPI_REG(dev, SPI_CONF));
-}
-
 /**
  * @brief Send 1-entry to Tx-FIFO
  *
@@ -291,16 +261,46 @@ static void spi_cdns_send(const struct device *dev)
 				break;
 			}
 		}
-		if ((spi_context_tx_buf_on(ctx) || spi_context_rx_buf_on(ctx))) {
-			if (data->tx_remain_entry > 0) {
-				data->tx_remain_entry--;
-				data->fifo_diff++;
-			}
+		if (data->tx_remain_entry > 0) {
+			data->tx_remain_entry--;
+			data->fifo_diff++;
 		}
 		spi_context_update_tx(&data->ctx, dfs, 1);
 	}
 
 	sys_write32(val, SPI_REG(dev, SPI_TX_DATA));
+}
+
+static inline void spi_cdns_rx_store(const struct spi_cdns_cfg *config,
+		struct spi_context *ctx,
+		uint32_t val, uint8_t dfs, int idx)
+{
+	switch (dfs) {
+	case 1:
+		if (config->fifo_width == 8) {
+			UNALIGNED_PUT(val & 0xFF, (uint8_t *)ctx->rx_buf);
+		} else if (config->fifo_width == 16) {
+			UNALIGNED_PUT((val >> 8 * (1 - idx)) & 0xFF,
+					(uint8_t *)ctx->rx_buf);
+		} else if (config->fifo_width == 32) {
+			UNALIGNED_PUT((val >> 8 * (3 - idx)) & 0xFF,
+					(uint8_t *)ctx->rx_buf);
+		}
+		break;
+	case 2:
+		if (config->fifo_width == 16) {
+			UNALIGNED_PUT(val & 0xFFFF, (uint16_t *)ctx->rx_buf);
+		} else if (config->fifo_width == 32) {
+			UNALIGNED_PUT((val >> 16 * (1 - idx)) & 0xFFFF,
+					(uint16_t *)ctx->rx_buf);
+		}
+		break;
+	case 4:
+		if (config->fifo_width == 32) {
+			UNALIGNED_PUT(val, (uint32_t *)ctx->rx_buf);
+		}
+		break;
+	}
 }
 
 /**
@@ -323,37 +323,20 @@ static void spi_cdns_recv(const struct device *dev)
 	loop = (config->fifo_width / 8) / dfs;
 	for (i = 0; i < loop; i++) {
 		if (spi_context_rx_buf_on(ctx)) {
-			switch (dfs) {
-			case 1:
-				if (config->fifo_width == 8) {
-					UNALIGNED_PUT(val & 0xFF, (uint8_t *)ctx->rx_buf);
-				} else if (config->fifo_width == 16) {
-					UNALIGNED_PUT((val >> 8 * (1 - i)) & 0xFF,
-						      (uint8_t *)ctx->rx_buf);
-				} else if (config->fifo_width == 32) {
-					UNALIGNED_PUT((val >> 8 * (3 - i)) & 0xFF,
-						      (uint8_t *)ctx->rx_buf);
-				}
-				break;
-			case 2:
-				if (config->fifo_width == 16) {
-					UNALIGNED_PUT(val & 0xFFFF, (uint16_t *)ctx->rx_buf);
-				} else if (config->fifo_width == 32) {
-					UNALIGNED_PUT((val >> 16 * (1 - i)) & 0xFFFF,
-						      (uint16_t *)ctx->rx_buf);
-				}
-				break;
-			case 4:
-				if (config->fifo_width == 32) {
-					UNALIGNED_PUT(val, (uint32_t *)ctx->rx_buf);
-				}
-				break;
+			spi_cdns_rx_store(config, ctx, val, dfs, i);
+
+			/* Slave: advance RX only when a buffer is present */
+			if (spi_context_is_slave(ctx)) {
+				spi_context_update_rx(ctx, dfs, 1);
 			}
+		}
+		/* Master: always advance RX per received frame */
+		if (!spi_context_is_slave(ctx)) {
+			spi_context_update_rx(ctx, dfs, 1);
 		}
 		if (data->fifo_diff > 0) {
 			data->fifo_diff--;
 		}
-		spi_context_update_rx(ctx, dfs, 1);
 	}
 }
 
@@ -400,32 +383,10 @@ static void spi_cdns_push_data(const struct device *dev)
  */
 static void spi_cdns_pull_data(const struct device *dev)
 {
-	const struct spi_cdns_cfg *config = dev->config;
 	struct spi_cdns_data *data = dev->data;
-	uint32_t rx_threshold_tmp;
-	uint32_t rx_remain_entry;
 
-	/*
-	 * As there is no rx fifo empty status bit, Write the rx threshold
-	 * to so the rne status bit will report when there is less than 1
-	 * item in the fifo
-	 */
-	rx_threshold_tmp = sys_read32(SPI_REG(dev, SPI_RX_THRESHOLD));
-	sys_write32(1, SPI_REG(dev, SPI_RX_THRESHOLD));
-
-	while (sys_read32(SPI_REG(dev, SPI_INT_STATUS)) & SPI_INT_RNE) {
+	while (data->fifo_diff > 0) {
 		spi_cdns_recv(dev);
-	}
-
-	/*
-	 * The threshold is designed to trigger by FIFO I/O.
-	 * Therefore, it is necessary to set rx threshold before pulling.
-	 */
-	rx_remain_entry = DIV_ROUND_UP(data->fifo_diff, (config->fifo_width / 8));
-	if ((rx_remain_entry != 0) && (rx_remain_entry < rx_threshold_tmp)) {
-		sys_write32(rx_remain_entry, SPI_REG(dev, SPI_RX_THRESHOLD));
-	} else {
-		sys_write32(rx_threshold_tmp, SPI_REG(dev, SPI_RX_THRESHOLD));
 	}
 }
 
@@ -442,7 +403,8 @@ static int spi_cdns_configure(const struct device *dev, const struct spi_config 
 {
 	const struct spi_cdns_cfg *dev_config = dev->config;
 	struct spi_cdns_data *data = dev->data;
-	uint32_t word_size, conf_val;
+	uint32_t word_size, conf_val, clock_freq, ext_clock_freq;
+	uint8_t baud_rate_div, ext_baud_rate_div;
 
 	if (spi_cdns_context_configured(dev, config)) {
 		/* Nothing to do */
@@ -476,7 +438,7 @@ static int spi_cdns_configure(const struct device *dev, const struct spi_config 
 	data->ctx.config = config;
 	data->config = *config;
 
-	conf_val = SPI_CONF_PCSL_MASK | SPI_CONF_MCSE | SPI_CONF_MRCS;
+	conf_val = SPI_CONF_PCSL_MASK | SPI_CONF_MCSE;
 
 	/* Configure for Master or Slave */
 	if (config->operation & SPI_OP_MODE_SLAVE) {
@@ -504,7 +466,38 @@ static int spi_cdns_configure(const struct device *dev, const struct spi_config 
 	 * SPI clock is generated based on pclk or ext_clk, and the frequency closest
 	 * to the value obtained by dividing the two base clocks is selected.
 	 */
-	spi_cdns_config_clock_freq(dev, config->frequency);
+	clock_freq = dev_config->clock_frequency;
+	baud_rate_div = SPI_MBRD_MIN;
+	while ((baud_rate_div < SPI_MBRD_MAX) &&
+	       ((clock_freq / (2 << baud_rate_div)) > config->frequency)) {
+		baud_rate_div++;
+	}
+
+	if (dev_config->ext_clock) {
+		/* check if there is a closer frequency with ext_clock */
+		ext_clock_freq = dev_config->ext_clock;
+		ext_baud_rate_div = SPI_MBRD_MIN;
+		while ((ext_baud_rate_div < SPI_MBRD_MAX) &&
+		       ((ext_clock_freq / (2 << ext_baud_rate_div)) > config->frequency)) {
+			ext_baud_rate_div++;
+		}
+		if (config->frequency - (clock_freq / (2 << baud_rate_div)) >
+		    config->frequency - (ext_clock_freq / (2 << ext_baud_rate_div))) {
+			/* ext_clock is closer, so use it instead */
+			baud_rate_div = ext_baud_rate_div;
+			clock_freq = ext_clock_freq;
+			conf_val |= SPI_CONF_MRCS;
+		} else {
+			conf_val &= ~SPI_CONF_MRCS;
+		}
+	} else {
+		conf_val &= ~SPI_CONF_MRCS;
+	}
+
+	conf_val &= ~SPI_CONF_MBRD_MASK;
+	conf_val |= baud_rate_div << SPI_CONF_MBRD_OFFSET;
+
+	LOG_DBG("%s: spi baud rate %uHz", dev->name, clock_freq / (2 << baud_rate_div));
 
 	/* Set transfer word size */
 	conf_val &= ~(SPI_CONF_TWS_MASK);
@@ -523,6 +516,7 @@ static int spi_cdns_configure(const struct device *dev, const struct spi_config 
  */
 static void spi_cdns_isr(const struct device *dev)
 {
+	const struct spi_cdns_cfg *dev_config = dev->config;
 	struct spi_cdns_data *data = dev->data;
 	int32_t int_status;
 	int error = 0;
@@ -542,21 +536,31 @@ static void spi_cdns_isr(const struct device *dev)
 		goto complete;
 	}
 
-	if (int_status & SPI_INT_RNE) {
-		spi_cdns_pull_data(dev);
-	}
-
 	if (int_status & SPI_INT_TNF) {
+		if (spi_context_is_slave(&data->ctx)) {
+			/* Fixed delay due to controller limitation with
+			 * RX_NEMPTY incorrect status
+			 * Xilinx AR:65885 contains more details
+			 */
+			k_busy_wait(10);
+		}
+		spi_cdns_pull_data(dev);
+
+		/* Set threshold to one if transfer length
+		 * is less than half FIFO depth
+		 */
+		if (data->tx_remain_entry < dev_config->tx_fifo_depth >> 1) {
+			sys_write32(1, SPI_REG(dev, SPI_TX_THRESHOLD));
+		}
+	}
+
+	if (!spi_context_tx_buf_on(&data->ctx) && !spi_context_rx_buf_on(&data->ctx)) {
+		/* Both TX and RX are done - transfer complete */
+		goto complete;
+	} else {
+		/* Still have data to process - continue transfer */
 		spi_cdns_push_data(dev);
-	}
-
-	if (!spi_context_tx_buf_on(&data->ctx)) {
-		/* Disable Tx-FIFO interrupt for no transfer data */
-		sys_write32(SPI_INT_TNF, SPI_REG(dev, SPI_INT_DISABLE));
-	}
-
-	if (spi_context_tx_buf_on(&data->ctx) || spi_context_rx_buf_on(&data->ctx)) {
-		return;
+		sys_write32(SPI_INT_TNF, SPI_REG(dev, SPI_INT_ENABLE));
 	}
 
 	if (data->fifo_diff != 0) {
@@ -573,7 +577,6 @@ complete:
 			spi_cdns_cs_control(dev, false);
 		}
 		pm_device_busy_clear(dev);
-		pm_device_runtime_put(dev);
 	}
 #endif
 
@@ -642,7 +645,6 @@ static int spi_cdns_transceive(const struct device *dev, const struct spi_config
 
 	spi_context_lock(&data->ctx, asynchronous, cb, userdata, config);
 
-	pm_device_runtime_get(dev);
 	pm_device_busy_set(dev);
 
 	spi_cdns_spi_enable(dev, false);
@@ -683,24 +685,20 @@ static int spi_cdns_transceive(const struct device *dev, const struct spi_config
 		goto out;
 	}
 
-	/* Set fifo thresholds */
-	if (spi_context_is_slave(&data->ctx)) {
-		sys_write32(1, SPI_REG(dev, SPI_RX_THRESHOLD));
-		sys_write32(dev_config->tx_fifo_depth - 1, SPI_REG(dev, SPI_TX_THRESHOLD));
-	} else {
-		uint32_t fifo_words = MIN(DIV_ROUND_UP(spi_context_total_rx_len(&data->ctx),
-						       (dev_config->fifo_width / 8)),
-					  dev_config->rx_fifo_depth * 5 / 8);
-		sys_write32(fifo_words, SPI_REG(dev, SPI_RX_THRESHOLD));
-		sys_write32(dev_config->tx_fifo_depth / 2, SPI_REG(dev, SPI_TX_THRESHOLD));
+	/* Set slave TX fifo threshold */
+	if (spi_context_is_slave(&data->ctx) && data->tx_remain_entry > dev_config->tx_fifo_depth) {
+		/* Set TX threshold to half FIFO depth
+		 * when transfer size exceeds FIFO depth
+		 */
+		sys_write32(dev_config->tx_fifo_depth >> 1, SPI_REG(dev, SPI_TX_THRESHOLD));
 	}
-
 	if (spi_cs_is_gpio(data->ctx.config)) {
 		spi_context_cs_control(&data->ctx, true);
 	} else {
 		spi_cdns_cs_control(dev, true);
 	}
 
+	spi_cdns_push_data(dev);
 	sys_write32(SPI_INT_DEFAULT, SPI_REG(dev, SPI_INT_ENABLE));
 
 	ret = spi_context_wait_for_completion(&data->ctx);
@@ -712,7 +710,6 @@ static int spi_cdns_transceive(const struct device *dev, const struct spi_config
 			spi_cdns_cs_control(dev, false);
 		}
 		pm_device_busy_clear(dev);
-		pm_device_runtime_put(dev);
 	}
 
 #ifdef CONFIG_SPI_SLAVE
@@ -795,39 +792,6 @@ static int spi_cdns_release(const struct device *dev, const struct spi_config *c
 	return 0;
 }
 
-#ifdef CONFIG_PM_DEVICE
-static int spi_cdns_pm_action(const struct device *dev, enum pm_device_action action)
-{
-	const struct spi_cdns_cfg *cfg = dev->config;
-	int ret;
-
-	switch (action) {
-	case PM_DEVICE_ACTION_RESUME:
-		/* TODO: Enable SPI Clock */
-#ifdef CONFIG_PINCTRL
-		ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
-		if (ret < 0) {
-			return ret;
-		}
-#endif
-		break;
-	case PM_DEVICE_ACTION_SUSPEND:
-		/* TODO: Disable SPI Clock */
-#ifdef CONFIG_PINCTRL
-		ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-		if (ret < 0) {
-			return ret;
-		}
-#endif
-		break;
-	default:
-		ret = -ENOTSUP;
-	}
-
-	return ret;
-}
-#endif /* CONFIG_PM_DEVICE */
-
 /**
  * SPI driver API registered in Zephyr spi framework
  */
@@ -837,13 +801,10 @@ static DEVICE_API(spi, spi_cdns_api) = {
 	.transceive_async = spi_cdns_transceive_async,
 #endif /* CONFIG_SPI_ASYNC */
 	.release = spi_cdns_release,
+#ifdef CONFIG_SPI_RTIO
+	.iodev_submit = spi_rtio_iodev_default_submit,
+#endif /* CONFIG_SPI_RTIO */
 };
-
-/* Set clock-frequency-ext to pclk / 5 if there is no clock-frequency-ext */
-#define SPI_CLOCK_FREQUENCY_EXT(n)                                                                 \
-	COND_CODE_1(DT_INST_NODE_HAS_PROP(n, clock_frequency_ext), \
-		(DT_INST_PROP(n, clock_frequency_ext)),            \
-		(DT_INST_PROP(n, clock_frequency) / 5))
 
 #define SPI_CDNS_INIT(n)                                                                           \
 	static void spi_cdns_irq_config_##n(void);                                                 \
@@ -855,11 +816,13 @@ static DEVICE_API(spi, spi_cdns_api) = {
 		.base = DT_INST_REG_ADDR(n),                                                       \
 		.irq_config = spi_cdns_irq_config_##n,                                             \
 		.clock_frequency = DT_INST_PROP(n, clock_frequency),                               \
-		.ext_clock = SPI_CLOCK_FREQUENCY_EXT(n),                                           \
+		.ext_clock = DT_INST_PROP_OR(n, clock_frequency_ext, 0),                           \
+		.fifo_width = DT_INST_PROP(n, fifo_width),                                         \
+		.tx_fifo_depth = DT_INST_PROP(n, tx_fifo_depth),                                   \
+		.rx_fifo_depth = DT_INST_PROP(n, rx_fifo_depth),                                   \
 	};                                                                                         \
-	SPI_DEVICE_DT_INST_DEFINE(n, spi_cdns_init, spi_cdns_pm_action, &spi_cdns_data_##n,        \
-				  &spi_cdns_cfg_##n, POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,        \
-				  &spi_cdns_api);                                                  \
+	SPI_DEVICE_DT_INST_DEFINE(n, spi_cdns_init, NULL, &spi_cdns_data_##n, &spi_cdns_cfg_##n,   \
+				  POST_KERNEL, CONFIG_SPI_INIT_PRIORITY, &spi_cdns_api);           \
 	static void spi_cdns_irq_config_##n(void)                                                  \
 	{                                                                                          \
 		IRQ_CONNECT(DT_INST_IRQN(n), DT_INST_IRQ(n, priority), spi_cdns_isr,               \

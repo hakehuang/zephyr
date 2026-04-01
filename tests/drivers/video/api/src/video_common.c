@@ -36,40 +36,34 @@ ZTEST(video_common, test_video_format_caps_index)
 
 	fmt.width = 100;
 	fmt.height = 100;
-	fmt.pitch = 100 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_ok(ret, "expecting minimum value to match");
 	zassert_equal(idx, YUYV_A);
 
 	fmt.width = 1000;
 	fmt.height = 1000;
-	fmt.pitch = 1000 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_ok(ret, "expecting maximum value to match");
 	zassert_equal(idx, YUYV_A);
 
 	fmt.width = 1920;
 	fmt.height = 1080;
-	fmt.pitch = 1920 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_ok(ret, "expecting exact match to work");
 	zassert_equal(idx, YUYV_B);
 
 	fmt.width = 1001;
 	fmt.height = 1000;
-	fmt.pitch = 1001 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_not_ok(ret, "expecting 1 above maximum width to mismatch");
 
 	fmt.width = 1000;
 	fmt.height = 1001;
-	fmt.pitch = 1000 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_not_ok(ret, "expecting 1 above maximum height to mismatch");
 
 	fmt.width = 1280;
 	fmt.height = 720;
-	fmt.pitch = 1280 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_not_ok(ret);
 	zassert_not_ok(ret, "expecting wrong format to mismatch");
@@ -78,13 +72,11 @@ ZTEST(video_common, test_video_format_caps_index)
 
 	fmt.width = 1000;
 	fmt.height = 1000;
-	fmt.pitch = 1000 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_not_ok(ret, "expecting wrong format to mismatch");
 
 	fmt.width = 1280;
 	fmt.height = 720;
-	fmt.pitch = 1280 * 2;
 	ret = video_format_caps_index(fmts, &fmt, &idx);
 	zassert_ok(ret, "expecting exact match to work");
 	zassert_equal(idx, RGB565);
@@ -115,6 +107,7 @@ ZTEST(video_common, test_video_closest_frmival_stepwise)
 	struct video_frmival desired;
 	struct video_frmival expected;
 	struct video_frmival match;
+	int ret;
 
 	stepwise.min.numerator = 1;
 	stepwise.min.denominator = 30;
@@ -125,29 +118,34 @@ ZTEST(video_common, test_video_closest_frmival_stepwise)
 
 	desired.numerator = 1;
 	desired.denominator = 1;
-	video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	ret = video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	zassert_ok(ret, "expecting video_closest_frmival_stepwise to work");
 	zassert_equal(video_frmival_nsec(&match), video_frmival_nsec(&desired), "1 / 1");
 
 	desired.numerator = 3;
 	desired.denominator = 30;
-	video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	ret = video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	zassert_ok(ret, "expecting video_closest_frmival_stepwise to work");
 	zassert_equal(video_frmival_nsec(&match), video_frmival_nsec(&desired), "3 / 30");
 
 	desired.numerator = 7;
 	desired.denominator = 80;
 	expected.numerator = 3;
 	expected.denominator = 30;
-	video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	ret = video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	zassert_ok(ret, "expecting video_closest_frmival_stepwise to work");
 	zassert_equal(video_frmival_nsec(&match), video_frmival_nsec(&expected), "7 / 80");
 
 	desired.numerator = 1;
 	desired.denominator = 120;
-	video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	ret = video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	zassert_ok(ret, "expecting video_closest_frmival_stepwise to work");
 	zassert_equal(video_frmival_nsec(&match), video_frmival_nsec(&stepwise.min), "1 / 120");
 
 	desired.numerator = 100;
 	desired.denominator = 1;
-	video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	ret = video_closest_frmival_stepwise(&stepwise, &desired, &match);
+	zassert_ok(ret, "expecting video_closest_frmival_stepwise to work");
 	zassert_equal(video_frmival_nsec(&match), video_frmival_nsec(&stepwise.max), "100 / 1");
 }
 

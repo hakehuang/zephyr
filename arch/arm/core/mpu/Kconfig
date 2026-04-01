@@ -71,12 +71,19 @@ config CUSTOM_SECTION_MIN_ALIGN_SIZE
 
 config ARM_MPU_PXN
 	bool
+	default y
 	depends on ARMV8_1_M_MAINLINE
 	help
 	  Enable support for Armv8.1-m MPU's Privileged Execute Never (PXN) attr.
 	  An MPU region marked with PXN attribute can only be executed from an
 	  unprivileged mode and executing such region from privileged mode will
 	  result in a Memory Management fault.
+
+config ARM_MPU_SRAM_WRITE_THROUGH
+	bool "Use Write-Through cache policy for SRAM regions"
+	help
+	  When enabled, SRAM regions will use Write-Through cache policy
+	  instead of the default Write-Back policy.
 
 endif # ARM_MPU
 

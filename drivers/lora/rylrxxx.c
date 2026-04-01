@@ -172,11 +172,11 @@ static void on_rx(struct modem_chat *chat, char **argv, uint16_t argc, void *use
 
 	if (RYLR_IS_RX_PENDING(driver_data->pending_async_flags)) {
 		driver_data->async_rx_cb(driver_data->dev, msg.data, msg.length, msg.rssi, msg.snr,
-					     driver_data->async_user_data);
+					 driver_data->async_user_data);
 	} else {
 		err = k_msgq_put(&driver_data->rx_msgq, &msg, K_NO_WAIT);
 		if (err != 0) {
-			LOG_ERR("error adding messgae to queue: %d", err);
+			LOG_ERR("error adding message to queue: %d", err);
 			driver_data->handler_error = err;
 		}
 	}
@@ -390,13 +390,15 @@ int rylr_send(const struct device *dev, uint8_t *payload, uint32_t payload_len)
 		goto exit;
 	}
 
-	if (cmd_len > CONFIG_LORA_RYLRXX_CMD_BUF_SIZE) {
+	/* snprintf requires an extra byte for the terminating NULL */
+	if (cmd_len > (CONFIG_LORA_RYLRXX_CMD_BUF_SIZE - 1)) {
 		LOG_ERR("payload too long");
 		err = -EINVAL;
 		goto exit;
 	}
 
-	snprintf(data->cmd_buffer, cmd_len + 1, RYLR_CMD_SEND_FORMAT, payload_len, payload);
+	snprintf(data->cmd_buffer, sizeof(data->cmd_buffer), RYLR_CMD_SEND_FORMAT, payload_len,
+		 payload);
 	data->curr_cmd_len = cmd_len;
 	err = rylr_send_cmd_buffer(dev);
 	if (err != 0) {
@@ -437,7 +439,8 @@ int rylr_send_async(const struct device *dev, uint8_t *payload, uint32_t payload
 	}
 
 	cmd_len = RYLR_CMD_SEND_LENGTH(payload_len);
-	if (cmd_len > CONFIG_LORA_RYLRXX_CMD_BUF_SIZE) {
+	/* snprintf requires an extra byte for the terminating NULL */
+	if (cmd_len > (CONFIG_LORA_RYLRXX_CMD_BUF_SIZE - 1)) {
 		LOG_ERR("payload too long");
 		err = -EINVAL;
 		goto bail;
@@ -450,8 +453,8 @@ int rylr_send_async(const struct device *dev, uint8_t *payload, uint32_t payload
 	}
 
 	data->async_tx_signal = async;
-	data->curr_cmd_len =
-		snprintf(data->cmd_buffer, cmd_len + 1, RYLR_CMD_SEND_FORMAT, payload_len, payload);
+	data->curr_cmd_len = snprintf(data->cmd_buffer, sizeof(data->cmd_buffer),
+				      RYLR_CMD_SEND_FORMAT, payload_len, payload);
 	rylr_reset_dynamic_script(data);
 	data->dynamic_chat.request = data->cmd_buffer;
 	data->dynamic_chat.request_size = data->curr_cmd_len;
@@ -528,7 +531,7 @@ int rylr_recv_async(const struct device *dev, lora_recv_cb cb, void *user_data)
 		return err;
 	}
 
-	/* This is not a user error but the documeted way to cancel async reception in lora api*/
+	/* This is not a user error but the documented way to cancel async reception in lora api*/
 	if (cb == NULL) {
 		goto bail;
 	}

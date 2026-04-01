@@ -1,13 +1,16 @@
-.. _intel_btl_s:
-
-Bartlett Lake S
-###############
+.. zephyr:board:: intel_btl_s_crb
 
 Overview
 ********
-Bartlett Lake processor is a 64-bit multi-core processor built on Intel 7 process
-Technology. Bartlett Lake is based on a Hybrid architecture, utilizing
-P-cores for performance and E-Cores for efficiency.
+The Bartlett Lake processor is a 64-bit multi-core processor built on Intel's 7 process technology.
+
+It is available in two versions, one version is based on a hybrid architecture utilizing both
+P-cores for performance and E-cores for efficiency, while the other version is based solely on
+P-cores. These two versions are enabled as two revisions in Zephyr, as listed below:
+* Revision "H" - BTL-s Hybrid
+* Revision "P" - BTL-s 12P
+
+Default revision H is selected. To build for revision P, use ``intel_btl_s_crb@P``.
 
 The S-Processor line is a 2-Chip Platform that includes the Processor Die and
 Platform Controller Hub (PCH-S) Die in the Package.
@@ -19,6 +22,8 @@ This board configuration enables kernel support for the Bartlett Lake S boards.
 
 Hardware
 ********
+
+.. zephyr:board-supported-hw::
 
 General information about the board can be found at the `BTL`_ website.
 

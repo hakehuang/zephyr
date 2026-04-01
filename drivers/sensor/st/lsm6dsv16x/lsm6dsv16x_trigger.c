@@ -129,7 +129,7 @@ static int lsm6dsv16x_enable_wake_int(const struct device *dev, int enable)
 	}
 
 	if ((cfg->drdy_pin == 1) || ON_I3C_BUS(cfg)) {
-		lsm6dsv16x_pin_int_route_t val;
+		lsm6dsv16x_pin_int_route_t val = {0};
 
 		ret = lsm6dsv16x_pin_int1_route_get(ctx, &val);
 		if (ret < 0) {
@@ -141,7 +141,7 @@ static int lsm6dsv16x_enable_wake_int(const struct device *dev, int enable)
 
 		ret = lsm6dsv16x_pin_int1_route_set(ctx, &val);
 	} else {
-		lsm6dsv16x_pin_int_route_t val;
+		lsm6dsv16x_pin_int_route_t val = {0};
 
 		ret = lsm6dsv16x_pin_int2_route_get(ctx, &val);
 		if (ret < 0) {
@@ -176,10 +176,6 @@ int lsm6dsv16x_trigger_set(const struct device *dev,
 	if (trig == NULL) {
 		LOG_ERR("no trigger");
 		return -EINVAL;
-	}
-
-	if (!lsm6dsv16x_is_active(dev)) {
-		return -EBUSY;
 	}
 
 	switch (trig->type) {
@@ -355,7 +351,7 @@ static int lsm6dsv16x_ibi_cb(struct i3c_device_desc *target,
 	 *           FF_IA)
 	 * - MDB[3]: SHUB DRDY (SENS_HUB_ENDOP)
 	 * - MDB[4]: Advanced Function interrupt group
-	 * - MDB[7:5]: 3'b000: Vendor Definied
+	 * - MDB[7:5]: 3'b000: Vendor Defined
 	 *             3'b100: Timing Information
 	 * 2nd byte: FIFO_STATUS1
 	 * 3rd byte: FIFO_STATUS2

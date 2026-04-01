@@ -16,11 +16,12 @@ Hardware
 STM32373C-EVAL provides the following hardware components:
 
 - STM32F373VCT6 microcontroller
-- Four 5 V power supply options:
-    - Power jack
-    - ST-LINK/V2 USB connector
-    - User USB connector
-    - Daughter board
+- Four 5 V power supply options
+  - Power jack
+  - ST-LINK/V2 USB connector
+  - User USB connector
+  - Daughter board
+
 - Audio jack connected to I2 S DAC
 - Microphone connected to ADC through an amplifier
 - 2-GByte (or more) MicroSD card on SPI
@@ -48,7 +49,8 @@ STM32373C-EVAL provides the following hardware components:
 - Embedded ST-LINK/V2
 
 More information about STM32F373VCT6 can be found here:
-       - `STM32F373VCT6 reference manual`_
+
+- `STM32F373VCT6 reference manual`_
 
 
 Supported Features
@@ -79,6 +81,8 @@ Default Zephyr Peripheral Mapping:
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``stm32373c_eval`` board configuration can be built and
 flashed in the usual way (see :ref:`build_an_application` and

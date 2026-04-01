@@ -5,20 +5,39 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <errno.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+#include <zephyr/autoconf.h>
+#include <zephyr/bluetooth/addr.h>
+#include <zephyr/bluetooth/assigned_numbers.h>
+#include <zephyr/bluetooth/audio/audio.h>
+#include <zephyr/bluetooth/audio/bap.h>
 #include <zephyr/bluetooth/audio/cap.h>
+#include <zephyr/bluetooth/audio/csip.h>
+#include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/gap.h>
+#include <zephyr/bluetooth/iso.h>
+#include <zephyr/bluetooth/uuid.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/net_buf.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/sys/util.h>
+#include <zephyr/sys/util_macro.h>
 
 #include "btp/btp.h"
 #include "btp_bap_audio_stream.h"
 #include "bap_endpoint.h"
-#include "zephyr/sys/byteorder.h"
-#include <stdint.h>
-
-#include <zephyr/logging/log.h>
-#define LOG_MODULE_NAME bttester_cap
-LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_BTTESTER_LOG_LEVEL);
 
 #include "btp_bap_unicast.h"
 #include "btp_bap_broadcast.h"
+
+#define LOG_MODULE_NAME bttester_cap
+LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_BTTESTER_LOG_LEVEL);
 
 static struct btp_bap_unicast_group *u_group;
 
@@ -173,11 +192,8 @@ static uint8_t btp_cap_supported_commands(const void *cmd, uint16_t cmd_len,
 {
 	struct btp_cap_read_supported_commands_rp *rp = rsp;
 
-	/* octet 0 */
-	tester_set_bit(rp->data, BTP_CAP_READ_SUPPORTED_COMMANDS);
-	tester_set_bit(rp->data, BTP_CAP_DISCOVER);
-
-	*rsp_len = sizeof(*rp) + 1;
+	*rsp_len = tester_supported_commands(BTP_SERVICE_ID_CAP, rp->data);
+	*rsp_len += sizeof(*rp);
 
 	return BTP_STATUS_SUCCESS;
 }
@@ -278,6 +294,8 @@ static uint8_t btp_cap_unicast_setup_ase(const void *cmd, uint16_t cmd_len,
 	qos.pd = sys_get_le24(cp->presentation_delay);
 
 	memset(&codec_cfg, 0, sizeof(codec_cfg));
+	codec_cfg.target_latency = BT_AUDIO_CODEC_CFG_TARGET_LATENCY_BALANCED;
+	codec_cfg.target_phy = BT_AUDIO_CODEC_CFG_TARGET_PHY_2M;
 	codec_cfg.id = cp->coding_format;
 	codec_cfg.vid = cp->vid;
 	codec_cfg.cid = cp->cid;
@@ -482,13 +500,42 @@ static uint8_t btp_cap_broadcast_source_setup_stream(const void *cmd, uint16_t c
 		btp_bap_broadcast_local_source_from_src_id_get(cp->source_id);
 
 	if (source == NULL) {
-		return BTP_STATUS_FAILED;
+		if (cp->source_id >= CONFIG_BT_BAP_BROADCAST_SRC_COUNT) {
+			LOG_DBG("Invalid cp->source ID for new source: %u", cp->source_id);
+			return BTP_STATUS_FAILED;
+		}
+
+		LOG_DBG("Could not get source by id %u, allocating", cp->source_id);
+		/* The CAP BTP commands are fundamentally broken as they expect a broadcast source
+		 * to already have been allocated. In the case that the source isn't allocated, we
+		 * attempt to allocate it with a dummy broadcast ID that will be updated later by
+		 * `btp_cap_broadcast_source_setup`.
+		 * The source_id returned from btp_bap_broadcast_local_source_allocate is also
+		 * overridden as it may not be the same as requested by this command.
+		 */
+		source = btp_bap_broadcast_local_source_allocate(0);
+
+		if (source == NULL) {
+			LOG_DBG("Could not allocate source");
+
+			return BTP_STATUS_FAILED;
+		}
+
+		source->source_id = cp->source_id;
 	}
 
 	struct bt_audio_codec_cfg *codec_cfg;
 
 	stream = btp_bap_broadcast_stream_alloc(source);
 	if (stream == NULL) {
+		const int err = btp_bap_broadcast_local_source_free(source);
+
+		LOG_DBG("Could not allocate stream");
+
+		if (err != 0) {
+			LOG_ERR("Failed to free allocated broadcast source: %d", err);
+		}
+
 		return BTP_STATUS_FAILED;
 	}
 
@@ -524,21 +571,18 @@ static uint8_t btp_cap_broadcast_source_setup_subgroup(const void *cmd, uint16_t
 		btp_bap_broadcast_local_source_from_src_id_get(cp->source_id);
 
 	if (source == NULL) {
+		LOG_DBG("Could not get source from src_id %u", cp->source_id);
 		return BTP_STATUS_FAILED;
 	}
 
 	if (cp->subgroup_id >= ARRAY_SIZE(cap_broadcast_params[0].cap_subgroup_params)) {
-		return BTP_STATUS_FAILED;
-	}
-
-	uint8_t idx = btp_bap_broadcast_local_source_idx_get(source);
-
-	if (idx >= ARRAY_SIZE(cap_broadcast_params)) {
+		LOG_DBG("Invalid subgroup_id: %u (>= %zu)", cp->subgroup_id,
+			ARRAY_SIZE(cap_broadcast_params[0].cap_subgroup_params));
 		return BTP_STATUS_FAILED;
 	}
 
 	struct bt_cap_initiator_broadcast_subgroup_param *subgroup_param =
-		&cap_broadcast_params[idx].cap_subgroup_params[cp->subgroup_id];
+		&cap_broadcast_params[cp->source_id].cap_subgroup_params[cp->subgroup_id];
 
 	subgroup_param->codec_cfg = &source->subgroup_codec_cfg[cp->subgroup_id];
 
@@ -640,7 +684,10 @@ static uint8_t btp_cap_broadcast_source_setup(const void *cmd, uint16_t cmd_len,
 	struct btp_bap_broadcast_local_source *source =
 		btp_bap_broadcast_local_source_from_src_id_get(cp->source_id);
 
+	LOG_DBG("");
+
 	if (source == NULL) {
+		LOG_DBG("Could not get source from src_id %u", cp->source_id);
 		return BTP_STATUS_FAILED;
 	}
 
@@ -649,9 +696,12 @@ static uint8_t btp_cap_broadcast_source_setup(const void *cmd, uint16_t cmd_len,
 
 	struct bt_bap_qos_cfg *qos = &source->qos;
 
-	LOG_DBG("");
-
 	memset(&create_param, 0, sizeof(create_param));
+
+	/* The source is allocated by btp_cap_broadcast_source_setup_stream but at that time we do
+	 * not have the broadcast_id, so update it here
+	 */
+	source->broadcast_id = sys_get_le24(cp->broadcast_id);
 
 	for (size_t i = 0; i < ARRAY_SIZE(source->streams); i++) {
 		struct btp_bap_broadcast_stream *stream = &source->streams[i];
@@ -688,6 +738,7 @@ static uint8_t btp_cap_broadcast_source_setup(const void *cmd, uint16_t cmd_len,
 	}
 
 	if (create_param.subgroup_count == 0) {
+		LOG_DBG("create_param.subgroup_count is 0");
 		return BTP_STATUS_FAILED;
 	}
 
@@ -717,12 +768,14 @@ static uint8_t btp_cap_broadcast_source_setup(const void *cmd, uint16_t cmd_len,
 
 	err = cap_broadcast_source_adv_setup(source, &gap_settings);
 	if (err != 0) {
+		LOG_DBG("Failed to setup adv for source: %d", err);
 		return BTP_STATUS_FAILED;
 	}
 
+	rp->source_id = cp->source_id;
 	rp->gap_settings = gap_settings;
 	sys_put_le24(source->broadcast_id, rp->broadcast_id);
-	*rsp_len = sizeof(*rp) + 1;
+	*rsp_len = sizeof(*rp);
 
 	return BTP_STATUS_SUCCESS;
 }

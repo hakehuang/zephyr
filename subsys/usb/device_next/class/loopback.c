@@ -174,12 +174,12 @@ static int lb_request_handler(struct usbd_class_data *const c_data,
 
 	net_buf_unref(buf);
 	if (err == -ECONNABORTED) {
-		LOG_INF("Transfer ep 0x%02x, len %u cancelled", ep, len);
+		LOG_INF("Transfer ep 0x%02x, len %zu cancelled", ep, len);
 	} else if (err != 0) {
-		LOG_ERR("Transfer ep 0x%02x, len %u failed", ep, len);
+		LOG_ERR("Transfer ep 0x%02x, len %zu failed", ep, len);
 		ret = err;
 	} else {
-		LOG_DBG("Transfer ep 0x%02x, len %u finished", ep, len);
+		LOG_DBG("Transfer ep 0x%02x, len %zu finished", ep, len);
 	}
 
 	if (!atomic_test_bit(&data->state, LB_FUNCTION_BULK_MANUAL)) {
@@ -254,7 +254,7 @@ static void *lb_get_desc(struct usbd_class_data *const c_data,
 {
 	struct lb_data *data = usbd_class_get_private(c_data);
 
-	if (speed == USBD_SPEED_HS) {
+	if (USBD_SUPPORTS_HIGH_SPEED && speed == USBD_SPEED_HS) {
 		return data->hs_desc;
 	}
 

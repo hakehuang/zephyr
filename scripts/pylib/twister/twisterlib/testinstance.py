@@ -30,6 +30,7 @@ from twisterlib.handlers import (
     QEMUWinHandler,
     SimulationHandler,
 )
+from twisterlib.hardwaredata import CompoundHardwareData
 from twisterlib.platform import Platform
 from twisterlib.size_calc import SizeCalculator
 from twisterlib.statuses import TwisterStatus
@@ -55,7 +56,7 @@ class TestInstance:
         self.platform: Platform = platform
 
         self._status = TwisterStatus.NONE
-        self.reason = "Unknown"
+        self.reason = None
         self.metrics = dict()
         self.handler = None
         self.recording = None
@@ -66,13 +67,15 @@ class TestInstance:
         self.build_time = 0
         self.retries = 0
         self.toolchain = toolchain
-
         self.name = os.path.join(platform.name, toolchain, testsuite.name)
-        self.dut = None
+        self.hardware_id: str | None = None
+        self.suite_repeat = None
+        self.test_repeat = None
+        self.test_shuffle = None
 
         if testsuite.detailed_test_id:
             self.build_dir = os.path.join(
-                outdir, platform.normalized_name, self.toolchain, testsuite.name
+                outdir, platform.normalized_name, self.toolchain.replace('/', '_'), testsuite.name
             )
         else:
             # if suite is not in zephyr,
@@ -81,7 +84,7 @@ class TestInstance:
             self.build_dir = os.path.join(
                 outdir,
                 platform.normalized_name,
-                self.toolchain,
+                self.toolchain.replace('/', '_'),
                 source_dir_rel,
                 testsuite.name
             )
@@ -95,6 +98,9 @@ class TestInstance:
         self.init_cases()
         self.filters = []
         self.filter_type = None
+        self.required_applications = []
+        self.required_build_dirs = []
+        self.reserved_duts: list[CompoundHardwareData] = []
 
     def setup_run_id(self):
         self.run_id = self._get_run_id()
@@ -182,9 +188,6 @@ class TestInstance:
     def __lt__(self, other):
         return self.name < other.name
 
-    def compose_case_name(self, tc_name) -> str:
-        return self.testsuite.compose_case_name(tc_name)
-
     def set_case_status_by_name(self, name, status, reason=None):
         tc = self.get_case_or_create(name)
         tc.status = status
@@ -220,6 +223,7 @@ class TestInstance:
         # console harness allows us to run the test and capture data.
         if testsuite.harness in [
             'console',
+            'display_capture',
             'ztest',
             'pytest',
             'power',
@@ -314,7 +318,7 @@ class TestInstance:
                             device_testing)
 
         # check if test is runnable in pytest
-        if self.testsuite.harness in ['pytest', 'shell', 'power']:
+        if self.testsuite.harness in ['pytest', 'shell', 'power', 'display_capture']:
             target_ready = bool(
                 filter == 'runnable' or simulator and simulator.name in SUPPORTED_SIMS_IN_PYTEST
             )
@@ -372,11 +376,27 @@ class TestInstance:
 
             content = "\n".join(new_config_list)
 
+
+        if self.testsuite.harness_config:
+            self.suite_repeat = self.testsuite.harness_config.get('ztest_suite_repeat', None)
+            self.test_repeat = self.testsuite.harness_config.get('ztest_test_repeat', None)
+            self.test_shuffle = self.testsuite.harness_config.get('ztest_test_shuffle', False)
+
+
+        # Use suite_repeat and test_repeat values
+        if self.suite_repeat or self.test_repeat or self.test_shuffle:
+            content +="\nCONFIG_ZTEST_REPEAT=y"
+            if self.suite_repeat:
+                content += f"\nCONFIG_ZTEST_SUITE_REPEAT_COUNT={self.suite_repeat}"
+            if self.test_repeat:
+                content += f"\nCONFIG_ZTEST_TEST_REPEAT_COUNT={self.test_repeat}"
+            if self.test_shuffle:
+                content +="\nCONFIG_ZTEST_SHUFFLE=y"
+
         if enable_coverage:
             for cp in coverage_platform:
                 if cp in platform.aliases:
                     content = content + "\nCONFIG_COVERAGE=y"
-                    content = content + "\nCONFIG_COVERAGE_DUMP=y"
 
         if platform.type == "native":
             if enable_asan:

@@ -5,18 +5,32 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <errno.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 
-#include "btp/btp.h"
-
+#include <zephyr/autoconf.h>
+#include <zephyr/bluetooth/addr.h>
+#include <zephyr/bluetooth/assigned_numbers.h>
+#include <zephyr/bluetooth/audio/audio.h>
 #include <zephyr/bluetooth/audio/bap.h>
 #include <zephyr/bluetooth/audio/pbp.h>
 #include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/crypto.h>
+#include <zephyr/bluetooth/gap.h>
+#include <zephyr/bluetooth/uuid.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/net_buf.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
-#define LOG_MODULE_NAME bttester_pbp
-LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_BTTESTER_LOG_LEVEL);
+#include <zephyr/sys/util_macro.h>
 
 #include "btp_bap_broadcast.h"
+#include "btp/btp.h"
+
+#define LOG_MODULE_NAME bttester_pbp
+LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_BTTESTER_LOG_LEVEL);
 
 #define PBP_EXT_ADV_METADATA_LEN_MAX 128
 
@@ -122,13 +136,8 @@ static uint8_t pbp_read_supported_commands(const void *cmd, uint16_t cmd_len, vo
 {
 	struct btp_pbp_read_supported_commands_rp *rp = rsp;
 
-	tester_set_bit(rp->data, BTP_PBP_READ_SUPPORTED_COMMANDS);
-	tester_set_bit(rp->data, BTP_PBP_SET_PUBLIC_BROADCAST_ANNOUNCEMENT);
-	tester_set_bit(rp->data, BTP_PBP_SET_BROADCAST_NAME);
-	tester_set_bit(rp->data, BTP_PBP_BROADCAST_SCAN_START);
-	tester_set_bit(rp->data, BTP_PBP_BROADCAST_SCAN_STOP);
-
-	*rsp_len = sizeof(*rp) + 1;
+	*rsp_len = tester_supported_commands(BTP_SERVICE_ID_PBP, rp->data);
+	*rsp_len += sizeof(*rp);
 
 	return BTP_STATUS_SUCCESS;
 }
@@ -171,6 +180,14 @@ static int pbp_broadcast_source_adv_setup(void)
 	struct btp_bap_broadcast_local_source *source;
 
 	source = btp_bap_broadcast_local_source_from_src_id_get(0);
+	if (source == NULL) {
+		/* use dummy broadcast ID, it is updated later on anyway */
+		source = btp_bap_broadcast_local_source_allocate(0);
+		if (source == NULL) {
+			LOG_DBG("Could not allocate source");
+			return -ENOMEM;
+		}
+	}
 
 	if (source->ext_adv == NULL) {
 		err = tester_gap_create_adv_instance(&param, BTP_GAP_ADDR_TYPE_IDENTITY, ext_ad,
@@ -190,7 +207,6 @@ static int pbp_broadcast_source_adv_setup(void)
 	}
 
 	source->broadcast_id = broadcast_id;
-	source->allocated = true;
 
 	return 0;
 }
@@ -200,6 +216,13 @@ static uint8_t pbp_set_public_broadcast_announcement(const void *cmd, uint16_t c
 {
 	const struct btp_pbp_set_public_broadcast_announcement_cmd *cp = cmd;
 	int err = -EINVAL;
+
+	if (cp->features == 0U || cp->features > (BT_PBP_ANNOUNCEMENT_FEATURE_ENCRYPTION |
+						  BT_PBP_ANNOUNCEMENT_FEATURE_STANDARD_QUALITY |
+						  BT_PBP_ANNOUNCEMENT_FEATURE_HIGH_QUALITY)) {
+		LOG_DBG("Invalid features: %u", cp->features);
+		return BTP_STATUS_FAILED;
+	}
 
 	if (cp->metadata_len <= PBP_EXT_ADV_METADATA_LEN_MAX) {
 		pbp_features_cached = cp->features;

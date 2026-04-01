@@ -47,8 +47,6 @@ that run the command:
 
    west blobs fetch hal_infineon
 
-.. note:: Only Bluetooth functionality is currently supported.
-
 Resources sharing
 =================
 
@@ -66,6 +64,8 @@ two cores. This is done in 3 ways:
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``arduino_nicla_vision`` board should be built per core target,
 using either ``arduino_nicla_vision/stm32h747xx/m7`` or ``arduino_nicla_vision/stm32h747xx/m4`` as the target.

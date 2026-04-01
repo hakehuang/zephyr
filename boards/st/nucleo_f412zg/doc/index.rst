@@ -33,7 +33,7 @@ Hardware
 Nucleo F412ZG provides the following hardware components:
 
 - STM32F412ZGT6 in LQFP144 package
-- ARM |reg| 32-bit Cortex |reg| -M4 CPU with FPU
+- ARM® 32-bit Cortex®-M4 CPU with FPU
 - 100 MHz max CPU frequency
 - VDD from 1.7 V to 3.6 V
 - 1 MB Flash
@@ -120,6 +120,8 @@ Ethernet over USB is configured as the default network interface
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Nucleo F412ZG board includes an ST-LINK/V2-1 embedded debug tool interface.
 

@@ -81,32 +81,7 @@ For more information about the PSOC 63 BLE MCU SoC and CY8CKIT-062-BLE board:
 Supported Features
 ==================
 
-The board configuration supports the following hardware features:
-
-+-----------+------------+-----------------------+
-| Interface | Controller | Driver/Component      |
-+===========+============+=======================+
-| NVIC      | on-chip    | nested vectored       |
-|           |            | interrupt controller  |
-+-----------+------------+-----------------------+
-| SYSTICK   | on-chip    | system clock          |
-+-----------+------------+-----------------------+
-| GPIO      | on-chip    | gpio                  |
-+-----------+------------+-----------------------+
-| PINCTRL   | on-chip    | pin control           |
-+-----------+------------+-----------------------+
-| SPI       | on-chip    | spi                   |
-+-----------+------------+-----------------------+
-| UART      | on-chip    | serial port-polling;  |
-|           |            | serial port-interrupt |
-+-----------+------------+-----------------------+
-
-
-The default configurations can be found in the Kconfig
-:zephyr_file:`boards/cypress/cy8ckit_062_ble/cy8ckit_062_ble_cy8c6347_m0_defconfig` for
-Cortex-M0+ and on the Kconfig
-:zephyr_file:`boards/cypress/cy8ckit_062_ble/cy8ckit_062_ble_cy8c6347_m4_defconfig` for
-Cortex-M4
+.. zephyr:board-supported-hw::
 
 System Clock
 ============
@@ -139,6 +114,8 @@ To get the OpenOCD package, it is required that you
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 The CY8CKIT-062-BLE includes an onboard programmer/debugger (KitProg2) with
 mass storage programming to provide debugging, flash programming, and serial

@@ -74,26 +74,7 @@ For more information about the PSOC 62 MCU SoC and CY8CKIT-062-WiFi-BT board:
 Supported Features
 ==================
 
-The board configuration supports the following hardware features:
-
-+-----------+------------+-----------------------+
-| Interface | Controller | Driver/Component      |
-+===========+============+=======================+
-| NVIC      | on-chip    | nested vectored       |
-|           |            | interrupt controller  |
-+-----------+------------+-----------------------+
-| SYSTICK   | on-chip    | system clock          |
-+-----------+------------+-----------------------+
-| PINCTRL   | on-chip    | pin control           |
-+-----------+------------+-----------------------+
-| UART      | on-chip    | serial port-polling;  |
-|           |            | serial port-interrupt |
-+-----------+------------+-----------------------+
-
-
-The default configuration can be found in the Kconfig
-:zephyr_file:`boards/cypress/cy8ckit_062_wifi_bt/cy8ckit_062_wifi_bt_cy8c6247_m0_defconfig`.
-
+.. zephyr:board-supported-hw::
 
 System Clock
 ============
@@ -126,6 +107,8 @@ To get the OpenOCD package, it is required that you
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 The CY8CKIT-062-WiFi-BT includes an onboard programmer/debugger (KitProg2) with
 mass storage programming to provide debugging, flash programming, and serial

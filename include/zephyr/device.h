@@ -112,8 +112,9 @@ typedef int16_t device_handle_t;
 
 /* By default, device identifiers are obtained using the dependency ordinal.
  * When LLEXT_EXPORT_DEV_IDS_BY_HASH is defined, the main Zephyr binary exports
- * DT identifiers via EXPORT_SYMBOL_NAMED as hashed versions of their paths.
- * When matching extensions are built, that is what they need to look for.
+ * DT identifiers via EXPORT_GROUP_SYMBOL_NAMED as hashed versions of their
+ * paths. When matching extensions are built, that is what they need to look
+ * for.
  *
  * The ordinal or hash used in this name can be mapped to the path by
  * examining zephyr/include/generated/zephyr/devicetree_generated.h.
@@ -127,11 +128,13 @@ typedef int16_t device_handle_t;
 #if defined(CONFIG_LLEXT_EXPORT_DEV_IDS_BY_HASH)
 /* Export device identifiers by hash */
 #define Z_DEVICE_EXPORT(node_id)					       \
-	EXPORT_SYMBOL_NAMED(DEVICE_DT_NAME_GET(node_id),		       \
-			    DEVICE_NAME_GET(Z_DEVICE_DT_HASH(node_id)))
-#elif defined(CONFIG_LLEXT_EXPORT_DEVICES)
+	EXPORT_GROUP_SYMBOL_NAMED(DEVICE,				       \
+				  DEVICE_DT_NAME_GET(node_id),		       \
+				  DEVICE_NAME_GET(Z_DEVICE_DT_HASH(node_id)))
+#else
 /* Export device identifiers using the builtin name */
-#define Z_DEVICE_EXPORT(node_id) EXPORT_SYMBOL(DEVICE_DT_NAME_GET(node_id))
+#define Z_DEVICE_EXPORT(node_id)					       \
+	EXPORT_GROUP_SYMBOL(DEVICE, DEVICE_DT_NAME_GET(node_id))
 #endif
 
 /**
@@ -143,6 +146,8 @@ typedef int16_t device_handle_t;
  * device is not being allocated from a devicetree node. If you are allocating a
  * device from a devicetree node, use DEVICE_DT_DEINIT_DEFINE() or
  * DEVICE_DT_INST_DEINIT_DEFINE() instead.
+ *
+ * Note: deinit_fn will only be used if CONFIG_DEVICE_DEINIT_SUPPORT is enabled.
  *
  * @param dev_id A unique token which is used in the name of the global device
  * structure as a C identifier.
@@ -211,8 +216,10 @@ typedef int16_t device_handle_t;
  * The device is declared with extern visibility, so a pointer to a global
  * device object can be obtained with `DEVICE_DT_GET(node_id)` from any source
  * file that includes `<zephyr/device.h>` (even from extensions, when
- * @kconfig{CONFIG_LLEXT_EXPORT_DEVICES} is enabled). Before using the
- * pointer, the referenced object should be checked using device_is_ready().
+ * @kconfig{CONFIG_LLEXT_EXPORT_SYMBOL_GROUP_DEVICE} is enabled). Before using
+ * the pointer, the referenced object should be checked using device_is_ready().
+ *
+ * Note: deinit_fn will only be used if CONFIG_DEVICE_DEINIT_SUPPORT is enabled.
  *
  * @param node_id The devicetree node identifier.
  * @param init_fn Pointer to the device's initialization function, which will be
@@ -494,8 +501,10 @@ typedef uint8_t device_flags_t;
 struct device_ops {
 	/** Initialization function */
 	int (*init)(const struct device *dev);
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
 	/** De-initialization function */
 	int (*deinit)(const struct device *dev);
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 };
 
 /**
@@ -860,6 +869,28 @@ size_t z_device_get_all_static(const struct device **devices);
 __syscall bool device_is_ready(const struct device *dev);
 
 /**
+ * @brief Writes a "device not ready" warning message to the log.
+ *
+ * @details Writes a "device not ready" warning message to the log using the
+ * device name as reference, meant to be used in device_is_ready checks.
+ *
+ * @param dev pointer to a struct device.
+ */
+#define LOG_WRN_DEVICE_NOT_READY(dev) \
+	LOG_WRN("%s device not ready", (dev) ? (dev)->name : "(null)")
+
+/**
+ * @brief Writes a "device not ready" error message to the log.
+ *
+ * @details Writes a "device not ready" error message to the log using the
+ * device name as reference, meant to be used in device_is_ready checks.
+ *
+ * @param dev pointer to a struct device.
+ */
+#define LOG_ERR_DEVICE_NOT_READY(dev) \
+	LOG_ERR("%s device not ready", (dev) ? (dev)->name : "(null)")
+
+/**
  * @brief Initialize a device.
  *
  * A device whose initialization was deferred (by marking it as
@@ -881,6 +912,8 @@ __syscall int device_init(const struct device *dev);
  * acquired (e.g. pins, memory, clocks, DMA channels, etc.) and its status will
  * be left as in its reset state.
  *
+ * Note: this will be available if CONFIG_DEVICE_DEINIT_SUPPORT is enabled.
+ *
  * @warning It is the responsibility of the caller to ensure that the device is
  * ready to be de-initialized.
  *
@@ -888,7 +921,8 @@ __syscall int device_init(const struct device *dev);
  *
  * @retval 0 If successful
  * @retval -EPERM If device has not been initialized.
- * @retval -ENOTSUP If device does not support de-initialization.
+ * @retval -ENOTSUP If device does not support de-initialization, or if the
+ *         feature is not enabled (see CONFIG_DEVICE_DEINIT_SUPPORT)
  * @retval -errno For any other errors.
  */
 __syscall int device_deinit(const struct device *dev);
@@ -998,8 +1032,8 @@ __syscall int device_deinit(const struct device *dev);
 		Z_DEVICE_DEPS_SEP,                                             \
 		Z_DEVICE_EXTRA_DEPS(__VA_ARGS__) /**/                          \
 		Z_DEVICE_DEPS_SEP,                                             \
-		COND_CODE_1(DT_NODE_EXISTS(node_id),                           \
-			    (DT_SUPPORTS_DEP_ORDS(node_id)), ()) /**/          \
+		IF_ENABLED(DT_NODE_EXISTS(node_id),                            \
+			   (DT_SUPPORTS_DEP_ORDS(node_id))) /**/               \
 	}
 
 #endif /* CONFIG_DEVICE_DEPS */
@@ -1133,6 +1167,19 @@ device_get_dt_nodelabels(const struct device *dev)
 			    Z_STRINGIFY(name) " too long")
 
 /**
+ * @brief Fill in the struct device_ops
+ *
+ * @param init_fn_ Initialization function
+ * @param deinit_fn_ De-initialization function
+ */
+#define Z_DEVICE_OPS(init_fn_, deinit_fn_)                                     \
+	{                                                                      \
+		.init = (init_fn_),                                            \
+		IF_ENABLED(CONFIG_DEVICE_DEINIT_SUPPORT,                       \
+			   (.deinit = (deinit_fn_),))                          \
+	}
+
+/**
  * @brief Initializer for @ref device.
  *
  * @param name_ Name of the device.
@@ -1156,7 +1203,7 @@ device_get_dt_nodelabels(const struct device *dev)
 		.api = (api_),								\
 		.state = (state_),							\
 		.data = (data_),							\
-		.ops = { .init = (init_fn_), .deinit = (deinit_fn_) },			\
+		.ops = Z_DEVICE_OPS(init_fn_, deinit_fn_),				\
 		.flags = (flags_),							\
 		IF_ENABLED(CONFIG_DEVICE_DEPS, (.deps = (deps_),)) /**/			\
 		IF_ENABLED(CONFIG_PM_DEVICE, Z_DEVICE_INIT_PM_BASE(pm_)) /**/		\
@@ -1207,8 +1254,8 @@ device_get_dt_nodelabels(const struct device *dev)
  */
 #define Z_DEVICE_BASE_DEFINE(node_id, dev_id, name, init_fn, deinit_fn, flags, pm, data, config,   \
 			     level, prio, api, state, deps)                                        \
-	COND_CODE_1(DT_NODE_EXISTS(node_id), (), (static))                                         \
-	COND_CODE_1(Z_DEVICE_IS_MUTABLE(node_id), (), (const))                                     \
+	IF_DISABLED(DT_NODE_EXISTS(node_id), (static))                                             \
+	IF_DISABLED(Z_DEVICE_IS_MUTABLE(node_id), (const))                                         \
 	STRUCT_SECTION_ITERABLE_NAMED_ALTERNATE(                                                   \
 		device, COND_CODE_1(Z_DEVICE_IS_MUTABLE(node_id), (device_mutable), (device)),     \
 		Z_DEVICE_SECTION_NAME(level, prio), DEVICE_NAME_GET(dev_id)) =                     \
@@ -1221,10 +1268,10 @@ device_get_dt_nodelabels(const struct device *dev)
  * @param level Init level
  */
 #define Z_DEVICE_CHECK_INIT_LEVEL(level)                                       \
-	COND_CODE_1(Z_INIT_PRE_KERNEL_1_##level, (),                           \
-	(COND_CODE_1(Z_INIT_PRE_KERNEL_2_##level, (),                          \
-	(COND_CODE_1(Z_INIT_POST_KERNEL_##level, (),                           \
-	(ZERO_OR_COMPILE_ERROR(0)))))))
+	COND_CASE_1(Z_INIT_PRE_KERNEL_1_##level, (),                           \
+		    Z_INIT_PRE_KERNEL_2_##level, (),                           \
+		    Z_INIT_POST_KERNEL_##level, (),                            \
+		    (ZERO_OR_COMPILE_ERROR(0)))
 
 /**
  * @brief Define the init entry for a device.
@@ -1284,8 +1331,8 @@ device_get_dt_nodelabels(const struct device *dev)
                                                                                 \
 	Z_DEVICE_INIT_ENTRY_DEFINE(node_id, dev_id, level, prio);               \
                                                                                 \
-	IF_ENABLED(CONFIG_LLEXT_EXPORT_DEVICES,                                 \
-		(IF_ENABLED(DT_NODE_EXISTS(node_id),                            \
+	IF_ENABLED(CONFIG_LLEXT,                                                \
+		   (IF_ENABLED(DT_NODE_EXISTS(node_id),                         \
 				(Z_DEVICE_EXPORT(node_id);))))
 
 /**
@@ -1299,8 +1346,8 @@ device_get_dt_nodelabels(const struct device *dev)
  * that out until after we've built the zephyr image, though.
  */
 #define Z_MAYBE_DEVICE_DECLARE_INTERNAL(node_id)                                                   \
-	extern COND_CODE_1(Z_DEVICE_IS_MUTABLE(node_id), (),                                       \
-			   (const)) struct device DEVICE_DT_NAME_GET(node_id);
+	extern IF_DISABLED(Z_DEVICE_IS_MUTABLE(node_id), (const))                                  \
+		struct device DEVICE_DT_NAME_GET(node_id);
 
 DT_FOREACH_STATUS_OKAY_NODE(Z_MAYBE_DEVICE_DECLARE_INTERNAL)
 

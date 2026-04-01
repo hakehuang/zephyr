@@ -130,6 +130,8 @@ two cores. This is done in 3 ways:
 Programming and Debugging
 *************************
 
+.. zephyr:board-supported-runners::
+
 STM32H757I-EVAL board includes an ST-LINK/V3 embedded debug tool interface.
 
 Applications for the ``stm32h757i_disco`` board should be built per core target,
@@ -221,7 +223,7 @@ Here is an example for the :zephyr:code-sample:`blinky` application on M4 core.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky
-   :board: stm32h757i_eval/stm32h757xx/m7
+   :board: stm32h757i_eval/stm32h757xx/m4
    :goals: build flash
 
 Debugging
