@@ -1,0 +1,13 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+    e1000: ethernet@1800 {
+        compatible = "intel,e1000";
+        reg = <0x00001800 0x00020000>;
+        interrupts = <10 0x0000A000 0>;
+        interrupt-parent = <&intc>;
+        status = "okay";
+    };
+};
