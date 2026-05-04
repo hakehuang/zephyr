@@ -1,0 +1,26 @@
+# NDP (Network Data Plane) options
+
+# Copyright (c) 2026 NDP Developer
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig NDP_PACKET_PROCESSING
+	bool "NDP Packet Processing"
+	depends on NET_IP
+	help
+	  Enable Network Data Plane callback system for packet processing.
+
+if NDP_PACKET_PROCESSING
+
+module = NDP
+module-dep = NET_LOG
+module-str = Log level for NDP
+module-help = Enables NDP output debug messages
+source "subsys/net/Kconfig.template.log_config.net"
+
+config NDP_ONLY_MODE
+	bool "NDP-only mode"
+	default n
+	help
+	  If enabled, packets processed by NDP callbacks will bypass native network stack.
+
+endif # NDP_PACKET_PROCESSING
