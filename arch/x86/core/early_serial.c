@@ -57,6 +57,7 @@ static mm_reg_t mmio;
 #define LCR_DLAB_SELECT BIT(7)
 #define MCR_DTR         BIT(0)
 #define MCR_RTS         BIT(1)
+#define MCR_OUT2        BIT(3)
 #define LSR_THRE        BIT(5)
 
 #define FCR_FIFO    BIT(0)  /* enable XMIT and RCVR FIFO */
@@ -107,7 +108,7 @@ void z_x86_early_serial_init(void)
 	OUT(REG_BRDL, 1);              /* Baud divisor = 1 */
 	OUT(REG_BRDH, 0);
 	OUT(REG_LCR, LCR_8N1);         /* LCR = 8n1 + DLAB off */
-	OUT(REG_MCR, MCR_DTR | MCR_RTS);
+	OUT(REG_MCR, MCR_DTR | MCR_RTS | MCR_OUT2);
 
 	/* Turn on FIFO. Some hardware needs this before transmitting */
 	OUT(REG_FCR, FCR_FIFO | FCR_FIFO_1 | FCR_RCVRCLR | FCR_XMITCLR);
