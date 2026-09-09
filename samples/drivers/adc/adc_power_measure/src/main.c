@@ -143,7 +143,7 @@ int main(void)
 	int err;
 
 	if (!device_is_ready(adc)) {
-		//printf("ADC controller device %s not ready\n", adc->name);
+		printf("ADC controller device %s not ready\n", adc->name);
 		return 0;
 	}
 
@@ -160,7 +160,7 @@ int main(void)
 		}
 	}
 
-	//printf("\r\nadc power shield sample starts\n");
+	printf("\r\nadc power shield sample starts\n");
 
 	while (1) {
 #ifndef CONFIG_SHELL_ADC_PS
@@ -197,7 +197,7 @@ int main(void)
 
 		err = adc_read(adc, &sequence);
 		if (err < 0) {
-			//printf("Could not read (%d)\n", err);
+			printf("Could not read (%d)\n", err);
 			continue;
 		}
 
