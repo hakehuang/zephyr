@@ -54,7 +54,21 @@ static struct adc_sequence sequence = {
 	.options = &options,
 };
 
+#ifdef CONFIG_SHELL_ADC_PS
 static uint32_t count;
+#endif
+
+/*
+ * The first reading of a channel is taken while the sample-and-hold capacitor is
+ * still settling from the previous channel, so it reads lower than the rest.
+ * Skip it when averaging, unless it is the only sample we have.
+ */
+#if defined(CONFIG_SEQUENCE_DISCARD_FIRST) && (CONFIG_SEQUENCE_SAMPLES > 1)
+#define AVG_FIRST_IDX 1
+#else
+#define AVG_FIRST_IDX 0
+#endif
+#define AVG_COUNT (CONFIG_SEQUENCE_SAMPLES - AVG_FIRST_IDX)
 
 #ifdef CONFIG_SHELL_ADC_PS
 /* ADC shell command handlers */
@@ -160,18 +174,18 @@ int main(void)
 		}
 	}
 
-	printf("\r\nadc power shield sample starts\n");
+	printf("#CFG,ch=%d,res=%d,ref_mv=%d,seq=%d,avg=%d\n",
+	       CHANNEL_COUNT, CONFIG_SEQUENCE_RESOLUTION, (int)vrefs_mv[0],
+	       CONFIG_SEQUENCE_SAMPLES, AVG_COUNT);
 
 	while (1) {
 #ifndef CONFIG_SHELL_ADC_PS
 		uint8_t c;
 		
 		if (uart_poll_in(uart_dev, &c) < 0) {
-			k_msleep(100);
+			k_msleep(10);
 			continue;
 		}
-
-		k_msleep(100);
 
 		/* print capacity when input is '\r'*/
 		if (c == '\r') {
@@ -193,40 +207,27 @@ int main(void)
 			continue;
 		}
 
-		printf("ADC sequence reading [%u]:\n", count++);
-
 		err = adc_read(adc, &sequence);
 		if (err < 0) {
-			printf("Could not read (%d)\n", err);
+			printf("#ERR,%d\n", err);
 			continue;
 		}
 
+		/* One line per measurement: timestamp plus the mean raw value of every
+		 * channel.  Averaging in raw units keeps the script free of fixed point
+		 * arithmetic and keeps the line short.
+		 */
+		printf("D,%u", (uint32_t)k_uptime_get());
 		for (size_t channel_index = 0U; channel_index < CHANNEL_COUNT; channel_index++) {
-			int32_t val_mv;
+			int32_t sum = 0;
 
-			printf("- %s, channel %" PRId32 ", %" PRId32
-			       " sequence samples (diff = %d):\n",
-			       adc->name, channel_cfgs[channel_index].channel_id,
-			       CONFIG_SEQUENCE_SAMPLES, channel_cfgs[channel_index].differential);
-			for (size_t sample_index = 0U; sample_index < CONFIG_SEQUENCE_SAMPLES;
+			for (size_t sample_index = AVG_FIRST_IDX; sample_index < CONFIG_SEQUENCE_SAMPLES;
 			     sample_index++) {
-
-				val_mv = channel_reading[sample_index][channel_index];
-
-				printf("- - %" PRId32, val_mv);
-				err = adc_raw_to_millivolts(vrefs_mv[channel_index],
-							    channel_cfgs[channel_index].gain,
-							    CONFIG_SEQUENCE_RESOLUTION, &val_mv);
-
-				/* conversion to mV may not be supported, skip if not */
-				if ((err < 0) || vrefs_mv[channel_index] == 0) {
-					printf(" (value in mV not available)\n");
-				} else {
-					printf(" = %" PRId32 "mV\n", val_mv);
-				}
+				sum += (int32_t)channel_reading[sample_index][channel_index];
 			}
+			printf(",%d", (int)((sum + AVG_COUNT / 2) / AVG_COUNT));
 		}
-		printf("==== end of reading ===\n");
+		printf("\n");
 #else
 		k_msleep(100);
 #endif

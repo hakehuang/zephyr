@@ -7,12 +7,13 @@ common:
   filter: dt_alias_exists("adc0")
   harness: console
   timeout: 10
+  # The console harness cannot send input, so only the one-shot header that is
+  # printed at boot is checked here.  Measurement lines ("D,<ms>,<raw>...") need a
+  # character on the console, hence they are documented in README.rst instead.
   harness_config:
     type: multi_line
     regex:
-      - "ADC sequence reading \\[\\d+\\]:"
-      - "- .+, channel \\d+, \\d+ sequence samples:"
-      - "- - \\d+ (= \\d+mV)|(\\(value in mV not available\\))"
+      - "^#CFG,ch=\\d+,res=\\d+,ref_mv=\\d+,seq=\\d+,avg=\\d+$"
 tests:
   sample.drivers.adc.adc_power_shield:
     integration_platforms:

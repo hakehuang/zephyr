@@ -5,6 +5,15 @@ config SEQUENCE_SAMPLES
 	int "Number of samples to be made on the sequence for each channel."
 	default 5
 
+config SEQUENCE_DISCARD_FIRST
+	bool "Discard the first sample of every channel before averaging"
+	default y
+	help
+	  The first reading after a channel switch is taken while the
+	  sample-and-hold capacitor is still settling, so it reads noticeably
+	  lower than the following ones.  Discard it before averaging whenever
+	  the sequence provides more than one sample per channel.
+
 config SEQUENCE_RESOLUTION
 	int "Set the resolution of the sequence readings."
 	default 12
