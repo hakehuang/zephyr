@@ -1,0 +1,6 @@
+board:
+  name: stm32f030_demo_no_hse
+  full_name: STM32F030 DEMO BOARD (HSI clock, no HSE crystal)
+  vendor: others
+  socs:
+    - name: stm32f030x6

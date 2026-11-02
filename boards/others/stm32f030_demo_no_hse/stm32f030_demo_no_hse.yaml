@@ -1,0 +1,13 @@
+identifier: stm32f030_demo_no_hse
+name: STM32F030 DEMO BOARD (HSI clock, no HSE crystal)
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 4
+flash: 16
+supported:
+  - uart
+  - gpio
+  - adc
