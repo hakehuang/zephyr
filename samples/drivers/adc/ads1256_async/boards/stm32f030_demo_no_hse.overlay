@@ -1,0 +1,12 @@
+/*
+ * Copyright (c) 2025 Hake Huang <hake.huang@gmail.com>.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* The board carries the ADS1256 on SPI1; the sample only picks it as adc0. */
+/ {
+	aliases {
+		adc0 = &ads1256;
+	};
+};

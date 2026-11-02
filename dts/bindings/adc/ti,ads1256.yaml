@@ -1,0 +1,71 @@
+# Copyright (c) 2024 The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: TI ADS1256 8-channel, 24-bit SPI ADC
+compatible: "ti,ads1256"
+
+include:
+  - adc-controller.yaml
+  - spi-device.yaml
+
+properties:
+  "#io-channel-cells":
+    const: 1
+
+  drdy-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      GPIO for data ready, becomes active when a conversion result is ready.
+      Typically active low signal.
+
+  reset-gpios:
+    type: phandle-array
+    description: |
+      Optional GPIO for hardware reset control.
+
+  sync-gpios:
+    type: phandle-array
+    description: |
+      Optional GPIO for synchronization control.
+      Used to synchronize conversions across multiple ADCs.
+
+  data-rate:
+    type: string
+    description: |
+      Data rate selection:
+      - "ADS1256_DRATE_30000"  # 30,000 SPS
+      - "ADS1256_DRATE_15000"  # 15,000 SPS
+      - "ADS1256_DRATE_10000"  # 10,000 SPS
+      - "ADS1256_DRATE_5000"   # 5,000 SPS
+      - "ADS1256_DRATE_1000"   # 1,000 SPS
+      - "ADS1256_DRATE_100"    # 100 SPS
+      - "ADS1256_DRATE_60"     # 60 SPS
+      - "ADS1256_DRATE_50"     # 50 SPS
+    enum:
+      - "ADS1256_DRATE_30000"  # 30,000 SPS
+      - "ADS1256_DRATE_15000"  # 15,000 SPS
+      - "ADS1256_DRATE_10000"  # 10,000 SPS
+      - "ADS1256_DRATE_5000"   # 5,000 SPS
+      - "ADS1256_DRATE_1000"   # 1,000 SPS
+      - "ADS1256_DRATE_100"    # 100 SPS
+      - "ADS1256_DRATE_60"     # 60 SPS
+      - "ADS1256_DRATE_50"     # 50 SPS
+
+  standby-on-boot:
+    type: boolean
+    description: Enter standby mode immediately after initialization
+
+  sensor-current:
+      type: int
+      enum:
+        - 0
+        - 500
+        - 2000
+        - 10000
+      default: 0
+      description: |
+        sensor current in nanoampere, the default value turns the current source off
+
+io-channel-cells:
+  - input

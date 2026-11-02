@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config ADC_ADS1256
+	bool "Texas Instruments ADS1256 ADC driver"
+	depends on SPI
+	select ADC_CONFIGURABLE_INPUTS
+	select ADC_ASYNC
+	help
+		Enable driver for Texas Instruments ADS1256
+		8-channel 24-bit SPI ADC.
+
+if ADC_ADS1256
+
+config ADC_ADS1256_INIT_PRIORITY
+	int "ADS1256 ADC driver initialization priority"
+	default 80
+	range 0 99
+	help
+		ADS1256 ADC device driver initialization priority.
+
+endif # ADC_ADS1256

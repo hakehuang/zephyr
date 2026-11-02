@@ -1,0 +1,21 @@
+/*
+ * Copyright (c) 2025 Hake Huang
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef ZEPHYR_DRIVERS_ADC_ADS1256_H_
+#define ZEPHYR_DRIVERS_ADC_ADS1256_H_
+
+#include <zephyr/device.h>
+#include <zephyr/dt-bindings/adc/ads1256.h>
+
+enum ads1256_drate {
+	ADS1256_DRATE_30000 = ADS1256_DRATE_30000_VAL,
+	ADS1256_DRATE_15000 = ADS1256_DRATE_15000_VAL,
+	ADS1256_DRATE_1000  = ADS1256_DRATE_1000_VAL,
+	ADS1256_DRATE_100   = ADS1256_DRATE_100_VAL,
+	ADS1256_DRATE_60    = ADS1256_DRATE_60_VAL,
+	ADS1256_DRATE_50    = ADS1256_DRATE_50_VAL,
+}; 
+
+#endif /* ZEPHYR_DRIVERS_ADC_ADS1256_H_ */
