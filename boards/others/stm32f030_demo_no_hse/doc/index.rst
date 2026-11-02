@@ -31,3 +31,11 @@ Programming
    west flash --runner jlink --dev-id <J-Link serial>
 
 Several boards can be attached at once; ``--dev-id`` selects the probe.
+
+Release notes
+=============
+
+The environment and implementation notes for this board (build toolchain,
+the two J-Link probes and their console ports, the single-thread kernel and the
+ADS1256 wiring, plus the measured flash/RAM budget) live in
+`RELEASE-NOTES.md <../RELEASE-NOTES.md>`_.
