@@ -107,7 +107,21 @@ else()
     endif()
     add_subdirectory_ifdef(CONFIG_SMP smp)
   else() # CONFIG_MULTITHREADING
-    kernel_sources(nothread.c)
+    # Power shield branch: single-thread implementations of the kernel
+    # primitives so a tiny image can still use sem/queue/work APIs.
+    kernel_sources(
+      nothread.c
+      condvar_single.c
+      mailbox_single.c
+      msg_q_single.c
+      mutex_single.c
+      queue_single.c
+      sched_single.c
+      sem_single.c
+      stack_single.c
+      system_work_q_single.c
+      work_single.c
+      )
   endif() # CONFIG_MULTITHREADING
 
 

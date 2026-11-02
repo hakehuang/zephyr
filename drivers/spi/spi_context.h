@@ -53,6 +53,10 @@ struct spi_context {
 	 * when threads are not enabled.
 	 */
 	atomic_t ready;
+	/* Second flag: SPI_CONTEXT_INIT_LOCK and SPI_CONTEXT_INIT_SYNC
+	 * must not both initialise `ready` when threads are off.
+	 */
+	atomic_t fake_sync;
 #endif /* CONFIG_MULTITHREADING */
 	int sync_status;
 
@@ -78,11 +82,23 @@ struct spi_context {
 #endif /* CONFIG_SPI_PERIPHERAL */
 };
 
+#ifdef CONFIG_MULTITHREADING
 #define SPI_CONTEXT_INIT_LOCK(_data, _ctx_name)				\
 	._ctx_name.lock = Z_SEM_INITIALIZER(_data._ctx_name.lock, 0, 1)
 
+
 #define SPI_CONTEXT_INIT_SYNC(_data, _ctx_name)				\
 	._ctx_name.sync = Z_SEM_INITIALIZER(_data._ctx_name.sync, 0, 1)
+#else
+/* Power shield branch: without threads there are no semaphores to
+ * initialise; transfer completion is signalled by an atomic flag.
+ */
+#define SPI_CONTEXT_INIT_LOCK(_data, _ctx_name)                              \
+     ._ctx_name.ready = ATOMIC_INIT(1)
+
+#define SPI_CONTEXT_INIT_SYNC(_data, _ctx_name)                              \
+     ._ctx_name.fake_sync = ATOMIC_INIT(1)
+#endif /* CONFIG_MULTITHREADING */
 
 #ifndef DT_SPI_CTX_HAS_NO_CS_GPIOS
 #define SPI_CONTEXT_CS_GPIO_SPEC_ELEM(_node_id, _prop, _idx)		\
